@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P11 · MVP 完成的唯一标准</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.page {
+  width: 1920px;
+  min-height: 1080px;
+  box-sizing: border-box;
+  padding: 56px var(--pad-stage) 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 头部 ─────────────────────────── */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+.meta b { color: var(--accent); font-weight: 600; }
+
+h1 {
+  font-size: 64px;
+  line-height: 1.1;
+  margin: 0 0 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h1 em { font-style: normal; color: var(--accent); }
+
+.sub {
+  font-size: 23px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 30px;
+}
+
+/* ── 主区：左清单 + 右计数/边界 ───── */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 40px;
+  align-items: stretch;
+}
+
+/* 左：六项完成线清单（弱网格线 + 状态点） */
+.checklist {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 8px 40px 0;
+  display: flex;
+  flex-direction: column;
+}
+.chead {
+  display: grid;
+  grid-template-columns: 46px 90px 250px 1fr;
+  gap: 16px;
+  padding: 22px 0 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.crow {
+  display: grid;
+  grid-template-columns: 46px 90px 250px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
+  justify-self: start;
+  margin-left: 4px;
+}
+.fid {
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.fname { font-size: 25px; font-weight: 600; }
+.fdesc { font-size: 22px; color: var(--ink-2); line-height: 1.5; }
+
+.gateline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 0;
+  font-size: 22px;
+  flex-wrap: wrap;
+}
+.gateline .chip {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 8px 18px;
+}
+.gateline .op { color: var(--ink-2); font-family: var(--font-num); font-size: 24px; }
+.gateline .res { font-weight: 700; color: var(--ink); }
+
+.footnote {
+  font-size: 19px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  padding: 14px 0 20px;
+  border-top: 1px dashed var(--line);
+}
+.footnote b { color: var(--ink); font-weight: 600; }
+
+/* 右列 */
+.side { display: flex; flex-direction: column; gap: var(--gap); }
+
+.count {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 26px 34px 22px;
+}
+.count .label {
+  font-size: 14px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--ink-2); margin-bottom: 8px;
+}
+.count .big {
+  font-family: var(--font-num);
+  font-size: 72px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.count .big small { font-size: 26px; color: var(--ink-2); font-weight: 500; margin-left: 8px; font-family: var(--font-sans); }
+.bars { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.bar { display: grid; grid-template-columns: 118px 1fr 40px; align-items: center; gap: 12px; font-size: 20px; }
+.bar .n { color: var(--ink); }
+.bar .track { height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--line) 60%, transparent); overflow: hidden; }
+.bar .fill { height: 100%; border-radius: 5px; background: var(--accent); }
+.bar .v { font-family: var(--font-num); font-size: 20px; color: var(--accent); text-align: right; }
+.count .note { margin-top: 14px; font-size: 17px; color: var(--ink-2); line-height: 1.5; }
+
+.nodo {
+  background: color-mix(in srgb, var(--danger) 5%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
+  border-radius: var(--radius-md);
+  padding: 22px 34px;
+  flex: 1;
+}
+.nodo .label {
+  font-size: 14px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--danger); margin-bottom: 16px; font-weight: 600;
+}
+.nodo ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.nodo li { font-size: 22px; line-height: 1.4; color: var(--ink); display: flex; gap: 12px; }
+.nodo li .x { color: var(--danger); font-family: var(--font-num); font-weight: 700; }
+.nodo li small { color: var(--ink-2); font-size: 19px; }
+
+/* ── 收束横幅 ─────────────────────── */
+.banner {
+  margin-top: 24px;
+  text-align: center;
+  padding: 18px 0 4px;
+  border-top: 1px solid var(--line);
+}
+.banner p {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.banner p em { font-style: normal; color: var(--accent); }
+
+/* ── 导航 ─────────────────────────── */
+.nav {
+  margin-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  color: var(--ink-2);
+}
+.nav a { color: var(--ink-2); text-decoration: none; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 20px; background: var(--surface); }
+.nav .disabled { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 20px; opacity: 0.35; }
+.nav .pageno { font-family: var(--font-num); letter-spacing: 0.2em; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="page">
+
+    <div class="meta">COOLFLY 智能客服 · <b>验收与边界</b> · 收官</div>
+    <h1>MVP 完成的唯一标准——<em>六项功能全部过硬验收</em></h1>
+    <p class="sub">完成定义已确认、不得改动：六项达到及格线完成标准即 MVP 完成，做完即验收，验收即上线条件。</p>
+
+    <div class="main">
+
+      <!-- 左：六项完成线清单 -->
+      <div class="checklist">
+        <div class="chead"><span></span><span>编号</span><span>功能</span><span>及格线要点</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F01</span><span class="fname">智能问答</span><span class="fdesc">答得准，宁可承认不会也不编造</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F02</span><span class="fname">引导式排障</span><span class="fdesc">安装 / 联网 / 配对，一步一屏</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F03</span><span class="fname">人机衔接</span><span class="fdesc">摘要 + SN + 型号，零复述</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F04</span><span class="fname">会话反馈</span><span class="fdesc">双层反馈，信号回流修正</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F06</span><span class="fname">效果度量</span><span class="fdesc">双口径看板 + 容量预警</span></div>
+        <div class="crow"><span class="dot"></span><span class="fid">F08</span><span class="fname">入口触达</span><span class="fdesc">错误场景一键 Get help</span></div>
+        <div class="gateline">
+          <span class="chip">六项全部及格</span><span class="op">+</span>
+          <span class="chip">离线评测集验收通过</span><span class="op">+</span>
+          <span class="chip">双口径看板可用</span><span class="op">=</span>
+          <span class="res">MVP 完成</span>
+        </div>
+        <div class="footnote"><b>F05</b> 知识库回流随 MVP 上线、不卡完成验收（周消化承诺待运营名单落实后生效）；<b>F07</b> 只验收两条零成本约束——文案不硬编码语言、知识条目带语言标记，完整多语言后置。</div>
+      </div>
+
+      <!-- 右：46 条计数 + 不做边界 -->
+      <div class="side">
+        <div class="count">
+          <div class="label">验收体系</div>
+          <div class="big">46<small>条硬验收</small></div>
+          <div class="bars">
+            <div class="bar"><span class="n">主流程</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="v">12</span></div>
+            <div class="bar"><span class="n">异常分支</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="v">12</span></div>
+            <div class="bar"><span class="n">状态切换</span><span class="track"><span class="fill" style="width:92%"></span></span><span class="v">11</span></div>
+            <div class="bar"><span class="n">兼容性</span><span class="track"><span class="fill" style="width:50%"></span></span><span class="v">6</span></div>
+            <div class="bar"><span class="n">不变行为</span><span class="track"><span class="fill" style="width:42%"></span></span><span class="v">5</span></div>
+          </div>
+          <div class="note">不变行为 5 条：不硬拦截转人工 · 不做设备诊断 · 人工首响不劣化 · App 现有功能不受影响 · 不虚假承诺</div>
+        </div>
+
+        <div class="nodo">
+          <div class="label">不做边界（重申）</div>
+          <ul>
+            <li><span class="x">✕</span><span>设备状态诊断 <small>（第二阶段王牌）</small></span></li>
+            <li><span class="x">✕</span><span>客服侧工作台 <small>（未来 Zendesk）</small></span></li>
+            <li><span class="x">✕</span><span>邮箱 / 社媒 / 官网渠道改造</span></li>
+            <li><span class="x">✕</span><span>硬拦截压转人工率</span></li>
+            <li><span class="x">✕</span><span>客服排班方案 <small>（只交付预警数据）</small></span></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 收束结论 -->
+    <div class="banner">
+      <p>先及格、再王牌——第一阶段的每一项承诺，都有一条<em>可核对的完成线</em>。</p>
+    </div>
+
+    <!-- 导航 -->
+    <div class="nav">
+      <a href="p10.html">← 上一页</a>
+      <span class="pageno">11 / 11</span>
+      <span class="disabled">下一页 →</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p10.html';
+    /* 末页：右方向键无下一页 */
+  });
+</script>
+</body>
+</html>

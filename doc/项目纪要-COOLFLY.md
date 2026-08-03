@@ -4,12 +4,13 @@
 - 约束：使用营队工具链（prd-master → design-master → tdd-master → git-master）
 
 ## 当前状态
-- ✅ 已完成：营队工具包已安装（prd/design/tdd/git masters + 全局提示词）
-- ▶️ 进行中：prd-master 阶段 5（PRD 终稿自动流水线：R0 完成，R1 三 author 写作中）
-- ⏸️ 待办：R1-R3 协同写作 → 合并 → R4 跨章节评审 → 四方终审 → requirements.md + 正确性分析 → 5 项硬校验 → PRD-summary/dev → 阶段 6 方案 PPT；用户侧并行动作=G1-G4 前置门槛（≤2 周硬窗口）+ 拍板 2 名单后补
-- ❓ 待确认：拍板 1（重建vs升级）、拍板 3（上线时间表）——均待 G1/G2 证据后拍，已在 PRD 中标 OPEN_QUESTION 不阻塞定稿
+- ✅ 已完成：prd-master 全流程（阶段 0–6）。PRD详细版 1424 行过 5 项硬校验（可执行性 81.7%）；requirements.md 契约（116 稳定对象）过校验；PRD-summary/dev 分层输出；方案 PPT 11 页 HTML 过全局自校验。全部产物已提交推送
+- ▶️ 进行中：无（PRD 链路收官，待进入 design-master）
+- ⏸️ 待办：用户侧并行动作=G1-G4 前置门槛（≤2 周硬窗口）+ 拍板 2 名单后补；下游=design-master 消费 output/PRD详细版.md + requirements.md
+- ❓ 待确认：拍板 1（重建vs升级）、拍板 3（上线时间表）——待 G1/G2 证据后拍（PRD 已标 OPEN_QUESTION）；两条 Controller 补写规则待企业家追认（拍板2超窗回退扩展、G窗口时间线owner默认=企业家本人）
 
 ## 决策记录（实时维护）
+- [08-03-2026 20:30:40] PRD 全流程完成（阶段 5+6 收官）｜背景：用户拍板停评审后收尾｜结论：阶段5交付=PRD详细版.md（1424行）+requirements.md（1564行，116稳定对象✅）+requirements-analysis.md（P0=0/P1=0/P2=13）+PRD-summary（88行）+PRD-dev（408行），5项硬校验全过；其间修正 3 处校验器正则 bug（check_format 缺尾部\b 误报 int/char；check_executability AC/FR 正则不认 AC-M-01/FR-F01 契约格式）——属校验器缺陷修复非绕过。阶段6交付=ppt.md 大纲（11页8段）+ppt/p01-p11.html（共享视觉契约自然绿浅底，全局自校验过：root一致/无hex泄漏/导航闭合/stage适配）。契约层增补 US-F07-01+8条AC（标注契约层增补，PRD未动）｜来源：AI
 - [08-03-2026 14:48:55] 启动 PRD 流程｜背景：用户说"打开PRD"，项目内尚无任何 PRD 文档，仅有 prd-master 工具包｜结论：解读为启动 prd-master 开始制作 PRD｜来源：用户
 - [08-03-2026 14:48:55] 官网地址更正｜背景：用户先给 www.coolfly.com（证书错误无法访问），后更正｜结论：COOLFLY 官网为 ourcoolfly.com（智能喂鸟器/鸟类相机 + App + 会员，2024 年创立）｜来源：用户
 - [08-03-2026 14:48:55] 产品需求原始输入｜背景：用户自由倾诉（阶段 0）｜结论：要在 COOLFLY App 上做智能客服入口，解决：①新用户装机/联网卡住找客服；②客服渠道分散（邮箱+App人工/AI）；③人工回复依赖不完善知识库、口径不一体验差。已有基于历史咨询数据的简单知识库。期望更快更准解决用户问题，具体方案开放待 AI 提出｜来源：用户
@@ -54,3 +55,9 @@
 - COOLFLY智能客服/drafts/r2-challenge-{tech,design,business,strategy}.md（阶段 4.4 Round 3 challenge）
 - COOLFLY智能客服/proposal-v1.md（阶段 4.5 收敛产物，08-03-2026，拍板 2/4/5 已落定，MVP 划分小节已写入）
 - COOLFLY智能客服/drafts/r0-chapter-negotiation.md（阶段 5 R0 章节分工备忘录，08-03-2026，R1 三 author 主笔边界依据）
+- COOLFLY智能客服/drafts/r1-{pm,architect,engineer}.md、r2-*-reviews-others.md、r3-{pm,architect,engineer}.md（阶段 5 R1-R3 协同写作产物）
+- COOLFLY智能客服/drafts/r4-cross-chapter-review.md、r5-final-review-{tech,design,business,strategy}.md、merge-conflicts.md（阶段 5 评审产物）
+- COOLFLY智能客服/output/PRD详细版.md（⭐ 1424 行终稿，5 项硬校验全过）
+- COOLFLY智能客服/output/requirements.md（⭐ 1564 行机器契约，116 稳定对象）+ requirements-analysis.md
+- COOLFLY智能客服/output/PRD-summary.md（老板版 88 行）+ PRD-dev.md（开发版 408 行）
+- COOLFLY智能客服/output/ppt.md（11 页大纲）+ output/ppt/p01-p11.html（方案 PPT）

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P9 · 两周查证窗口 + 写死的回退规则</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+.stage { width: 1920px; transform-origin: top left; }
+
+.page {
+  min-height: 1080px;
+  padding: 72px var(--pad-stage) 40px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 头部 ---------- */
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 26px;
+}
+h1 {
+  margin: 0;
+  font-size: 66px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+h1 .hl { color: var(--accent); }
+.subtitle {
+  margin-top: 14px;
+  font-size: 24px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+/* ---------- 区块标题 ---------- */
+.sec-label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+}
+.sec-label .bar {
+  width: 28px; height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.sec-label .tag {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-transform: none;
+}
+
+/* ---------- 查证门槛表（G1–G4） ---------- */
+.gates {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  padding: 10px 36px;
+  margin-top: 38px;
+}
+.gate-head, .gate-row {
+  display: grid;
+  grid-template-columns: 96px 340px 150px 1fr;
+  align-items: center;
+  column-gap: 28px;
+}
+.gate-head {
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.gate-row { padding: 17px 0; }
+.gate-row + .gate-row { border-top: 1px solid var(--line); }
+.gate-id {
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.gate-name { font-size: 24px; font-weight: 600; }
+.gate-days {
+  font-family: var(--font-num);
+  font-size: 22px;
+  color: var(--ink);
+}
+.gate-fall {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 22px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.dot {
+  flex: none;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+.dot-danger { background: var(--danger); }
+.dot-accent { background: var(--accent); }
+.gate-fall b { color: var(--danger); font-weight: 600; }
+
+/* ---------- 下半区 ---------- */
+.bottom {
+  display: grid;
+  grid-template-columns: 1fr 640px;
+  gap: var(--gap);
+  margin-top: 34px;
+  flex: 1;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 26px 32px;
+  box-sizing: border-box;
+}
+
+/* 风险表 */
+.risk-row {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  column-gap: 24px;
+  align-items: start;
+  padding: 15px 0;
+}
+.risk-row + .risk-row { border-top: 1px solid var(--line); }
+.risk-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--danger);
+  line-height: 1.35;
+}
+.risk-fix { font-size: 22px; line-height: 1.5; color: var(--ink-2); }
+.risk-fix b { color: var(--ink); font-weight: 600; }
+
+/* 成本表 */
+.cost-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 20px;
+  padding: 13px 0;
+}
+.cost-row + .cost-row { border-top: 1px solid var(--line); }
+.cost-item { font-size: 22px; font-weight: 600; }
+.cost-val {
+  font-family: var(--font-num);
+  font-size: 22px;
+  color: var(--accent);
+  text-align: right;
+  line-height: 1.4;
+}
+.cost-val.pending { color: var(--ink-2); }
+.cost-note { font-size: 15px; color: var(--ink-2); margin-top: 4px; }
+
+/* 止损扳机 */
+.trigger {
+  margin-top: 18px;
+  border: 1px solid var(--danger);
+  border-left: 6px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 18px 24px;
+}
+.trigger .t-label {
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--danger);
+  margin-bottom: 8px;
+}
+.trigger p {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.55;
+}
+.trigger .num { font-family: var(--font-num); color: var(--danger); font-weight: 600; }
+
+/* ---------- 导航 ---------- */
+.nav {
+  margin-top: 26px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  color: var(--ink-2);
+}
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.nav .pageno {
+  font-family: var(--font-num);
+  letter-spacing: 0.1em;
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="page">
+
+    <div class="meta-row">
+      <span>Risk &amp; Gates · 前置查证与风险</span>
+      <span>COOLFLY 智能客服</span>
+    </div>
+
+    <h1>两周查证窗口 + 写死的回退规则<br><span class="hl">风险不留模糊区</span></h1>
+    <div class="subtitle">四项查证并行推进，每项都预设超期回退动作——查证不顺利，方案自动降级，不停摆、不含糊。</div>
+
+    <div class="gates">
+      <div class="sec-label" style="padding-top:16px;">
+        <span class="bar"></span><span>四项前置查证</span>
+        <span class="tag">并行 ≤ 2 周</span>
+      </div>
+      <div class="gate-head">
+        <span>门槛</span><span>查证项</span><span>时限</span><span>写死的回退 / 判定</span>
+      </div>
+      <div class="gate-row">
+        <span class="gate-id">G1</span>
+        <span class="gate-name">历史数据基线</span>
+        <span class="gate-days">≤ 5 日</span>
+        <span class="gate-fall"><span class="dot dot-danger"></span>超 2 周 → <b>自动落保守版</b></span>
+      </div>
+      <div class="gate-row">
+        <span class="gate-id">G2</span>
+        <span class="gate-name">现有系统盘点</span>
+        <span class="gate-days">≤ 5 日</span>
+        <span class="gate-fall"><span class="dot dot-accent"></span>判定「重建 / 升级」是否为真选择题</span>
+      </div>
+      <div class="gate-row">
+        <span class="gate-id">G3</span>
+        <span class="gate-name">人工通路查证</span>
+        <span class="gate-days">≤ 3 日</span>
+        <span class="gate-fall"><span class="dot dot-danger"></span>反向通路不通 → <b>转人工承诺直接降级</b></span>
+      </div>
+      <div class="gate-row">
+        <span class="gate-id">G4</span>
+        <span class="gate-name">退货归因链路</span>
+        <span class="gate-days">≤ 5 日</span>
+        <span class="gate-fall"><span class="dot dot-danger"></span>映射不存在 → <b>降级为粗分类趋势</b></span>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <div class="card">
+        <div class="sec-label"><span class="bar" style="background:var(--danger);"></span><span>三大风险与缓解</span></div>
+        <div class="risk-row">
+          <span class="risk-name"><span class="dot dot-danger"></span>知识库质量<br>——第一命门</span>
+          <span class="risk-fix">三大场景上线前完成<b>结构化改造</b>，评测达标才放量</span>
+        </div>
+        <div class="risk-row">
+          <span class="risk-name"><span class="dot dot-danger"></span>拒答洪水</span>
+          <span class="risk-fix">薄知识 + 严核验会推高转人工——<b>放量门禁</b>把洪水关在小流量里，容量预警预案灰度前到位</span>
+        </div>
+        <div class="risk-row">
+          <span class="risk-name"><span class="dot dot-danger"></span>实现缩水</span>
+          <span class="risk-fix">用户可见完成标准为<b>硬验收</b>，不随技术选型变化</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="sec-label"><span class="bar"></span><span>成本账一页 · 对照价值账呈报</span></div>
+        <div class="cost-row">
+          <div>
+            <div class="cost-item">大模型推理</div>
+            <div class="cost-note">对照：采购成品年费约 ¥8–19 万；第一版自研</div>
+          </div>
+          <span class="cost-val">约 ¥1 万 / 年</span>
+        </div>
+        <div class="cost-row">
+          <span class="cost-item">基础设施与集成 · 开发投入</span>
+          <span class="cost-val pending">查证后回填</span>
+        </div>
+        <div class="cost-row">
+          <span class="cost-item">运营三岗兼任工时</span>
+          <span class="cost-val">≤ 1 人日 / 周起步</span>
+        </div>
+
+        <div class="trigger">
+          <div class="t-label">止损扳机 · 写死</div>
+          <p>高频类严口径解决率<span class="num">连续 2 个月 &lt; 45%</span> 且知识修正机制正常运转 → 触发采购路线复评；供应商更换以整套评测集回归通过为前提。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <a href="p08.html">← 上一页</a>
+      <span class="pageno">9 / 11</span>
+      <a href="p10.html">下一页 →</a>
+    </div>
+
+  </div>
+</div>
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p08.html';
+    if (e.key === 'ArrowRight') location.href = 'p10.html';
+  });
+</script>
+</body>
+</html>

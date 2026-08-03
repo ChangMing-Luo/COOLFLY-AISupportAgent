@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P10 · 先及格、再王牌——两阶段路线与两个待拍决策</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  box-sizing: border-box;
+  padding: 64px var(--pad-stage) 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 头部 ---------- */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 18px;
+}
+h1 {
+  font-size: 66px;
+  line-height: 1.1;
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+h1 .hl { color: var(--accent); }
+.lede {
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 40px;
+  max-width: 1400px;
+}
+
+/* ---------- 上半区：两阶段路线 ---------- */
+.roadmap {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: var(--gap);
+}
+.phase {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 28px 32px;
+  box-sizing: border-box;
+}
+.phase-1 {
+  flex: 0 0 620px;
+  border-top: 4px solid var(--accent);
+}
+.phase-2 {
+  flex: 1;
+  border-top: 4px solid var(--line);
+}
+.phase-tag {
+  display: inline-block;
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+}
+.phase-1 .phase-tag { background: var(--accent); color: var(--surface); }
+.phase-2 .phase-tag { background: var(--bg); color: var(--ink-2); border: 1px solid var(--line); }
+.phase h2 { font-size: 32px; margin: 0 0 16px; line-height: 1.25; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip {
+  font-size: 22px;
+  line-height: 1.4;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.chip.king {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.arrow {
+  flex: 0 0 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.arrow svg { display: block; }
+
+/* ---------- 下半区 ---------- */
+.lower {
+  display: flex;
+  gap: var(--gap);
+  flex: 1;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 28px 32px;
+  box-sizing: border-box;
+}
+.panel-title {
+  font-size: 15px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin: 0 0 18px;
+}
+.decisions { flex: 0 0 760px; display: flex; flex-direction: column; }
+.dcard {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+.dcard .dhead {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.dcard .dname { font-size: 24px; font-weight: 700; }
+.badge {
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.dcard .dnote { font-size: 22px; line-height: 1.5; color: var(--ink-2); }
+.dep {
+  font-size: 22px;
+  color: var(--ink-2);
+  margin: 2px 0 14px;
+}
+.dep strong { color: var(--ink); }
+.redline {
+  margin-top: auto;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 14px 20px;
+  font-size: 23px;
+  line-height: 1.5;
+}
+.redline strong { color: var(--danger); }
+
+/* 灰度双线 */
+.rollout { flex: 1; display: flex; flex-direction: column; }
+.track { margin-bottom: 22px; }
+.track-name { font-size: 24px; font-weight: 700; margin-bottom: 12px; }
+.steps { display: flex; align-items: center; gap: 0; }
+.step {
+  font-family: var(--font-num);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 10px 24px;
+}
+.step-link {
+  width: 44px;
+  height: 2px;
+  background: var(--line);
+}
+.gate {
+  font-size: 22px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin-top: 10px;
+}
+.gate strong { color: var(--ink); }
+.track-client .steps .step {
+  color: var(--ink-2);
+  background: var(--bg);
+  border-color: var(--line);
+  font-size: 23px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+.rollout-note {
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  font-size: 22px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.rollout-note strong { color: var(--ink); }
+
+/* ---------- 导航 ---------- */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 24px;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.nav a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.nav .pageno { font-family: var(--font-num); }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta">Roadmap · 两阶段路线</div>
+  <h1><span class="hl">先及格、再王牌</span>——两阶段路线与两个待拍决策</h1>
+  <p class="lede">本期只承诺 MVP 及格线；差异化王牌登记方向、不进承诺。两个决策待证据后拍，不阻塞方案定稿。</p>
+
+  <!-- 两阶段路线 -->
+  <div class="roadmap">
+    <div class="phase phase-1">
+      <span class="phase-tag">阶段一 · 本期承诺</span>
+      <h2>MVP：八项功能交付及格线体验 + 数据底子</h2>
+      <div class="chips">
+        <span class="chip">及格线体验</span>
+        <span class="chip">数据底子</span>
+      </div>
+    </div>
+    <div class="arrow">
+      <svg width="56" height="24" viewBox="0 0 56 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0 12 H44 M36 4 L46 12 L36 20" stroke="var(--ink-2)" stroke-width="2.5" fill="none"/>
+      </svg>
+    </div>
+    <div class="phase phase-2">
+      <span class="phase-tag">阶段二 · 登记方向 不在本期承诺内</span>
+      <h2>差异化与扩展</h2>
+      <div class="chips">
+        <span class="chip king">设备状态诊断 + 自动解决方案（王牌 · 待方案商接口）</span>
+        <span class="chip">邮箱 / 社媒 / 官网全渠道</span>
+        <span class="chip">Zendesk 客服工作台</span>
+        <span class="chip">完整多语言（非英语来话 &gt;15% 提前触发）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 下半区 -->
+  <div class="lower">
+
+    <div class="panel decisions">
+      <div class="panel-title">两个待拍决策 · 不阻塞定稿</div>
+      <div class="dcard">
+        <div class="dhead">
+          <span class="dname">① 重建 vs 升级现有系统</span>
+          <span class="badge">未决</span>
+        </div>
+        <div class="dnote">待 G1 基线 + G2 盘点证据后拍</div>
+      </div>
+      <div class="dcard">
+        <div class="dhead">
+          <span class="dname">② 上线时间表与 Q4 旺季策略</span>
+          <span class="badge">未决</span>
+        </div>
+        <div class="dnote">待 G1 + 开发排期后，在「旺季前完整爬坡」与「旺季前只上保守版」中选</div>
+      </div>
+      <div class="dep">依赖关系：决策 <strong>① 先决于 ②</strong></div>
+      <div class="redline"><strong>红线</strong>：灰度爬坡 <strong>11 月中旬前</strong>完成，不撞旺季峰值（超期回退规则见查证窗口页）</div>
+    </div>
+
+    <div class="panel rollout">
+      <div class="panel-title">上线双线 · 灰度放量</div>
+
+      <div class="track">
+        <div class="track-name">服务端灰度线（用户分桶 + 远程开关 · 2 周）</div>
+        <div class="steps">
+          <span class="step">20%</span>
+          <span class="step-link"></span>
+          <span class="step">50%</span>
+          <span class="step-link"></span>
+          <span class="step">100%</span>
+        </div>
+        <div class="gate">门禁三项缺一不放量：<strong>评测命中率达标 · 拒答率在预期区间 · 运营就绪</strong></div>
+      </div>
+
+      <div class="track track-client">
+        <div class="track-name">客户端发版线</div>
+        <div class="steps">
+          <span class="step">入口 / 按钮组 / 卡片界面</span>
+          <span class="step-link"></span>
+          <span class="step">随版本升级率爬坡 · 覆盖率如实呈报</span>
+        </div>
+      </div>
+
+      <div class="rollout-note">灰度对比强制区分<strong>「回答能力效果」与「入口效果」</strong>，混算会让新系统被自己的增量流量拉低；旧版本客户端全程可用文字版完整能力，<strong>不出功能黑洞</strong>。</div>
+    </div>
+
+  </div>
+
+  <!-- 导航 -->
+  <div class="nav">
+    <a href="p09.html">← 上一页</a>
+    <span class="pageno">10 / 11</span>
+    <a href="p11.html">下一页 →</a>
+  </div>
+
+</div>
+
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p09.html';
+    if (e.key === 'ArrowRight') location.href = 'p11.html';
+  });
+</script>
+</body>
+</html>

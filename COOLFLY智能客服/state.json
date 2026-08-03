@@ -2,7 +2,7 @@
   "state_schema_version": 1,
   "project_name": "COOLFLY智能客服",
   "project_started_at_utc": "2026-08-03T07:08:22Z",
-  "last_updated_at_utc": "2026-08-03T13:10:00Z",
+  "last_updated_at_utc": "2026-08-03T13:55:00Z",
   "work_type": "feature",
   "workflow_mode": "standard",
   "value_confirmation": {
@@ -31,20 +31,21 @@
   },
   "contract_revision": 0,
   "source_ids_changed": [],
-  "current_stage": "6",
-  "current_substep": "stage6-6.2-ppt-html",
+  "current_stage": "completed",
+  "current_substep": "all-stages-complete",
   "completed_stages": [
     "0",
     "1",
     "2",
     "3",
     "4",
-    "5"
+    "5",
+    "6"
   ],
   "skipped_stages": [],
   "next_action": {
-    "type": "auto",
-    "description": "阶段6.2：11页PPT HTML并发生成中（P1-P6已派发，P7-P11待派）；完成后全局自校验并标记完成",
+    "type": "handoff",
+    "description": "PRD 全流程完成。下游：design-master 消费 output/PRD详细版.md + requirements.md；用户侧并行动作 G1-G4（≤2周硬窗口）+ 拍板2名单后补；拍板1/3 待 G1/G2 证据。两条 Controller 补写规则（拍板2超窗回退扩展、G窗口时间线owner=企业家）待企业家追认",
     "askuserquestion_options": []
   },
   "open_questions": [
@@ -160,6 +161,18 @@
     "prd_summary": "output/PRD-summary.md",
     "prd_dev": "output/PRD-dev.md",
     "ppt_outline": "output/ppt.md",
-    "ppt_pages": []
+    "ppt_pages": [
+      "output/ppt/p01.html",
+      "output/ppt/p02.html",
+      "output/ppt/p03.html",
+      "output/ppt/p04.html",
+      "output/ppt/p05.html",
+      "output/ppt/p06.html",
+      "output/ppt/p07.html",
+      "output/ppt/p08.html",
+      "output/ppt/p09.html",
+      "output/ppt/p10.html",
+      "output/ppt/p11.html"
+    ]
   }
 }
