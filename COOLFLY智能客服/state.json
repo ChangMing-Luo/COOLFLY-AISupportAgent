@@ -2,7 +2,7 @@
   "state_schema_version": 1,
   "project_name": "COOLFLY智能客服",
   "project_started_at_utc": "2026-08-03T07:08:22Z",
-  "last_updated_at_utc": "2026-08-03T13:55:00Z",
+  "last_updated_at_utc": "2026-08-03T14:15:00Z",
   "work_type": "feature",
   "workflow_mode": "standard",
   "value_confirmation": {
@@ -111,6 +111,12 @@
       "decision": "拍板5：知识库三场景前置改造+回流补齐（排序依G1）、转人工沿现有渠道层级依G3，授权按门槛结果执行（回炉线除外不上会）；拍板1/3待G1/G2证据后拍",
       "stage": "4.5",
       "rationale": "用户授权；减少无效上会轮次"
+    },
+    {
+      "id": "D-9",
+      "decision": "MVP 不变；语音/无屏渠道与 AI 生成型知识库（AI 起草+人工审核）登记阶段二储备，接口预留=既有约束（引擎渠道无关/channel 字段/条目 schema/回流管道），本期零额外开发",
+      "stage": "post-prd",
+      "rationale": "用户拍板（08-03-2026）；已全链路同步 PRD/requirements/summary/dev/ppt"
     }
   ],
   "category": "mobile-app",
