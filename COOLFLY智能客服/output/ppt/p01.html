@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P1 · COOLFLY 智能客服</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: var(--pad-stage);
+  background: var(--bg);
+}
+
+/* 顶部品牌行 */
+.brand-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 28px;
+}
+.brand {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.brand .dot { color: var(--accent); }
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* 中部主视觉 */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 1440px;
+}
+.hero-label {
+  font-size: 16px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 36px;
+}
+.hero-label::before {
+  content: "";
+  display: inline-block;
+  width: 40px;
+  height: 2px;
+  background: var(--accent);
+  vertical-align: middle;
+  margin-right: 16px;
+}
+h1 {
+  margin: 0;
+  font-size: 72px;
+  line-height: 1.16;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+h1 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.hero-sub {
+  margin-top: 40px;
+  font-size: 28px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 1240px;
+}
+.hero-sub strong { color: var(--ink); font-weight: 600; }
+
+/* 底部三关键词 */
+.pillars {
+  display: flex;
+  gap: var(--gap);
+  margin-top: 72px;
+}
+.pillar {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 36px 40px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.pillar-num {
+  font-family: var(--font-num);
+  font-size: 16px;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pillar-word { font-size: 26px; font-weight: 700; line-height: 1.3; }
+.pillar-note { font-size: 15px; color: var(--ink-2); margin-top: 6px; letter-spacing: 0.04em; }
+
+/* 导航 */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+  color: var(--ink-2);
+  letter-spacing: 0.12em;
+}
+.nav a { color: var(--ink); text-decoration: none; }
+.nav .disabled { color: var(--line); pointer-events: none; }
+.nav .page-no { font-family: var(--font-num); }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="brand-row">
+    <div class="brand">COOLFLY<span class="dot"> ·</span> 智能客服</div>
+    <div class="meta">App 内 · 英文 · 北美主力用户</div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-label">智能喂鸟器 / 鸟类相机品牌 · App 内智能客服重建方案</div>
+    <h1>把装机挫败，<br>变成<em>几分钟的自助解决</em></h1>
+    <p class="hero-sub">让刚装机的用户几分钟内自助解决<strong>安装、联网、配对、会员</strong>高频问题；解决不了时顺畅转人工——<strong>零复述、不干等、知道去哪等回复</strong>。</p>
+  </div>
+
+  <div class="pillars">
+    <div class="pillar">
+      <div class="pillar-num">01</div>
+      <div>
+        <div class="pillar-word">几分钟自助解决</div>
+        <div class="pillar-note">高频问题不出 App</div>
+      </div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-num">02</div>
+      <div>
+        <div class="pillar-word">顺畅转人工</div>
+        <div class="pillar-note">零复述 · 不干等</div>
+      </div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-num">03</div>
+      <div>
+        <div class="pillar-word">效果看得见</div>
+        <div class="pillar-note">上线第一周即有数据</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <span class="disabled">← 上一页</span>
+    <span class="page-no">1 / 11</span>
+    <a href="p02.html">下一页 →</a>
+  </div>
+
+</div>
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') location.href = 'p02.html';
+    /* 第 1 页无上一页 */
+  });
+</script>
+</body>
+</html>

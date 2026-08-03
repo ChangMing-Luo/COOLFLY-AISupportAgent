@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P2 · 第一阶段：补到及格线，攒数据</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  box-sizing: border-box;
+  padding: 72px var(--pad-stage) 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 头部 ---------- */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+h1 {
+  font-size: 66px;
+  line-height: 1.12;
+  margin: 0 0 22px;
+  font-weight: 700;
+}
+h1 .hl { color: var(--accent); }
+.lead {
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 1500px;
+  margin: 0 0 40px;
+}
+.lead strong { color: var(--ink); font-weight: 600; }
+
+/* ---------- 及格线四标准 ---------- */
+.bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.bar .std {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 24px 32px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.std .no {
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--accent);
+  letter-spacing: 0.12em;
+}
+.std .name { font-size: 30px; font-weight: 700; }
+.std .desc { font-size: 16px; color: var(--ink-2); margin-left: auto; }
+
+/* ---------- 下半区 ---------- */
+.lower {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 430px;
+  gap: var(--gap);
+}
+.features {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr;
+  gap: var(--gap);
+}
+.f {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+}
+.f .fid {
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--ink-2);
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+.f .fname { font-size: 25px; font-weight: 700; line-height: 1.3; }
+.f .fsub { font-size: 17px; color: var(--ink-2); line-height: 1.5; margin-top: 8px; }
+
+/* ---------- 目标块 ---------- */
+.target {
+  background: var(--accent);
+  color: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 40px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.target .tlabel {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.target .num {
+  font-family: var(--font-num);
+  font-size: 150px;
+  line-height: 1;
+  font-weight: 700;
+  margin: 18px 0 4px;
+}
+.target .num small { font-size: 56px; font-weight: 700; }
+.target .tdesc { font-size: 22px; line-height: 1.55; }
+.target .tfoot {
+  font-size: 16px;
+  line-height: 1.5;
+  opacity: 0.82;
+  border-top: 1px solid var(--surface);
+  padding-top: 16px;
+  margin-top: 20px;
+}
+
+/* ---------- 导航 ---------- */
+.nav {
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.nav .page {
+  font-family: var(--font-num);
+  font-size: 16px;
+  color: var(--ink-2);
+  letter-spacing: 0.2em;
+}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta">COOLFLY 智能客服 · 阶段一定位 · Scope &amp; Target</div>
+
+  <h1>第一阶段不做炫技：<span class="hl">把体验补到及格线</span>，同时为第二阶段攒数据</h1>
+
+  <p class="lead">本期只做一件事：把高频问题的自助解决体验补到及格线，同时攒下数据与知识修正机制，承接第二阶段的差异化王牌——<strong>AI + 设备状态诊断</strong>（调研证明全品类 7 家品牌无一做到）。</p>
+
+  <div class="bar">
+    <div class="std"><span class="no">01</span><span class="name">答得准</span><span class="desc">高频问题</span></div>
+    <div class="std"><span class="no">02</span><span class="name">转得顺</span><span class="desc">人工兜底</span></div>
+    <div class="std"><span class="no">03</span><span class="name">找得到门</span><span class="desc">入口触达</span></div>
+    <div class="std"><span class="no">04</span><span class="name">出得去门</span><span class="desc">不困住用户</span></div>
+  </div>
+
+  <div class="lower">
+    <div class="features">
+      <div class="f"><div class="fid">F01</div><div class="fname">智能问答</div></div>
+      <div class="f"><div class="fid">F02</div><div class="fname">引导式排障</div><div class="fsub">安装 / 联网 / 配对，一步一屏</div></div>
+      <div class="f"><div class="fid">F03</div><div class="fname">人机衔接</div><div class="fsub">摘要 + SN + 型号</div></div>
+      <div class="f"><div class="fid">F04</div><div class="fname">双层反馈</div></div>
+      <div class="f"><div class="fid">F05</div><div class="fname">知识库升级与回流</div></div>
+      <div class="f"><div class="fid">F06</div><div class="fname">效果度量与预警</div></div>
+      <div class="f"><div class="fid">F07</div><div class="fname">多语言预留</div><div class="fsub">仅两条约束</div></div>
+      <div class="f"><div class="fid">F08</div><div class="fname">入口与场景化触达</div></div>
+    </div>
+
+    <div class="target">
+      <div>
+        <div class="tlabel">目标 · 高频类自助解决率</div>
+        <div class="num">60<small>%</small></div>
+        <div class="tdesc">安装 / 联网 / 配对，3 个月达成；底线 45%</div>
+      </div>
+      <div class="tfoot">严口径：未转人工 + 48 小时未复问 + 用户显式确认解决。目标值为假设值，上线前用真实历史数据校准。</div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <a href="p01.html">&larr; 上一页</a>
+    <span class="page">2 / 11</span>
+    <a href="p03.html">下一页 &rarr;</a>
+  </div>
+
+</div>
+
+<script>
+  function fit() {
+    var s = innerWidth / 1920;                 // 按视口宽度等比缩放
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';  // 修正滚动高度，避免留白 / 错位
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p01.html';
+    if (e.key === 'ArrowRight') location.href = 'p03.html';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P7 · 答错的地方，一周内被看见、被修正</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  background: var(--bg);
+  box-sizing: border-box;
+  padding: 64px var(--pad-stage) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Header ===== */
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-num);
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+h1 {
+  margin: 20px 0 0;
+  font-size: 66px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+h1 .em { color: var(--accent); }
+.lede {
+  margin-top: 16px;
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.lede strong { color: var(--ink); font-weight: 600; }
+
+/* ===== Main grid ===== */
+.grid {
+  flex: 1;
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: 1fr 1.12fr;
+  gap: calc(var(--gap) * 1.5);
+  align-items: stretch;
+}
+
+.panel-label {
+  font-family: var(--font-num);
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 16px;
+}
+.panel-label b { color: var(--accent); font-weight: 700; }
+
+/* ===== Left · 修正流 ===== */
+.flow { display: flex; flex-direction: column; }
+
+.signals {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.sig {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  font-size: 22px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sig .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.sig .num { font-family: var(--font-num); font-weight: 700; }
+
+.chute {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0;
+  padding-left: 6px;
+}
+.chute .arrow {
+  font-size: 24px;
+  color: var(--accent);
+  line-height: 1;
+}
+.chute .note {
+  font-family: var(--font-num);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.steps { position: relative; padding-left: 34px; }
+.steps::before {
+  content: "";
+  position: absolute;
+  left: 10px; top: 14px; bottom: 14px;
+  width: 2px;
+  background: var(--line);
+}
+.step {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px 22px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.step:last-child { margin-bottom: 0; }
+.step::before {
+  content: "";
+  position: absolute;
+  left: -30px; top: 24px;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--accent);
+  box-sizing: border-box;
+}
+.step .t { font-size: 23px; font-weight: 600; line-height: 1.4; }
+.step .t small {
+  display: block;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink-2);
+  margin-top: 4px;
+}
+.step .kpi {
+  font-family: var(--font-num);
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.step .kpi small { font-size: 16px; color: var(--ink-2); font-weight: 400; display: block; text-align: right; letter-spacing: 0.1em; }
+
+.flow-note {
+  margin-top: 18px;
+  font-size: 22px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  border-left: 3px solid var(--accent);
+  padding-left: 16px;
+}
+.flow-note strong { color: var(--ink); }
+
+/* ===== Right · 看板 ===== */
+.board { display: flex; flex-direction: column; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+}
+.card.wide { grid-column: 1 / -1; }
+.card h3 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card h3 .tag {
+  font-family: var(--font-num);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.card .desc { margin-top: 10px; font-size: 20px; line-height: 1.55; color: var(--ink-2); }
+.card .desc b { color: var(--ink); font-weight: 600; }
+
+.duo { display: flex; gap: 10px; margin-top: 14px; }
+.duo .pill {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 19px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.duo .pill b {
+  font-family: var(--font-num);
+  font-size: 24px;
+  color: var(--accent);
+  margin-right: 8px;
+}
+
+.range { margin-top: 16px; }
+.range .track {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line);
+}
+.range .band {
+  position: absolute;
+  left: 18%; width: 34%;
+  top: 0; bottom: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  opacity: 0.35;
+}
+.range .lbl {
+  margin-top: 8px;
+  font-family: var(--font-num);
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.cap { margin-top: 16px; }
+.cap .track {
+  position: relative;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--line);
+}
+.cap .fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 52%;
+  border-radius: 9px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+.cap .mark {
+  position: absolute;
+  left: 80%; top: -8px; bottom: -8px;
+  width: 0;
+  border-left: 3px dashed var(--danger);
+}
+.cap .mark span {
+  position: absolute;
+  top: -26px; left: -22px;
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--danger);
+  white-space: nowrap;
+}
+.cap .lbl {
+  margin-top: 14px;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.cap .lbl b { color: var(--danger); font-family: var(--font-num); }
+
+.strip {
+  display: flex;
+  gap: 10px;
+}
+.strip .cell {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 19px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+
+.rule-card {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: 18px 24px;
+  font-size: 22px;
+  line-height: 1.6;
+}
+.rule-card .formula {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 23px;
+}
+.rule-card .formula .x { color: var(--ink-2); padding: 0 6px; }
+.rule-card b.warn { color: var(--danger); }
+
+/* ===== Nav ===== */
+.nav {
+  margin-top: 36px;
+  padding: 20px 0 28px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+}
+.nav .page {
+  font-family: var(--font-num);
+  font-size: 18px;
+  color: var(--ink);
+  letter-spacing: 0.2em;
+}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta-row">
+    <span>COOLFLY AI SUPPORT · PROPOSAL</span>
+    <span>07 · EFFECT &amp; CORRECTION LOOP</span>
+  </div>
+
+  <h1>答错的地方，<span class="em">一周内</span>被看见、被修正</h1>
+  <p class="lede"><strong>每次不满意都自动变成修正任务，指标不许自欺</strong>——知识缺口按频次排队，不靠人肉巡检。</p>
+
+  <div class="grid">
+
+    <!-- 左 · 知识修正流 -->
+    <section class="flow">
+      <div class="panel-label"><b>KNOWLEDGE LOOP</b> · 知识修正流</div>
+
+      <div class="signals">
+        <div class="sig"><span class="dot"></span>拒答 / 无命中</div>
+        <div class="sig"><span class="dot"></span>点踩 · "没起作用"</div>
+        <div class="sig"><span class="dot"></span>转人工会话</div>
+        <div class="sig"><span class="dot"></span><span><span class="num">48h</span> 内复问</span></div>
+      </div>
+
+      <div class="chute">
+        <span class="arrow">&#8595;</span>
+        <span class="note">4 类信号 · 全部自动回流</span>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="t">周度待补清单 · 按频次聚合<small>原始问题 · 命中文档 · 会话链接 · 频次</small></div>
+        </div>
+        <div class="step">
+          <div class="t">每周消化高频缺口</div>
+          <div class="kpi">TOP 10<small>/ WEEK</small></div>
+        </div>
+        <div class="step">
+          <div class="t">修订生效</div>
+          <div class="kpi">24h<small>内上线</small></div>
+        </div>
+        <div class="step">
+          <div class="t">离线评测回归<small>发版前把关，防止改一处坏一处</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右 · 效果看板 -->
+    <section class="board">
+      <div class="panel-label"><b>DASHBOARD</b> · 效果看板 · 上线第一周即有数据，按周呈报</div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>解决率 · 双口径 <span class="tag">BY SOURCE</span></h3>
+          <div class="duo">
+            <div class="pill"><b>宽</b>行为口径</div>
+            <div class="pill"><b>严</b>行为＋显式确认</div>
+          </div>
+          <div class="desc">按入口来源分层呈现</div>
+        </div>
+
+        <div class="card">
+          <h3>拒答率 <span class="tag">BY LAYER</span></h3>
+          <div class="range">
+            <div class="track"><div class="band"></div></div>
+            <div class="lbl">EXPECTED RANGE</div>
+          </div>
+          <div class="desc">按触发层分列 · 对照预期区间</div>
+        </div>
+
+        <div class="card wide">
+          <h3>转人工量 · 容量预警 <span class="tag">AUTO ALERT</span></h3>
+          <div class="cap">
+            <div class="track">
+              <div class="fill"></div>
+              <div class="mark"><span>80%</span></div>
+            </div>
+            <div class="lbl">月转人工量达现有团队月处理量 <b>80%</b> 即自动预警推送，给业务侧留出容量应对时间</div>
+          </div>
+        </div>
+
+        <div class="card wide">
+          <div class="strip">
+            <div class="cell">解决时长</div>
+            <div class="cell">满意度</div>
+            <div class="cell">语言分布</div>
+            <div class="cell">退货归因月报</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rule-card">
+        <span class="formula">解决率 <span class="x">×</span> 满意度 <span class="x">×</span> 退货趋势</span>
+        三者<b class="warn">背离</b>即触发口径复查。
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <a href="p06.html">&#8592; 上一页</a>
+    <span class="page">7 / 11</span>
+    <a href="p08.html">下一页 &#8594;</a>
+  </div>
+
+</div>
+
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p06.html';
+    if (e.key === 'ArrowRight') location.href = 'p08.html';
+  });
+</script>
+</body>
+</html>

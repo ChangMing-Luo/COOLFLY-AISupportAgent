@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P6 · 宁可承认不会，也不编造答案</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  position: relative;
+  box-sizing: border-box;
+  padding: var(--pad-stage) var(--pad-stage) 140px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 头部 ── */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+h1 {
+  font-size: 68px;
+  line-height: 1.1;
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+h1 .em { color: var(--accent); }
+.sub {
+  font-size: 23px;
+  color: var(--ink-2);
+  margin: 0 0 52px;
+}
+
+/* ── 判定链 ── */
+.chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.node {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 26px 26px 24px;
+  width: 268px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.node .step {
+  font-family: var(--font-num);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+}
+.node .name {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.node .desc {
+  font-size: 22px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.link {
+  align-self: center;
+  width: 44px;
+  height: 1px;
+  background: var(--line);
+  position: relative;
+  flex: none;
+}
+.link::after {
+  content: "";
+  position: absolute;
+  right: 0; top: -4px;
+  border-left: 8px solid var(--line);
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+}
+
+/* 重点节点：三道核验 */
+.node.hero {
+  width: 480px;
+  border: 2px solid var(--accent);
+  padding: 26px 30px 22px;
+}
+.node.hero .step { color: var(--accent); }
+.node.hero .name { font-size: 30px; }
+.gates { margin-top: 6px; display: flex; flex-direction: column; }
+.gate {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  font-size: 22px;
+  line-height: 1.45;
+}
+.gate b { font-weight: 700; }
+.gate .g-no {
+  font-family: var(--font-num);
+  font-size: 15px;
+  color: var(--accent);
+  flex: none;
+}
+.gate .g-out { color: var(--ink-2); }
+
+/* 出口 */
+.outs {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  justify-content: center;
+  width: 268px;
+  flex: none;
+}
+.out {
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  font-size: 24px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+.out small { display: block; font-size: 20px; font-weight: 400; margin-top: 6px; line-height: 1.4; }
+.out.answer { background: var(--accent); color: var(--surface); }
+.out.answer small { color: var(--surface); opacity: 0.85; }
+.out.human { background: var(--surface); border: 1px solid var(--line); }
+.out.human small { color: var(--ink-2); }
+
+/* ── 底部两块 ── */
+.bottom {
+  display: flex;
+  gap: var(--gap);
+  margin-top: 48px;
+}
+.panel {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 28px 32px;
+  box-sizing: border-box;
+}
+.panel .tag {
+  font-size: 15px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.panel p { margin: 0; font-size: 23px; line-height: 1.55; }
+.panel .num { font-family: var(--font-num); color: var(--accent); font-weight: 700; }
+.panel.warn { border-left: 4px solid var(--danger); }
+.panel.warn .tag { color: var(--danger); }
+
+/* ── 导航 ── */
+.nav {
+  position: absolute;
+  left: var(--pad-stage);
+  right: var(--pad-stage);
+  bottom: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.nav a { color: var(--ink-2); text-decoration: none; }
+.nav .page { font-family: var(--font-num); }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta">COOLFLY 智能客服 · 回答质量与拒答策略</div>
+  <h1>宁可<span class="em">承认不会</span>，也不编造答案</h1>
+  <p class="sub">每条用户消息都走同一条判定链——只有过了三道核验的事实性回答才会被说出口。</p>
+
+  <div class="chain">
+    <div class="node">
+      <div class="step">01</div>
+      <div class="name">语言检测</div>
+      <div class="desc">非英语：双语说明 + 转人工，不被无声忽略</div>
+    </div>
+    <div class="link"></div>
+    <div class="node">
+      <div class="step">02</div>
+      <div class="name">退款 / 愤怒词</div>
+      <div class="desc">确定性规则，命中直入情绪安抚</div>
+    </div>
+    <div class="link"></div>
+    <div class="node">
+      <div class="step">03</div>
+      <div class="name">意图五分类</div>
+      <div class="desc">只有事实性提问进核验；共情、追问、闲聊不误触拒答</div>
+    </div>
+    <div class="link"></div>
+    <div class="node hero">
+      <div class="step">04 · 三道核验</div>
+      <div class="name">事实性回答专用闸门</div>
+      <div class="gates">
+        <div class="gate"><span class="g-no">G1</span><span><b>无可靠依据</b><span class="g-out"> → 承认不会，给转人工</span></span></div>
+        <div class="gate"><span class="g-no">G2</span><span><b>必须有知识出处</b><span class="g-out"> → 末尾标注来源，用户看到的 = 系统实际引用的条目</span></span></div>
+        <div class="gate"><span class="g-no">G3</span><span><b>敏感 / 超范围</b><span class="g-out"> → 说明能力边界，转人工</span></span></div>
+      </div>
+    </div>
+    <div class="link"></div>
+    <div class="outs">
+      <div class="out answer">回答<small>带来源，可核对</small></div>
+      <div class="out human">转人工<small>诚实交底，不硬撑</small></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="panel">
+      <div class="tag">耐心保护</div>
+      <p>同一会话连续 <span class="num">2</span> 次答不上 → 直接呈现转人工大按钮，不存在第 <span class="num">3</span> 次「我没把握」。</p>
+    </div>
+    <div class="panel warn">
+      <div class="tag">防跑偏</div>
+      <p>高频问题误拒率设上限并入离线评测验收，防「全拒答刷指标」；情绪会话触发核验时改用共情短语 + 大按钮，不用常规拒答措辞。</p>
+    </div>
+  </div>
+
+  <div class="nav">
+    <a href="p05.html">← 上一页</a>
+    <span class="page">6 / 11</span>
+    <a href="p07.html">下一页 →</a>
+  </div>
+
+</div>
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p05.html';
+    if (e.key === 'ArrowRight') location.href = 'p07.html';
+  });
+</script>
+</body>
+</html>

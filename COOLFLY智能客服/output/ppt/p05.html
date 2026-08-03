@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P5 · 三条旅程接住用户从卡住到解决的全部去向</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+.stage { width: 1920px; transform-origin: top left; }
+
+.canvas {
+  min-height: 1080px;
+  padding: 72px var(--pad-stage) 48px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 头部 ===== */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+h1 {
+  font-size: 66px;
+  line-height: 1.1;
+  margin: 0 0 16px;
+  font-weight: 700;
+}
+.thesis {
+  font-size: 24px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 44px;
+}
+.thesis strong { color: var(--accent); font-weight: 600; }
+
+/* ===== 泳道 ===== */
+.lanes { display: flex; flex-direction: column; gap: var(--gap); flex: 1; }
+
+.lane {
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  gap: 32px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 30px 36px;
+  align-items: center;
+}
+.lane-a { border-left: 4px solid var(--accent); }
+.lane-c { border-left: 4px solid var(--danger); }
+.lane-b { border-left: 4px solid var(--line); }
+
+.lane-head .k {
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+.lane-head .t { font-size: 30px; font-weight: 700; line-height: 1.25; }
+.lane-a .lane-head .t { color: var(--accent); }
+.lane-c .lane-head .t em { font-style: normal; color: var(--danger); }
+.tag {
+  display: inline-block;
+  margin-top: 12px;
+  font-family: var(--font-num);
+  font-size: 16px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 5px 14px;
+}
+
+.flow { display: flex; align-items: center; margin-bottom: 14px; }
+.node {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 13px 16px;
+  font-size: 22px;
+  line-height: 1.35;
+  text-align: center;
+  flex: 1;
+}
+.node small { display: block; font-size: 15px; color: var(--ink-2); margin-top: 4px; }
+.node-hero {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  flex: 1.4;
+}
+.node-pain {
+  border-color: var(--danger);
+  color: var(--danger);
+  font-style: italic;
+  flex: 1.5;
+}
+.conn { width: 26px; height: 1px; background: var(--ink-2); flex: none; position: relative; }
+.conn::after {
+  content: "";
+  position: absolute;
+  right: 0; top: -3.5px;
+  border-left: 7px solid var(--ink-2);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.exit {
+  flex: none;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 13px 20px;
+  font-size: 20px;
+  font-weight: 600;
+  background: var(--surface);
+}
+.note { font-size: 22px; line-height: 1.55; color: var(--ink-2); margin: 0; }
+.note b { color: var(--ink); font-weight: 600; }
+
+/* ===== 导航 ===== */
+.nav {
+  margin-top: 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.nav .pageno { font-family: var(--font-num); font-size: 16px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="canvas">
+
+    <div class="meta">COOLFLY 智能客服 · 用户旅程</div>
+    <h1>三条旅程，接住用户从卡住到解决的全部去向</h1>
+    <p class="thesis">自助是主路径，转人工是兜底，情绪安抚直击退货——<strong>每条路都有明确出口，没有死胡同</strong>。</p>
+
+    <div class="lanes">
+
+      <!-- 旅程 A -->
+      <div class="lane lane-a">
+        <div class="lane-head">
+          <div class="k">Journey A · 主路径</div>
+          <div class="t">自助解决</div>
+          <span class="tag">8 分钟 · 零打字</span>
+        </div>
+        <div>
+          <div class="flow">
+            <div class="node">配对失败页<small>一键 Get help</small></div>
+            <div class="conn"></div>
+            <div class="node">开场确认</div>
+            <div class="conn"></div>
+            <div class="node node-hero">一步一屏引导<small>每步只选 Done / It didn't work</small></div>
+            <div class="conn"></div>
+            <div class="node">确认解决</div>
+            <div class="conn"></div>
+            <div class="node">轻量评分</div>
+            <div class="conn"></div>
+            <div class="exit">出口 · 问题解决</div>
+          </div>
+          <p class="note"><b>为中老年、打字意愿低的用户设计</b>：首屏零打字按钮组；切出 App 改路由器设置，24 小时内回来自动恢复到原步骤。</p>
+        </div>
+      </div>
+
+      <!-- 旅程 B -->
+      <div class="lane lane-b">
+        <div class="lane-head">
+          <div class="k">Journey B · 兜底</div>
+          <div class="t">转人工</div>
+        </div>
+        <div>
+          <div class="flow">
+            <div class="node">两轮自查失败</div>
+            <div class="conn"></div>
+            <div class="node">系统主动给转人工</div>
+            <div class="conn"></div>
+            <div class="node node-hero">摘要可见可补充<small>已试步骤 · SN · 型号 · 卡点</small></div>
+            <div class="conn"></div>
+            <div class="node">告知回复渠道<small>与预计时间</small></div>
+            <div class="conn"></div>
+            <div class="exit">出口 · 人工接手</div>
+          </div>
+          <p class="note"><b>用户零复述</b>：人工首条回复直接引用摘要；等待承诺取近期实际响应的滚动值，禁止硬编码固定时长。</p>
+        </div>
+      </div>
+
+      <!-- 旅程 C -->
+      <div class="lane lane-c">
+        <div class="lane-head">
+          <div class="k">Journey C · 退货率直接来源</div>
+          <div class="t"><em>情绪安抚</em></div>
+        </div>
+        <div>
+          <div class="flow">
+            <div class="node node-pain">"this thing is garbage, I want a refund"</div>
+            <div class="conn"></div>
+            <div class="node">先共情<small>不追问技术细节</small></div>
+            <div class="conn"></div>
+            <div class="node">转人工 + 退货政策<small>入口置顶常驻</small></div>
+            <div class="conn"></div>
+            <div class="node">愿意时再给<small>"最后试一步"</small></div>
+            <div class="conn"></div>
+            <div class="exit">出口 · 情绪接住</div>
+          </div>
+          <p class="note"><b>退款 / 愤怒词触发为确定性规则，100% 可复现验收</b>；用户气头上时绝不出现"我没把握"式模板话术。</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="nav">
+      <a href="p04.html">← 上一页</a>
+      <span class="pageno">5 / 11</span>
+      <a href="p06.html">下一页 →</a>
+    </div>
+
+  </div>
+</div>
+<script>
+  function fit() {
+    var s = innerWidth / 1920;                 // 按视口宽度等比缩放
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';  // 修正滚动高度，避免留白 / 错位
+  }
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p04.html';
+    if (e.key === 'ArrowRight') location.href = 'p06.html';
+  });
+</script>
+</body>
+</html>

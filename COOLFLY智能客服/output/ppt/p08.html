@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>P8 · 行为规格先行</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  box-sizing: border-box;
+  padding: 72px var(--pad-stage) 48px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 头部 ===== */
+.kicker {
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+h1 {
+  margin: 0 0 24px;
+  font-size: 66px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h1 em { font-style: normal; color: var(--accent); }
+.banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  border-left: 4px solid var(--accent);
+  padding: 10px 22px;
+  background: var(--surface);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 44px;
+}
+.banner .tag {
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ===== 主体：左架构 + 右约束 ===== */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  gap: 56px;
+  align-items: stretch;
+}
+
+/* 左：三层架构 */
+.arch { display: flex; flex-direction: column; }
+.layer {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 30px 36px;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 28px;
+  align-items: center;
+}
+.layer-name .idx {
+  font-family: var(--font-num);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  color: var(--ink-2);
+  display: block;
+  margin-bottom: 8px;
+}
+.layer-name .zh {
+  font-size: 31px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.layer-body { font-size: 22px; line-height: 1.6; color: var(--ink); border-left: 1px solid var(--line); padding-left: 28px; }
+.layer-body b { font-weight: 700; }
+.layer-body .num { font-family: var(--font-num); color: var(--accent); font-weight: 700; }
+.layer-body .sub { color: var(--ink-2); }
+
+/* 层间细线连接 */
+.link {
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+.link::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--line);
+}
+.link span {
+  position: relative;
+  background: var(--bg);
+  padding: 0 16px;
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* 右：五条演进约束 */
+.rules {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 36px 40px;
+  display: flex;
+  flex-direction: column;
+}
+.rules-head { margin-bottom: 10px; }
+.rules-head .tag {
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 10px;
+}
+.rules-head .t { font-size: 30px; font-weight: 700; line-height: 1.3; }
+.rules-head .s { font-size: 22px; color: var(--accent); font-weight: 600; margin-top: 6px; }
+.rules ol {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  flex: 1;
+}
+.rules li {
+  display: flex;
+  gap: 18px;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 22px;
+  line-height: 1.5;
+  align-items: baseline;
+}
+.rules li:last-child { border-bottom: none; }
+.rules li .no {
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: var(--accent);
+  font-weight: 700;
+  flex: 0 0 32px;
+}
+.rules li .sub { color: var(--ink-2); font-size: 20px; display: block; margin-top: 4px; }
+.rules-foot {
+  margin-top: 18px;
+  padding: 14px 20px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ===== 导航 ===== */
+.nav {
+  margin-top: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 16px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.nav .page {
+  font-family: var(--font-num);
+  font-size: 16px;
+  color: var(--ink-2);
+  letter-spacing: 0.18em;
+}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="kicker">COOLFLY 智能客服 · 架构与演进</div>
+  <h1>行为规格先行——<em>无论重建还是升级，对外表现一致</em></h1>
+  <div class="banner"><span class="tag">Principle</span>能力以可观察行为定义，与实现形态解耦</div>
+
+  <div class="main">
+
+    <!-- 左：三层架构 -->
+    <div class="arch">
+      <div class="layer">
+        <div class="layer-name">
+          <span class="idx">LAYER 01</span>
+          <span class="zh">知识资产层</span>
+        </div>
+        <div class="layer-body">
+          问答条目 + 结构化排障流程：每步两出口，全部路径终点只有「确认解决」或「转人工」，<b>机器自动校验无死胡同</b>。<span class="sub">知识与流程渠道中立、带语言标记。</span>
+        </div>
+      </div>
+
+      <div class="link"><span>行为契约</span></div>
+
+      <div class="layer">
+        <div class="layer-name">
+          <span class="idx">LAYER 02</span>
+          <span class="zh">对话决策层</span>
+        </div>
+        <div class="layer-body">
+          「重建 vs 升级现有系统」待查证后决策——全部能力以形态无关的可观察行为定义<b>硬验收</b>，选哪条路都不许缩水。<span class="sub">达不成的项逐条摆回决策桌面重拍。</span>
+        </div>
+      </div>
+
+      <div class="link"><span>同步验收</span></div>
+
+      <div class="layer">
+        <div class="layer-name">
+          <span class="idx">LAYER 03</span>
+          <span class="zh">数据度量层</span>
+        </div>
+        <div class="layer-body">
+          数据采集与功能同步交付、同步验收——<b>缺数据的功能不算完成</b>。离线评测集用真实咨询 + 差评原话出题（应拒答／引用不忠实／豁免滥用／怒气样本四类陷阱题），命中率 <span class="num">≥80%</span> 为放量门禁。
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：五条演进约束 -->
+    <div class="rules">
+      <div class="rules-head">
+        <span class="tag">Evolution Rules</span>
+        <div class="t">五条演进约束</div>
+        <div class="s">零成本现在写，两年后免还债</div>
+      </div>
+      <ol>
+        <li><span class="no">01</span><span>对话核心不绑定 App 来源</span></li>
+        <li><span class="no">02</span><span>数据自带渠道标记</span></li>
+        <li><span class="no">03</span><span>转人工交接 6 字段契约固定<span class="sub">兼作未来 Zendesk 对接底稿</span></span></li>
+        <li><span class="no">04</span><span>文案与模板不硬编码语言</span></li>
+        <li><span class="no">05</span><span>界面呈现由适配层映射<span class="sub">未来全渠道／多语言只加适配层，不重写核心</span></span></li>
+      </ol>
+      <div class="rules-foot">违反任一条，按缺陷处理</div>
+    </div>
+
+  </div>
+
+  <!-- 导航 -->
+  <div class="nav">
+    <a href="p07.html">← 上一页</a>
+    <span class="page">8 / 11</span>
+    <a href="p09.html">下一页 →</a>
+  </div>
+
+</div>
+
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p07.html';
+    if (e.key === 'ArrowRight') location.href = 'p09.html';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P4 · 一年 ¥120–130 万的价值账</title>
+<style>
+:root {
+  --bg: #F6F8F7;          /* 页面底 · 浅暖灰绿 */
+  --surface: #FFFFFF;     /* 卡片面 */
+  --ink: #14201B;         /* 主文字 · 墨绿黑 */
+  --ink-2: #5C6B64;       /* 次级文字 */
+  --line: #E2E8E4;        /* 分隔线/弱边框 */
+  --accent: #0E7A5F;      /* 主色 · 自然绿，只用于结论/关键数值 */
+  --danger: #B4462E;      /* 痛点/风险 · 赤陶红 */
+  --font-sans: "PingFang SC", "SF Pro Display", "Helvetica Neue", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --gap: 24px;
+  --pad-stage: 96px;
+}
+
+html, body { margin: 0; padding: 0; }
+.stage { width: 1920px; transform-origin: top left; }
+
+body { background: var(--bg); font-family: var(--font-sans); color: var(--ink); }
+
+.stage {
+  min-height: 1080px;
+  box-sizing: border-box;
+  padding: 72px var(--pad-stage) 40px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/* ===== 页眉 ===== */
+.meta {
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 18px;
+}
+.meta b { color: var(--accent); font-weight: 600; }
+h1 {
+  font-size: 66px;
+  line-height: 1.1;
+  margin: 0 0 44px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h1 .num { font-family: var(--font-num); color: var(--accent); }
+
+/* ===== 主体：合计 + 三行账 ===== */
+.ledger {
+  display: grid;
+  grid-template-columns: 560px 1fr;
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+.total-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.total-card .label {
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+.total-card .big {
+  font-family: var(--font-num);
+  font-size: 92px;
+  line-height: 1.05;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+.total-card .unit {
+  font-size: 30px;
+  color: var(--ink);
+  font-weight: 600;
+  margin-top: 8px;
+}
+.total-card .sub {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-size: 23px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.total-card .sub .num { font-family: var(--font-num); color: var(--ink); font-weight: 600; }
+
+.rows { display: flex; flex-direction: column; gap: 16px; }
+.row {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 26px 36px;
+  display: grid;
+  grid-template-columns: 64px 1fr 300px;
+  gap: 24px;
+  align-items: center;
+  flex: 1;
+}
+.row .rank {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.row .name { font-size: 29px; font-weight: 700; margin-bottom: 8px; }
+.row .formula {
+  font-family: var(--font-num);
+  font-size: 16.5px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.row .value {
+  font-family: var(--font-num);
+  font-size: 52px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: right;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.row .value small {
+  display: block;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink-2);
+  margin-top: 6px;
+  letter-spacing: 0;
+}
+
+/* ===== 口径披露 ===== */
+.disclosure {
+  margin-top: var(--gap);
+  background: var(--line);
+  border-radius: var(--radius-md);
+  padding: 30px 40px;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.disclosure .tag {
+  font-size: 15px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-weight: 600;
+  padding-top: 4px;
+}
+.disclosure .tag .zh { display: block; font-size: 26px; letter-spacing: 0.06em; color: var(--ink); margin-bottom: 6px; text-transform: none; }
+.disclosure ol {
+  margin: 0; padding: 0 0 0 26px;
+  font-size: 22px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.disclosure li + li { margin-top: 10px; }
+.disclosure .num { font-family: var(--font-num); font-weight: 600; }
+
+/* ===== 金句横幅 ===== */
+.banner {
+  margin-top: var(--gap);
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: var(--radius-md);
+  padding: 34px 48px;
+  font-size: 28px;
+  line-height: 1.55;
+  font-weight: 600;
+}
+.banner .hl { color: var(--accent); }
+.banner .note {
+  display: block;
+  margin-top: 10px;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--line);
+  letter-spacing: 0.02em;
+}
+
+/* ===== 导航 ===== */
+.nav {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.nav a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.nav .page { font-family: var(--font-num); }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <div class="meta">COOLFLY 智能客服 · <b>价值账 Value Ledger</b> · 算法与前提全部摊开</div>
+  <h1>一年 <span class="num">¥120–130 万</span> 的价值账，算法与前提全部摊开</h1>
+
+  <div class="ledger">
+    <div class="total-card">
+      <div class="label">中性合计 · Neutral Total</div>
+      <div class="big">¥120–130<span style="font-size:44px;">万</span></div>
+      <div class="unit">/ 年</div>
+      <div class="sub">两年稳超 <span class="num">¥200 万</span>（前提见下方口径披露）</div>
+    </div>
+
+    <div class="rows">
+      <div class="row">
+        <div class="rank">②</div>
+        <div>
+          <div class="name">减退货损失</div>
+          <div class="formula">退货率降 3pp 归功一半 × 10 万台/年 × $50 客单 × 70% 损失率</div>
+        </div>
+        <div class="value">≈¥75万<small>区间 ¥36–136 万</small></div>
+      </div>
+      <div class="row">
+        <div class="rank">③</div>
+        <div>
+          <div class="name">撑增长不加人</div>
+          <div class="formula">销量涨 2–3 倍时自助解决 50%+，客服维持 3–4 人、避免新增 4–5 人</div>
+        </div>
+        <div class="value">¥24–48万</div>
+      </div>
+      <div class="row">
+        <div class="rank">①</div>
+        <div>
+          <div class="name">省现有人力</div>
+          <div class="formula">客服工作量减半 + 技术定位省来回</div>
+        </div>
+        <div class="value">¥12–17万</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclosure">
+    <div class="tag"><span class="zh">口径披露</span>与结论同页呈现</div>
+    <ol>
+      <li>价值块①与③基于同一份被释放的客服容量，为两种情景下的两种计法，同表相加存在重复计算风险；剔除后可复算中性口径为 <span class="num">②+③ = ¥99–123 万/年</span>。决策者知晓该风险，仍确认对外保留 <span class="num">¥120–130 万/年</span>原口径。</li>
+      <li>“两年稳超 <span class="num">¥200 万</span>”为中性情景结论，以数据基线查证通过“退货用户中曾咨询比例 <span class="num">≥30%</span>”为前提，未通过则重算重述。</li>
+    </ol>
+  </div>
+
+  <div class="banner">
+    差评里一半是“装不上连不上”——这正好是智能客服最能吃掉的问题；<span class="hl">退货率每降 1 个点，一年就是 1,000 台不用退。</span>
+    <span class="note">另有未入账弹性：店铺评分回升对转化的拉动未计入本账</span>
+  </div>
+
+  <div class="nav">
+    <a href="p03.html">← 上一页</a>
+    <span class="page">4 / 11</span>
+    <a href="p05.html">下一页 →</a>
+  </div>
+
+</div>
+<script>
+  function fit() {
+    var s = innerWidth / 1920;
+    var stage = document.querySelector('.stage');
+    stage.style.transform = 'scale(' + s + ')';
+    document.body.style.height = (stage.offsetHeight * s) + 'px';
+  }
+  addEventListener('resize', fit); fit();
+  addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowLeft') location.href = 'p03.html';
+    if (e.key === 'ArrowRight') location.href = 'p05.html';
+  });
+</script>
+</body>
+</html>

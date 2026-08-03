@@ -2,8 +2,7 @@
   "state_schema_version": 1,
   "project_name": "COOLFLY智能客服",
   "project_started_at_utc": "2026-08-03T07:08:22Z",
-  "last_updated_at_utc": "2026-08-03T07:20:00Z",
-
+  "last_updated_at_utc": "2026-08-03T13:10:00Z",
   "work_type": "feature",
   "workflow_mode": "standard",
   "value_confirmation": {
@@ -13,42 +12,107 @@
     "basis": "用户确认价值账：中性约¥120-130万/年，两年稳超¥200万；口径=减退货损失(3pp×10万台×$50×70%)+撑增长不加人+省人力；假设值A-005/A-006登记待上线校准"
   },
   "stage_confirmations": {
-    "stage1_shared_understanding": {"status": "confirmed", "confirmed_at_utc": "2026-08-03T07:33:56Z"},
-    "stage3_research_sufficiency": {"status": "confirmed", "confirmed_at_utc": "2026-08-03T08:07:00Z"},
-    "stage4_5_v1": {"status": "confirmed", "confirmed_at_utc": "2026-08-03T08:48:09Z"},
-    "stage4_6_mvp": {"status": "confirmed", "confirmed_at_utc": "2026-08-03T08:58:54Z"}
+    "stage1_shared_understanding": {
+      "status": "confirmed",
+      "confirmed_at_utc": "2026-08-03T07:33:56Z"
+    },
+    "stage3_research_sufficiency": {
+      "status": "confirmed",
+      "confirmed_at_utc": "2026-08-03T08:07:00Z"
+    },
+    "stage4_5_v1": {
+      "status": "confirmed",
+      "confirmed_at_utc": "2026-08-03T08:48:09Z"
+    },
+    "stage4_6_mvp": {
+      "status": "confirmed",
+      "confirmed_at_utc": "2026-08-03T08:58:54Z"
+    }
   },
   "contract_revision": 0,
   "source_ids_changed": [],
-
-  "current_stage": "5",
-  "current_substep": "stage5-5.5-final-review-fixes",
-  "completed_stages": ["0", "1", "2", "3"],
+  "current_stage": "6",
+  "current_substep": "stage6-6.2-ppt-html",
+  "completed_stages": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+  ],
   "skipped_stages": [],
-
   "next_action": {
-    "type": "user_decision",
-    "description": "阶段5自动执行中：R0章节预协商→3 authors R1-R3→合并→R4跨章节评审→四方终审→requirements.md→正确性分析→硬校验→分层输出；无需用户逐项回答",
+    "type": "auto",
+    "description": "阶段6.2：11页PPT HTML并发生成中（P1-P6已派发，P7-P11待派）；完成后全局自校验并标记完成",
     "askuserquestion_options": []
   },
-
   "open_questions": [
-    {"id": "OQ-13", "title": "导出现有 AI 客服历史数据用于基线校准与知识库升级", "kind": "fact", "category": "data_asset", "priority": "P1", "depends_on": [], "owner": "user", "status": "pending_user", "evidence_needed": "AI 会话记录导出文件（含是否转人工标记）", "acceptance_threshold": "可计算自助解决率基线", "due_by": "设计/实现阶段前"}
+    {
+      "id": "OQ-13",
+      "title": "导出现有 AI 客服历史数据用于基线校准与知识库升级",
+      "kind": "fact",
+      "category": "data_asset",
+      "priority": "P1",
+      "depends_on": [],
+      "owner": "user",
+      "status": "pending_user",
+      "evidence_needed": "AI 会话记录导出文件（含是否转人工标记）",
+      "acceptance_threshold": "可计算自助解决率基线",
+      "due_by": "设计/实现阶段前"
+    }
   ],
-
   "key_decisions_made": [
-    {"id": "D-1", "decision": "核心目标=提升用户解决速度与解决体验；降人工量是副产品", "stage": "1", "rationale": "用户明确拍板；决定后续取舍（答不准宁可转人工，不做硬拦截）"},
-    {"id": "D-2", "decision": "渠道范围/人机衔接/知识库升级方向委托 AI 提案，随场景锚点与 V0 方案整体确认；长期愿景为一个 agent 服务全渠道（邮箱/App/社媒/官网）", "stage": "1", "rationale": "用户明确委托；App 客诉量最大为已知事实"},
-    {"id": "D-3", "decision": "第一版范围只做 App 用户侧客服入口；客服员工工作台未来用 Zendesk 接入，现阶段不做任何客服侧工具", "stage": "1", "rationale": "用户明确拍板；未来 Zendesk 接入是设计阶段需预留的集成约束"},
-    {"id": "D-4", "decision": "成功指标：核心=自助解决率（未转人工且48h未复问），3个月高频类≥60%/整体≥50%（假设值待基线校准）；次要=自助解决时长≤10分钟、转人工首响不劣化、会话满意度", "stage": "1", "rationale": "用户按推荐包确认；基线用导出数据回填"},
-    {"id": "D-5", "decision": "第一阶段核心=高质量 AI 式对话（知识库问答+转人工衔接）；设备状态诊断与自动解决方案不是本阶段重要目标，降为后续阶段差异化储备", "stage": "3", "rationale": "用户在调研确认环节明确拍板；调研证明'AI+设备诊断'全品类空白，保留为第二阶段王牌"},
-    {"id": "D-6", "decision": "拍板2：运营三岗（知识库运营/退货归因/客服SOP抽检）现有人员兼任，名单G窗口内后补；给不出名单则砍F05承诺并下调目标", "stage": "4.5", "rationale": "用户拍板；零现金成本，空转风险用户自担"},
-    {"id": "D-7", "decision": "拍板4：价值账保留原口径¥120-130万/年（不采纳修正为99-123万）", "stage": "4.5", "rationale": "用户拍板保留；AI推荐为修正口径，用户知晓①③重复计算风险；PRD依据清单如实披露口径结构"},
-    {"id": "D-8", "decision": "拍板5：知识库三场景前置改造+回流补齐（排序依G1）、转人工沿现有渠道层级依G3，授权按门槛结果执行（回炉线除外不上会）；拍板1/3待G1/G2证据后拍", "stage": "4.5", "rationale": "用户授权；减少无效上会轮次"}
+    {
+      "id": "D-1",
+      "decision": "核心目标=提升用户解决速度与解决体验；降人工量是副产品",
+      "stage": "1",
+      "rationale": "用户明确拍板；决定后续取舍（答不准宁可转人工，不做硬拦截）"
+    },
+    {
+      "id": "D-2",
+      "decision": "渠道范围/人机衔接/知识库升级方向委托 AI 提案，随场景锚点与 V0 方案整体确认；长期愿景为一个 agent 服务全渠道（邮箱/App/社媒/官网）",
+      "stage": "1",
+      "rationale": "用户明确委托；App 客诉量最大为已知事实"
+    },
+    {
+      "id": "D-3",
+      "decision": "第一版范围只做 App 用户侧客服入口；客服员工工作台未来用 Zendesk 接入，现阶段不做任何客服侧工具",
+      "stage": "1",
+      "rationale": "用户明确拍板；未来 Zendesk 接入是设计阶段需预留的集成约束"
+    },
+    {
+      "id": "D-4",
+      "decision": "成功指标：核心=自助解决率（未转人工且48h未复问），3个月高频类≥60%/整体≥50%（假设值待基线校准）；次要=自助解决时长≤10分钟、转人工首响不劣化、会话满意度",
+      "stage": "1",
+      "rationale": "用户按推荐包确认；基线用导出数据回填"
+    },
+    {
+      "id": "D-5",
+      "decision": "第一阶段核心=高质量 AI 式对话（知识库问答+转人工衔接）；设备状态诊断与自动解决方案不是本阶段重要目标，降为后续阶段差异化储备",
+      "stage": "3",
+      "rationale": "用户在调研确认环节明确拍板；调研证明'AI+设备诊断'全品类空白，保留为第二阶段王牌"
+    },
+    {
+      "id": "D-6",
+      "decision": "拍板2：运营三岗（知识库运营/退货归因/客服SOP抽检）现有人员兼任，名单G窗口内后补；给不出名单则砍F05承诺并下调目标",
+      "stage": "4.5",
+      "rationale": "用户拍板；零现金成本，空转风险用户自担"
+    },
+    {
+      "id": "D-7",
+      "decision": "拍板4：价值账保留原口径¥120-130万/年（不采纳修正为99-123万）",
+      "stage": "4.5",
+      "rationale": "用户拍板保留；AI推荐为修正口径，用户知晓①③重复计算风险；PRD依据清单如实披露口径结构"
+    },
+    {
+      "id": "D-8",
+      "decision": "拍板5：知识库三场景前置改造+回流补齐（排序依G1）、转人工沿现有渠道层级依G3，授权按门槛结果执行（回炉线除外不上会）；拍板1/3待G1/G2证据后拍",
+      "stage": "4.5",
+      "rationale": "用户授权；减少无效上会轮次"
+    }
   ],
-
   "category": "mobile-app",
-
   "resolved_facts": {
     "existing_ai_support": "自研，App 内入口，AI 答不满意可转人工对话",
     "knowledge_base": "飞书文档约 120+ 篇，覆盖硬件安装/软件会员等",
@@ -57,23 +121,45 @@
     "device_status_visibility": "App 端用户可见在线状态/WiFi信号/电量；配对绑定失败需 SN 码给方案商定位",
     "market_language": "主力北美英文；需保留多语言能力"
   },
-
   "deliverables": {
     "scene_anchor": "scene-anchor.md",
-    "proposal_v0": null,
-    "proposal_v1": null,
-    "debate_log": null,
+    "proposal_v0": "proposal-v0.md",
+    "proposal_v1": "proposal-v1.md",
+    "debate_log": "debate-log.md",
     "assumptions": "assumptions.md",
     "conversation": "conversation.md",
-    "evidence": ["evidence/competitors.md", "evidence/competitors-direct.md", "evidence/competitors-platforms.md", "evidence/complaints.md", "evidence/benchmark.md"],
-    "drafts": [],
-    "final_prd": null,
-    "requirements_contract": null,
-    "requirements_analysis": null,
+    "evidence": [
+      "evidence/competitors.md",
+      "evidence/competitors-direct.md",
+      "evidence/competitors-platforms.md",
+      "evidence/complaints.md",
+      "evidence/benchmark.md"
+    ],
+    "drafts": [
+      "drafts/r0-chapter-negotiation.md",
+      "drafts/r1-pm.md",
+      "drafts/r1-architect.md",
+      "drafts/r1-engineer.md",
+      "drafts/r2-pm-reviews-others.md",
+      "drafts/r2-architect-reviews-others.md",
+      "drafts/r2-engineer-reviews-others.md",
+      "drafts/r3-pm.md",
+      "drafts/r3-architect.md",
+      "drafts/r3-engineer.md",
+      "drafts/r4-cross-chapter-review.md",
+      "drafts/r5-final-review-tech.md",
+      "drafts/r5-final-review-design.md",
+      "drafts/r5-final-review-business.md",
+      "drafts/r5-final-review-strategy.md",
+      "drafts/merge-conflicts.md"
+    ],
+    "final_prd": "output/PRD详细版.md",
+    "requirements_contract": "output/requirements.md",
+    "requirements_analysis": "output/requirements-analysis.md",
     "bugfix_contract": null,
-    "prd_summary": null,
-    "prd_dev": null,
-    "ppt_outline": null,
+    "prd_summary": "output/PRD-summary.md",
+    "prd_dev": "output/PRD-dev.md",
+    "ppt_outline": "output/ppt.md",
     "ppt_pages": []
   }
 }
