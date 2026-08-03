@@ -15,33 +15,38 @@
    ============================================================ */
 :root {
   /* ─── Surface (3 levels) ─── */
-  --bg: #F5F7F5;                     /* 页面底色：植物绿灰，晨光感 */
+  --bg: #EAF6F8;                     /* 页面底色：浅冰青，通透干净 */
   --surface: #FFFFFF;                /* 卡片/气泡纸面 */
-  --surface-warm: #EDF3EE;           /* 温感面板：AI 气泡、徽章底、禁用底 */
+  --surface-warm: #E0F1F6;           /* 温感面板（极浅青）：AI 气泡、徽章底、禁用底 */
   --surface-raised: var(--surface);  /* 浅色模式抬升态与 surface 同值，靠描边/静态阴影区分 */
   --surface-overlay: var(--surface); /* 模态/底部抽屉（转人工确认面板）最高层 */
 
   /* ─── Foreground (4 levels) ─── */
-  --fg: #1C2B22;                     /* 正文主色：对 bg 13.76:1 / 对 surface 14.81:1 */
-  --fg-2: #33463B;                   /* 副标题层：对 surface 10.10:1 */
-  --muted: #52655A;                  /* 辅助说明：对 bg 5.79:1 / 对 surface 6.24:1 */
-  --meta: #5E7267;                   /* 时间戳/徽章文字：对 surface 5.15:1 / 对 bg 4.78:1 */
+  --fg: #13252B;                     /* 正文主色：对 bg 14.34:1 / 对 surface 15.82:1 */
+  --fg-2: #31474E;                   /* 副标题层：对 surface 9.80:1 */
+  --muted: #4E6870;                  /* 辅助说明：对 bg 5.38:1 / 对 surface 5.94:1 */
+  --meta: #5A737B;                   /* 时间戳/徽章文字：对 surface 5.03:1 / 对 bg 4.56:1 */
 
   /* ─── Border (2 levels) ─── */
-  --border: #D7E0DA;                 /* 卡片描边 */
-  --border-soft: #E6ECE7;            /* 卡内分隔线（摘要卡字段行间） */
+  --border: #CBE2E9;                 /* 卡片描边 */
+  --border-soft: #DFEEF3;            /* 卡内分隔线（摘要卡字段行间） */
 
   /* ─── Accent ─── */
-  --accent: #2E7D4F;                 /* 品牌自然绿（待品牌素材校准）；对 --accent-on 5.05:1 */
+  --accent: #0D7594;                 /* 品牌青蓝（2026-08-04 按截图校准，保亮青色相调深达标）；
+                                        对 --accent-on 5.26:1 / 对 surface 5.26:1 / 对 bg 4.77:1 */
   --accent-on: #FFFFFF;              /* accent 实底上的前景色 */
   --accent-hover: color-mix(in oklab, var(--accent), black 8%);
   --accent-active: color-mix(in oklab, var(--accent), black 14%);
 
   /* ─── Semantic ─── */
-  --success: #23703F;                /* 解决确认；对 surface 6.07:1 */
-  --warn: #8A5A00;                   /* 看板超区间/降级提示；对 surface 5.93:1 */
-  --danger: #B23B2E;                 /* 陶土红：仅小面积状态文字与看板标红；
+  --success: #177A57;                /* 解决确认（偏青的柔和绿）；对 surface 5.31:1 */
+  --warn: #8A5F1A;                   /* 看板超区间/降级提示（柔和琥珀）；对 surface 5.63:1 */
+  --danger: #B2453A;                 /* 柔和陶土红：仅小面积状态文字与看板标红；
                                         情绪路径界面禁止大面积使用——共情场景用色须冷静 */
+
+  /* ─── Gradient（品牌校准新增 · 唯一结构增补：开场问候区 粉紫→淡青 端点） ─── */
+  --grad-hello-start: #F3EAF8;       /* 淡粉紫端点；--fg 于其上 13.51:1 */
+  --grad-hello-end: #E0F3F8;         /* 淡青端点；--fg 于其上 13.82:1 */
 
   /* ─── Typography — fonts ─── */
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -422,7 +427,7 @@ body {
       </div>
       <h1 style="font-family: var(--font-display); font-size: clamp(40px, 6vw, 64px); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); color: var(--fg);">
         COOLFLY 智能客服<br>
-        <span style="color: var(--accent);">自然绿的冷静安抚系统</span>
+        <span style="color: var(--accent);">冰青底上的青蓝安抚系统</span>
       </h1>
       <p style="font-size: var(--text-lg); color: var(--fg-2); max-width: 66ch; margin-top: var(--space-5);">
         为带着挫败进来的中老年用户设计的高可读支持对话界面，浅色单模式，色彩响应交互，来源徽章与 Done / It didn't work 大按钮双选是它的签名。
@@ -433,7 +438,7 @@ body {
         <p class="sec-eyebrow">核心隐喻 · §1</p>
         <p style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);">清晨的后院，鸟鸣与晨光。</p>
         <p style="margin-top: var(--space-3); color: var(--fg-2);">
-          一张摊在晨光里的白纸说明书，页边留着大片空白，重点句子用大号字写，每一步只讲一件事。背景是极浅的、几乎察觉不到的植物绿灰，像清晨透过纱窗的光；消息卡是纯白的纸面，浮在背景之上但不投夸张的影子；品牌自然绿只出现在最需要它的地方——那颗告诉你"下一步在这里"的大按钮上。界面必须像一位坐在她身边、语速放慢、把手机转过来指给她看的耐心店员，而不是一个闪烁着高科技光效的机器人。
+          一张摊在晨光里的白纸说明书，页边留着大片空白，重点句子用大号字写，每一步只讲一件事。背景是极浅的、通透干净的冰青，像清晨透过纱窗的光；消息卡是纯白的纸面，浮在背景之上但不投夸张的影子；品牌青蓝只出现在最需要它的地方——那颗告诉你"下一步在这里"的大按钮上。界面必须像一位坐在她身边、语速放慢、把手机转过来指给她看的耐心店员，而不是一个闪烁着高科技光效的机器人。
         </p>
       </div>
 
@@ -452,7 +457,7 @@ body {
           <p class="sec-eyebrow">设计签名 ②</p>
           <p class="label" style="margin-bottom: var(--space-3);">来源徽章：诚实的物证，截图可识别的品牌记号</p>
           <div><span class="source-badge" tabindex="0">Source: Setup Guide</span></div>
-          <p class="note" style="margin-top: var(--space-3);">胶囊形、绿灰底、13px 文字加书页圆点。刻意做小——诚实是气质，不是广告。</p>
+          <p class="note" style="margin-top: var(--space-3);">胶囊形、浅青底、13px 文字加书页圆点。刻意做小——诚实是气质，不是广告。</p>
         </div>
       </div>
     </div>
@@ -468,7 +473,7 @@ body {
       <div class="grid md:grid-cols-3 gap-6">
         <div class="panel">
           <p class="label" style="color: var(--accent);"><i class="ph ph-wind"></i> 冷静</p>
-          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">界面上任何时刻都不出现兴奋、催促、闪烁的元素。没有弹跳动画，没有渐变霓虹，没有大面积警示红。哪怕在情绪路径里，出口置顶卡也用中性纸面 + 绿色行动按钮呈现。</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">界面上任何时刻都不出现兴奋、催促、闪烁的元素。没有弹跳动画，没有渐变霓虹，没有大面积警示红。哪怕在情绪路径里，出口置顶卡也用中性纸面 + 青蓝行动按钮呈现。</p>
         </div>
         <div class="panel">
           <p class="label" style="color: var(--accent);"><i class="ph ph-compass"></i> 掌控</p>
@@ -486,8 +491,8 @@ body {
           <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">不是因为浅色安全，而是因为核心用户是<strong>中老年、老花镜、户外或窗边强光环境</strong>（喂鸟器装在后院，排障经常发生在窗边看着设备的时候）。浅色高对比是这类人群与场景下可读性的最优解：正文对背景对比度 13.8:1，远超 WCAG AA。深色模式跟随主 App 能力后置，本期不做，避免双模式维护摊薄单模式的打磨深度。</p>
         </div>
         <div class="panel">
-          <p class="label">为什么是自然绿</p>
-          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">COOLFLY 卖的是与自然的连接——鸟、后院、清晨。绿色是这个品牌唯一合理的主色（占位色值待品牌素材校准）。同时绿色在支持场景有第二重语义红利：它天然是"没问题、往前走"的颜色。当用户满心挫败时，一颗绿色大按钮说的是"这事能解决"。</p>
+          <p class="label">为什么是冰青与青蓝</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">COOLFLY 现有 App 的客服页已经用浅冰青底与亮青蓝把"轻盈、友好、通透"立成了品牌语言（2026-08-04 用户截图为源），本系统与它同频：冰青是天空与水汽的颜色，天然冷静；青蓝在支持场景有第二重语义红利——它是"可信、专业、往前走"的颜色。当用户满心挫败时，一颗青蓝大按钮说的是"这事能解决"。截图亮青 #4CC8E8 对白底仅 1.96:1，交互用色调深保色相为 #0D7594 后达标。</p>
         </div>
       </div>
 
@@ -517,14 +522,14 @@ body {
     <div class="wrap">
       <p class="sec-eyebrow">Section 3 · DESIGN.md §2 + tokens.css</p>
       <h2 class="sec-title">色彩系统</h2>
-      <p class="sec-lede">色彩哲学：绿色是承诺，中性色是空气，语义色是耳语。全部文本/背景配对 ≥ 4.5:1（WCAG 2.2 AA，逐对计算验证）。</p>
+      <p class="sec-lede">色彩哲学：青蓝是承诺，中性色是空气，语义色是耳语。全部文本/背景配对 ≥ 4.5:1（WCAG 2.2 AA，逐对计算验证）。</p>
 
       <!-- 3.1 Surface -->
       <p class="label" style="margin-bottom: var(--space-3);">3.1 Surface 色板（含 Border 底盒对照）</p>
       <div class="grid grid-cols-2 md:grid-cols-5 gap-4" style="margin-bottom: var(--space-8);">
         <div class="swatch">
           <div class="swatch__chip" style="background: var(--bg);"></div>
-          <div class="swatch__meta"><span class="token-name">--bg</span><span class="hexval">#F5F7F5</span><span class="note">页面底色；与纯白卡片 1.06:1 极轻层差，靠色温而非阴影分层</span></div>
+          <div class="swatch__meta"><span class="token-name">--bg</span><span class="hexval">#EAF6F8</span><span class="note">页面底色；与纯白卡片 1.10:1 极轻层差，靠色温而非阴影分层</span></div>
         </div>
         <div class="swatch">
           <div class="swatch__chip" style="background: var(--surface); border-bottom: 1px solid var(--border-soft);"></div>
@@ -532,7 +537,7 @@ body {
         </div>
         <div class="swatch">
           <div class="swatch__chip" style="background: var(--surface-warm);"></div>
-          <div class="swatch__meta"><span class="token-name">--surface-warm</span><span class="hexval">#EDF3EE</span><span class="note">AI 气泡与徽章底的温感绿灰；让 AI 的话比系统色更"有人味"</span></div>
+          <div class="swatch__meta"><span class="token-name">--surface-warm</span><span class="hexval">#E0F1F6</span><span class="note">AI 气泡与徽章底的温感浅青；让 AI 的话比系统色更"有人味"</span></div>
         </div>
         <div class="swatch">
           <div class="swatch__chip" style="background: var(--surface-raised); box-shadow: inset var(--elev-ring);"></div>
@@ -549,17 +554,17 @@ body {
       <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
         <div class="panel">
           <p class="note" style="margin-bottom: var(--space-2);">在 --surface 纸面上：</p>
-          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="hexval">#1C2B22</span> <span class="note">对 surface 14.81:1</span></p>
-          <p style="color: var(--fg-2); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg-2</span> <span class="hexval">#33463B</span> <span class="note">对 surface 10.10:1</span></p>
-          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="hexval">#52655A</span> <span class="note">对 surface 6.24:1</span></p>
-          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="hexval">#5E7267</span> <span class="note">对 surface 5.15:1</span></p>
+          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="hexval">#13252B</span> <span class="note">对 surface 15.82:1</span></p>
+          <p style="color: var(--fg-2); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg-2</span> <span class="hexval">#31474E</span> <span class="note">对 surface 9.80:1</span></p>
+          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="hexval">#4E6870</span> <span class="note">对 surface 5.94:1</span></p>
+          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="hexval">#5A737B</span> <span class="note">对 surface 5.03:1</span></p>
         </div>
         <div class="panel" style="background: var(--bg);">
           <p class="note" style="margin-bottom: var(--space-2);">在 --bg 背景上：</p>
-          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="note">对 bg 13.76:1（老花镜与强光下的安全余量）</span></p>
-          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="note">对 bg 5.79:1，辅助说明仍稳过 AA</span></p>
-          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="note">对 bg 4.78:1，时间戳/徽章文字 AA 达标</span></p>
-          <p style="color: var(--accent); font-size: var(--text-lg);">Accent as link text — <span class="token-name">--accent</span> <span class="note">对 bg 4.69:1（全表最低的一对，仍达标）</span></p>
+          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="note">对 bg 14.34:1（老花镜与强光下的安全余量）</span></p>
+          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="note">对 bg 5.38:1，辅助说明仍稳过 AA</span></p>
+          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="note">对 bg 4.56:1，时间戳/徽章文字 AA 达标</span></p>
+          <p style="color: var(--accent); font-size: var(--text-lg);">Accent as link text — <span class="token-name">--accent</span> <span class="note">对 bg 4.77:1（全表最低的一对，仍达标）</span></p>
         </div>
       </div>
 
@@ -567,11 +572,11 @@ body {
       <p class="label" style="margin-bottom: var(--space-3);">3.3 Border 色板（实际带边框的盒子）</p>
       <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
         <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4);">
-          <span class="token-name">--border</span> <span class="hexval">#D7E0DA</span>
+          <span class="token-name">--border</span> <span class="hexval">#CBE2E9</span>
           <p class="note" style="margin-top: var(--space-1);">卡片描边——分隔而不切割</p>
         </div>
         <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4);">
-          <span class="token-name">--border-soft</span> <span class="hexval">#E6ECE7</span>
+          <span class="token-name">--border-soft</span> <span class="hexval">#DFEEF3</span>
           <dl style="margin-top: var(--space-2);">
             <div class="summary-row"><dt>已试步骤</dt><dd>2.4GHz 自查 → 重启路由器</dd></div>
             <div class="summary-row"><dt>SN</dt><dd>CF-2318-8842-01</dd></div>
@@ -592,7 +597,7 @@ body {
             <button class="btn btn-primary">试试真实 hover/按压</button>
           </div>
           <div class="flex flex-wrap gap-4" style="margin-top: var(--space-4);">
-            <span><span class="token-name">--accent</span> <span class="hexval">#2E7D4F</span> <span class="note">承诺与前进；唯一主行动色（待品牌素材校准）；对 --accent-on（#FFFFFF）5.05:1</span></span>
+            <span><span class="token-name">--accent</span> <span class="hexval">#0D7594</span> <span class="note">承诺与前进；唯一主行动色（2026-08-04 按品牌截图校准）；对 --accent-on（#FFFFFF）5.26:1</span></span>
           </div>
           <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--accent-hover</span> = color-mix 压暗 8%（手指按上去时颜色沉一分——色彩响应哲学的核心表达）；<span class="token-name">--accent-active</span> = 压暗 14%（确认按下；沉两分）</p>
         </div>
@@ -610,15 +615,15 @@ body {
       <div class="grid md:grid-cols-3 gap-4">
         <div class="panel">
           <p style="color: var(--success); font-weight: 600;"><i class="ph ph-check-circle"></i> Great — looks like you're all set!</p>
-          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--success</span> <span class="hexval">#23703F</span> · 解决确认的低语，比 accent 更收敛，避免与主按钮争抢语义（对 surface 6.07:1）</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--success</span> <span class="hexval">#177A57</span> · 解决确认的低语，比 accent 更收敛，避免与主按钮争抢语义（对 surface 5.31:1）</p>
         </div>
         <div class="panel">
           <p style="color: var(--warn); font-weight: 600;"><i class="ph ph-warning-circle"></i> 数据回补中 · 预警线待 G1 回填</p>
-          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--warn</span> <span class="hexval">#8A5A00</span> · 看板"超预期区间/降级提示"的克制琥珀（对 surface 5.93:1）</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--warn</span> <span class="hexval">#8A5F1A</span> · 看板"超预期区间/降级提示"的克制琥珀（对 surface 5.63:1）</p>
         </div>
         <div class="panel">
           <p style="color: var(--danger); font-weight: 600;"><i class="ph ph-arrow-up-right"></i> 拒答率 12.4% · 超预期区间</p>
-          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--danger</span> <span class="hexval">#B23B2E</span> · 陶土红耳语；只用于小面积状态文字与看板标红，情绪路径界面禁大面积——对怒气用户，红色是火上浇油</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--danger</span> <span class="hexval">#B2453A</span> · 柔和陶土红耳语；只用于小面积状态文字与看板标红，情绪路径界面禁大面积——对怒气用户，红色是火上浇油</p>
         </div>
       </div>
     </div>
@@ -766,7 +771,7 @@ body {
       <div class="grid md:grid-cols-4 gap-6 items-start" style="background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: var(--space-6);">
         <div style="border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-flat);">
           <span class="token-name">--elev-flat</span>
-          <p class="note" style="margin-top: var(--space-1);">层级 0：绿灰背景本身（none）</p>
+          <p class="note" style="margin-top: var(--space-1);">层级 0：冰青背景本身（none）</p>
         </div>
         <div style="background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-ring);">
           <span class="token-name">--elev-ring</span>
@@ -899,7 +904,7 @@ body {
       </div>
 
       <!-- 8.3 消息气泡 -->
-      <p class="label" style="margin-bottom: var(--space-3);">8.3 消息气泡（AI 温感绿灰 / 用户 accent 实底）+ 来源徽章</p>
+      <p class="label" style="margin-bottom: var(--space-3);">8.3 消息气泡（AI 温感浅青 / 用户 accent 实底）+ 来源徽章</p>
       <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
         <div class="phone-frame">
           <div class="bubble bubble--ai">
@@ -1135,7 +1140,7 @@ body {
         <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">诚实</span><p class="note">知道就告诉你出处，不知道就直说并交给真人</p></div>
         <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">沉稳</span><p class="note">你拍桌子的时候 ta 不慌（零红色、零打断、出口常驻）</p></div>
         <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">可靠</span><p class="note">说"会有人回复你"就真的按查证过的通路承诺</p></div>
-        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">谦逊</span><p class="note">绿色只出现在该出现的地方（accent 每屏 ≤2 处）</p></div>
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">谦逊</span><p class="note">青蓝只出现在该出现的地方（accent 每屏 ≤2 处）</p></div>
       </div>
 
       <!-- 情感化细节：真实渲染 -->
@@ -1216,7 +1221,7 @@ body {
               </div>
             </div>
           </div>
-          <p class="note" style="margin-top: var(--space-3);">理由：怒气用户面前红色是刺激源不是信息；--danger 只允许小面积状态文字与看板标红。共情场景只允许中性纸面 + 绿色行动按钮。</p>
+          <p class="note" style="margin-top: var(--space-3);">理由：怒气用户面前红色是刺激源不是信息；--danger 只允许小面积状态文字与看板标红。共情场景只允许中性纸面 + 青蓝行动按钮。</p>
         </div>
 
         <!-- 禁忌 2 -->
@@ -1290,7 +1295,7 @@ body {
               </div>
             </div>
           </div>
-          <p class="note" style="margin-top: var(--space-3);">理由：绿色的指路价值来自稀缺；到处是绿等于没有路标。</p>
+          <p class="note" style="margin-top: var(--space-3);">理由：青蓝的指路价值来自稀缺；到处是青蓝等于没有路标。</p>
         </div>
 
         <!-- 禁忌 6 -->
