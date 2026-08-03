@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="page-id" content="PAGE-F03-01">
+  <title>转人工确认面板</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* ===== 从 tokens.css 粘贴 ===== */
+    :root {
+      /* ─── Surface (3 levels) ─── */
+      --bg: #F5F7F5;                     /* 页面底色：植物绿灰，晨光感 */
+      --surface: #FFFFFF;                /* 卡片/气泡纸面 */
+      --surface-warm: #EDF3EE;           /* 温感面板：AI 气泡、徽章底、禁用底 */
+      --surface-raised: var(--surface);  /* 浅色模式抬升态与 surface 同值，靠描边/静态阴影区分 */
+      --surface-overlay: var(--surface); /* 模态/底部抽屉（转人工确认面板）最高层 */
+
+      /* ─── Foreground (4 levels) ─── */
+      --fg: #1C2B22;                     /* 正文主色：对 bg 13.76:1 / 对 surface 14.81:1 */
+      --fg-2: #33463B;                   /* 副标题层：对 surface 10.10:1 */
+      --muted: #52655A;                  /* 辅助说明：对 bg 5.79:1 / 对 surface 6.24:1 */
+      --meta: #5E7267;                   /* 时间戳/徽章文字：对 surface 5.15:1 / 对 bg 4.78:1 */
+
+      /* ─── Border (2 levels) ─── */
+      --border: #D7E0DA;                 /* 卡片描边 */
+      --border-soft: #E6ECE7;            /* 卡内分隔线（摘要卡字段行间） */
+
+      /* ─── Accent ─── */
+      --accent: #2E7D4F;                 /* 品牌自然绿（待品牌素材校准）；对 --accent-on 5.05:1 */
+      --accent-on: #FFFFFF;              /* accent 实底上的前景色 */
+      --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+      --accent-active: color-mix(in oklab, var(--accent), black 14%);
+
+      /* ─── Semantic ─── */
+      --success: #23703F;                /* 解决确认；对 surface 6.07:1 */
+      --warn: #8A5A00;                   /* 看板超区间/降级提示；对 surface 5.93:1 */
+      --danger: #B23B2E;                 /* 陶土红：仅小面积状态文字与看板标红；
+                                            情绪路径界面禁止大面积使用——共情场景用色须冷静 */
+
+      /* ─── Typography — fonts ─── */
+      --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+      /* ─── Type scale（正文 17px 为 PRD 定稿基准；20px+ 为步骤卡大字） ─── */
+      --text-xs: 13px;
+      --text-sm: 15px;
+      --text-base: 17px;
+      --text-lg: 20px;
+      --text-xl: 24px;
+      --text-2xl: 28px;
+      --text-3xl: 34px;
+      --text-4xl: 40px;
+
+      /* ─── Leading & Tracking ─── */
+      --leading-body: 1.55;
+      --leading-tight: 1.25;
+      --tracking-display: -0.02em;
+
+      /* ─── Spacing (4px base) ─── */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-12: 48px;
+
+      /* ─── Section rhythm ─── */
+      --section-y-desktop: 64px;         /* 看板页区块节奏 */
+      --section-y-tablet: 48px;
+      --section-y-phone: 32px;           /* 对话页区块节奏（流内以消息间距为主） */
+
+      /* ─── Radius ─── */
+      --radius-sm: 8px;                  /* 配图内嵌、小元素 */
+      --radius-md: 12px;                 /* 按钮、输入框 */
+      --radius-lg: 16px;                 /* 步骤卡、气泡、图卡、抽屉 */
+      --radius-pill: 9999px;             /* 来源徽章、指示点 */
+
+      /* ─── Surface elevation（静态层级专用；交互反馈禁用阴影） ─── */
+      --elev-flat: none;
+      --elev-ring: 0 0 0 1px var(--border);
+      --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);   /* 情绪出口置顶卡 */
+      --elev-float: 0 8px 32px color-mix(in oklab, var(--fg), transparent 88%);   /* 转人工底部抽屉 */
+
+      /* ─── Focus ─── */
+      --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%);
+
+      /* ─── Motion ─── */
+      --motion-fast: 150ms;              /* 色彩响应微反馈 */
+      --motion-base: 200ms;              /* 进场落座 / 抽屉 / 状态切换 */
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+      /* ─── Layout ─── */
+      --container-max: 1200px;           /* 看板 12 列网格容器；对话页单列 100% 不受此限 */
+      --container-gutter-desktop: 32px;
+      --container-gutter-tablet: 24px;
+      --container-gutter-phone: 16px;
+    }
+    /* ===== end tokens ===== */
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: var(--leading-body);
+    }
+
+    /* ============ 来自 DESIGN.md §6 的组件 CSS ============ */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 48px; padding: var(--space-3) var(--space-5);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body); font-size: var(--text-lg);
+      font-weight: 600; letter-spacing: 0.02em; line-height: var(--leading-tight);
+      border: 1.5px solid transparent; cursor: pointer;
+      transition: background-color var(--motion-fast) var(--ease-standard),
+                  border-color var(--motion-fast) var(--ease-standard),
+                  color var(--motion-fast) var(--ease-standard);
+    }
+    .btn-primary { background: var(--accent); color: var(--accent-on); }
+    .btn-primary:hover  { background: var(--accent-hover); }
+    .btn-primary:active { background: var(--accent-active); }
+    .btn-primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+    .btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
+    .btn-secondary:hover  { border-color: var(--accent); color: var(--accent); }
+    .btn-secondary:active { background: var(--surface-warm); border-color: var(--accent); }
+    .btn-secondary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+    .btn:disabled,
+    .btn[aria-disabled="true"] {
+      background: var(--surface-warm); color: var(--muted);
+      border-color: transparent; cursor: not-allowed;
+    }
+
+    .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+    .btn-row .btn { flex: 1 1 45%; min-width: 140px; }
+
+    .bubble {
+      max-width: 85%; padding: var(--space-3) var(--space-4);
+      font-size: var(--text-base); line-height: var(--leading-body);
+      border-radius: var(--radius-lg);
+    }
+    .bubble--ai   { background: var(--surface-warm); color: var(--fg); border-bottom-left-radius: var(--radius-sm); align-self: flex-start; }
+    .bubble--user { background: var(--accent); color: var(--accent-on); border-bottom-right-radius: var(--radius-sm); align-self: flex-end; }
+    .bubble__meta { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); margin-top: var(--space-1); }
+
+    .input {
+      width: 100%; min-height: 48px;
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body); font-size: var(--text-base);
+      line-height: var(--leading-body); color: var(--fg);
+      transition: border-color var(--motion-fast) var(--ease-standard),
+                  background-color var(--motion-fast) var(--ease-standard);
+    }
+    .input::placeholder { color: var(--meta); }
+    .input:hover { border-color: var(--accent); }
+    .input:active { border-color: var(--accent); }
+    .input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .input:disabled { background: var(--surface-warm); color: var(--muted); cursor: not-allowed; }
+    .input__count { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); text-align: right; }
+    .input__count--over { color: var(--danger); }
+
+    /* ============ 来自 DESIGN.md §7 的动效 CSS ============ */
+    @keyframes msg-settle {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .bubble { animation: msg-settle var(--motion-base) var(--ease-standard) both; }
+
+    .drawer-mask {
+      position: absolute; inset: 0; background: color-mix(in oklab, var(--fg), transparent 55%);
+      opacity: 1; pointer-events: auto;
+      transition: opacity var(--motion-base) var(--ease-standard);
+    }
+    .drawer {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      background: var(--surface-overlay);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      box-shadow: var(--elev-float); /* 静态层级 */
+      transform: translateY(0);
+      transition: transform var(--motion-base) var(--ease-standard);
+    }
+
+    .notice-bar { animation: msg-settle var(--motion-base) var(--ease-standard) both; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .bubble, .notice-bar { animation: none; }
+      .drawer, .drawer-mask { transition-duration: 0.01ms; }
+    }
+
+    /* ============ 本页专用样式 ============ */
+    .page-header {
+      max-width: 1760px; margin: 0 auto;
+      padding: var(--space-8) var(--space-8) 0;
+    }
+    .page-header__title {
+      font-family: var(--font-display); font-size: var(--text-2xl);
+      font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);
+    }
+    .page-id-badge {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      padding: 2px var(--space-2); min-height: 24px;
+      background: var(--surface-warm);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-pill);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);
+    }
+
+    .state-section {
+      max-width: 1760px; margin: 0 auto;
+      padding: var(--space-8);
+    }
+    .state-section__title {
+      font-family: var(--font-display); font-size: var(--text-xl);
+      font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);
+      margin-bottom: var(--space-2);
+    }
+    .state-section__sub { font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--space-6); }
+
+    .frame-grid { display: flex; flex-wrap: wrap; gap: var(--space-8); align-items: flex-start; }
+
+    .frame { width: 390px; max-width: 100%; }
+    .frame-label {
+      font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em;
+      color: var(--fg-2); margin-bottom: var(--space-3);
+      display: flex; align-items: center; gap: var(--space-2);
+    }
+    .frame-label__dot {
+      width: 8px; height: 8px; border-radius: var(--radius-pill);
+      background: var(--accent); flex: none;
+    }
+
+    .phone {
+      position: relative; width: 100%; min-height: 800px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--elev-ring);
+      display: flex; flex-direction: column;
+    }
+    .statusbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--space-3) var(--space-5) var(--space-1);
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--fg-2);
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .chat-header__title {
+      font-family: var(--font-display); font-size: var(--text-base);
+      font-weight: 700; letter-spacing: -0.01em; color: var(--fg);
+      flex: 1; text-align: center;
+    }
+    .chat-header__icon { color: var(--fg-2); font-size: 22px; display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+
+    .chat-flow {
+      flex: 1; display: flex; flex-direction: column; gap: var(--space-3);
+      padding: var(--space-4) var(--space-4) var(--space-5);
+      overflow: hidden;
+    }
+    .chat-day {
+      align-self: center; font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);
+      padding: var(--space-1) 0;
+    }
+
+    .composer {
+      display: flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-3) var(--space-4) var(--space-5);
+      background: var(--surface);
+      border-top: 1px solid var(--border-soft);
+    }
+    .composer__field {
+      flex: 1; min-height: 44px;
+      display: flex; align-items: center;
+      padding: 0 var(--space-4);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-pill);
+      font-size: var(--text-sm); color: var(--meta);
+    }
+    .composer__send {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 44px; min-height: 44px; border-radius: var(--radius-pill);
+      background: var(--surface-warm); color: var(--muted); border: none; cursor: pointer;
+      font-size: 20px;
+      transition: background-color var(--motion-fast) var(--ease-standard),
+                  color var(--motion-fast) var(--ease-standard);
+    }
+    .composer__send:hover { color: var(--fg-2); }
+
+    /* 系统提示条（会话流内的状态说明，非气泡） */
+    .sys-note {
+      align-self: center; width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      font-size: var(--text-sm); line-height: var(--leading-body); color: var(--fg-2);
+      display: flex; gap: var(--space-2); align-items: flex-start;
+    }
+    .sys-note .ph { flex: none; margin-top: 3px; font-size: 17px; color: var(--muted); }
+
+    /* ─── 抽屉内部 ─── */
+    .drawer { padding: var(--space-3) var(--space-5) var(--space-8); display: flex; flex-direction: column; gap: var(--space-4); max-height: 92%; }
+    .drawer__grabber {
+      width: 40px; height: 4px; border-radius: var(--radius-pill);
+      background: var(--border); margin: 0 auto var(--space-1);
+    }
+    .drawer__title {
+      font-family: var(--font-display); font-size: var(--text-xl);
+      font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);
+      color: var(--fg);
+    }
+
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-2) var(--space-4);
+    }
+    .summary-row {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-row__label {
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--meta);
+    }
+    .summary-row__value { font-size: var(--text-base); line-height: var(--leading-body); color: var(--fg); }
+    .summary-row__value--mono { font-family: var(--font-mono); letter-spacing: 0; }
+    .summary-row__value--empty { color: var(--muted); }
+    .summary-row__hint { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--muted); }
+
+    .drawer__meta {
+      font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);
+      display: flex; align-items: flex-start; gap: var(--space-1);
+    }
+    .drawer__meta .ph { flex: none; margin-top: 2px; }
+
+    .add-details__label {
+      font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em; color: var(--fg-2);
+      margin-bottom: var(--space-2); display: block;
+    }
+
+    /* 设备选择（多设备态） */
+    .device-option {
+      display: flex; align-items: center; gap: var(--space-3);
+      width: 100%; min-height: 64px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      cursor: pointer; text-align: left;
+      transition: border-color var(--motion-fast) var(--ease-standard),
+                  background-color var(--motion-fast) var(--ease-standard);
+    }
+    .device-option:hover { border-color: var(--accent); }
+    .device-option:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .device-option--selected { border-color: var(--accent); background: var(--surface-warm); }
+    .device-option__radio {
+      width: 22px; height: 22px; border-radius: var(--radius-pill);
+      border: 1.5px solid var(--border); flex: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .device-option--selected .device-option__radio { border-color: var(--accent); }
+    .device-option--selected .device-option__radio::after {
+      content: ""; width: 12px; height: 12px; border-radius: var(--radius-pill);
+      background: var(--accent);
+    }
+    .device-option__name { font-size: var(--text-base); font-weight: 600; color: var(--fg); line-height: var(--leading-tight); }
+    .device-option__sn { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--meta); margin-top: 2px; }
+
+    /* 提交反馈区 */
+    .fail-note {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3) var(--space-4);
+      display: flex; flex-direction: column; gap: var(--space-3);
+    }
+    .fail-note__text {
+      font-size: var(--text-sm); line-height: var(--leading-body); color: var(--danger);
+      display: flex; gap: var(--space-2); align-items: flex-start;
+    }
+    .fail-note__text .ph { flex: none; margin-top: 3px; }
+
+    /* push 权限系统弹窗（目标态示意） */
+    .os-alert-mask {
+      position: absolute; inset: 0;
+      background: color-mix(in oklab, var(--fg), transparent 65%);
+      display: flex; align-items: center; justify-content: center;
+      padding: var(--space-8);
+    }
+    .os-alert {
+      width: 280px; background: var(--surface-overlay);
+      border-radius: var(--radius-lg); overflow: hidden;
+      box-shadow: var(--elev-float);
+      text-align: center;
+    }
+    .os-alert__body { padding: var(--space-5) var(--space-4) var(--space-4); }
+    .os-alert__title { font-size: var(--text-base); font-weight: 700; line-height: var(--leading-tight); color: var(--fg); }
+    .os-alert__desc { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--muted); margin-top: var(--space-2); }
+    .os-alert__actions { display: flex; border-top: 1px solid var(--border-soft); }
+    .os-alert__btn {
+      flex: 1; min-height: 44px; background: none; border: none; cursor: pointer;
+      font-size: var(--text-base); color: var(--accent); font-weight: 400;
+      transition: background-color var(--motion-fast) var(--ease-standard);
+    }
+    .os-alert__btn + .os-alert__btn { border-left: 1px solid var(--border-soft); font-weight: 600; }
+    .os-alert__btn:hover { background: var(--surface-warm); }
+
+    /* 体验反馈入口（底线态，元素归 PAGE-F01-01，此处为触发示意） */
+    .feedback-chip {
+      align-self: flex-start; max-width: 85%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg); border-bottom-left-radius: var(--radius-sm);
+      padding: var(--space-3) var(--space-4);
+      display: flex; flex-direction: column; gap: var(--space-3);
+    }
+    .feedback-chip__text { font-size: var(--text-base); line-height: var(--leading-body); color: var(--fg); }
+    .feedback-chip__actions { display: flex; gap: var(--space-2); }
+    .feedback-chip__btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+      min-height: 44px; min-width: 96px; padding: 0 var(--space-4);
+      background: var(--surface); color: var(--fg-2);
+      border: 1.5px solid var(--border); border-radius: var(--radius-md);
+      font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em; cursor: pointer;
+      transition: border-color var(--motion-fast) var(--ease-standard),
+                  color var(--motion-fast) var(--ease-standard),
+                  background-color var(--motion-fast) var(--ease-standard);
+    }
+    .feedback-chip__btn:hover { border-color: var(--accent); color: var(--accent); }
+    .feedback-chip__btn:active { background: var(--surface-warm); border-color: var(--accent); }
+    .feedback-chip__btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  </style>
+</head>
+<body>
+
+  <!-- 页面标题 -->
+  <header class="page-header">
+    <div class="flex flex-wrap items-center gap-3">
+      <h1 class="page-header__title">转人工确认面板</h1>
+      <span class="page-id-badge">PAGE-F03-01</span>
+    </div>
+    <p class="mt-2" style="font-size: var(--text-sm); color: var(--muted); max-width: 720px;">
+      客服对话页内调起的全屏级底部抽屉（手机竖屏 390pt 基准）。以下按「面板内状态」与「提交后会话流状态」平铺展示全部状态。
+    </p>
+  </header>
+
+  <!-- ============================================================
+       Section A · 面板内状态（本页元素）
+       ============================================================ -->
+  <section class="state-section" id="panel-states">
+    <h2 class="state-section__title">面板内状态</h2>
+    <p class="state-section__sub">底部抽屉本体：摘要预览 → 补充 → 提交；缺失 / 多设备 / 降级 / 失败均不阻塞、不出死屏。</p>
+
+    <div class="frame-grid">
+
+      <!-- A1 · 初始态（摘要就绪，主视图） -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A1 · 初始态（摘要就绪 · 主视图）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:14 PM</div>
+            <div class="bubble bubble--user">It's still blinking orange after step 3.</div>
+            <div class="bubble bubble--ai">Sorry that didn't fix it. Let's get you to a real person.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div class="summary-card">
+              <div class="summary-row">
+                <span class="summary-row__label">What you've tried</span>
+                <span class="summary-row__value">Pairing troubleshooting steps 1–3: restarted the feeder, re-entered the Wi-Fi password, moved it closer to the router.</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Serial number (SN)</span>
+                <span class="summary-row__value summary-row__value--mono">CF24-08812-BFD</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Device model</span>
+                <span class="summary-row__value">COOLFLY Smart Bird Feeder Pro</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Where you're stuck</span>
+                <span class="summary-row__value">Feeder LED keeps blinking orange and pairing won't finish after the password step.</span>
+              </div>
+            </div>
+            <p class="drawer__meta"><i class="ph ph-info"></i>Your conversation record is included so our team can pick up right where you left off.</p>
+            <div>
+              <label class="add-details__label" for="add-details-a1">Add details</label>
+              <textarea class="input" id="add-details-a1" rows="2" placeholder="Anything else we should know?"></textarea>
+              <div class="input__count mt-1">0 / 500</div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button class="btn btn-primary w-full" type="button" onclick="setTimeout(function(){location.href='阶段1_客服对话_客服对话页.html'},800)">Send &amp; connect</button>
+              <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A2 · 字段缺失态（SN 缺失） -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A2 · 字段缺失态（SN 缺失，可手补，不阻塞）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 8:02 AM</div>
+            <div class="bubble bubble--user">I'd like to talk to a person please.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div class="summary-card">
+              <div class="summary-row">
+                <span class="summary-row__label">What you've tried</span>
+                <span class="summary-row__value">Asked about camera clips not saving; checked storage settings together in this chat.</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Serial number (SN)</span>
+                <span class="summary-row__value summary-row__value--empty">Not on file</span>
+                <span class="summary-row__hint">No device linked to your account — you can add the SN below if you have it. This won't stop your request.</span>
+                <input class="input mt-2" type="text" placeholder="Add serial number (optional)" aria-label="Add serial number (optional)">
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Device model</span>
+                <span class="summary-row__value summary-row__value--empty">Not on file</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Where you're stuck</span>
+                <span class="summary-row__value">Bird visit clips stopped saving to the app since last week.</span>
+              </div>
+            </div>
+            <div>
+              <label class="add-details__label" for="add-details-a2">Add details</label>
+              <textarea class="input" id="add-details-a2" rows="2" placeholder="Anything else we should know?"></textarea>
+              <div class="input__count mt-1">0 / 500</div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button class="btn btn-primary w-full" type="button" onclick="setTimeout(function(){location.href='阶段1_客服对话_客服对话页.html'},800)">Send &amp; connect</button>
+              <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A3 · 多设备选择态 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A3 · 多设备选择态（选择填入 SN / 型号，不选不阻塞）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 5:37 PM</div>
+            <div class="bubble bubble--user">One of my feeders keeps going offline.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div>
+              <span class="add-details__label">Which device is this about?</span>
+              <div class="flex flex-col gap-2" role="radiogroup" aria-label="Which device is this about?">
+                <button class="device-option device-option--selected" type="button" role="radio" aria-checked="true">
+                  <span class="device-option__radio"></span>
+                  <span>
+                    <span class="device-option__name">Smart Bird Feeder Pro · Backyard</span>
+                    <span class="device-option__sn block">SN CF24-08812-BFD</span>
+                  </span>
+                </button>
+                <button class="device-option" type="button" role="radio" aria-checked="false">
+                  <span class="device-option__radio"></span>
+                  <span>
+                    <span class="device-option__name">Smart Bird Feeder Mini · Porch</span>
+                    <span class="device-option__sn block">SN CF23-04471-MNI</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-row">
+                <span class="summary-row__label">What you've tried</span>
+                <span class="summary-row__value">Offline troubleshooting steps 1–2: power-cycled the feeder, confirmed home Wi-Fi is up.</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Serial number (SN)</span>
+                <span class="summary-row__value summary-row__value--mono">CF24-08812-BFD</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Device model</span>
+                <span class="summary-row__value">COOLFLY Smart Bird Feeder Pro</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Where you're stuck</span>
+                <span class="summary-row__value">Backyard feeder drops offline every night and won't reconnect until morning.</span>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button class="btn btn-primary w-full" type="button" onclick="setTimeout(function(){location.href='阶段1_客服对话_客服对话页.html'},800)">Send &amp; connect</button>
+              <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A4 · 摘要降级态 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A4 · 摘要降级态（生成失败，不阻塞转人工）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 11:26 AM</div>
+            <div class="bubble bubble--user">This is going nowhere. Get me a human.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div class="sys-note" style="align-self: stretch;">
+              <i class="ph ph-chat-centered-text"></i>
+              <span>We couldn't build a summary this time, so your full conversation record will go straight to our team — nothing is lost.</span>
+            </div>
+            <div>
+              <label class="add-details__label" for="stuck-a4">Describe where you're stuck</label>
+              <textarea class="input" id="stuck-a4" rows="3" placeholder="Anything else we should know?">Feeder camera shows a black screen since yesterday. Already tried restarting it twice.</textarea>
+              <div class="input__count mt-1">92 / 500</div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button class="btn btn-primary w-full" type="button" onclick="setTimeout(function(){location.href='阶段1_客服对话_客服对话页.html'},800)">Send &amp; connect</button>
+              <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A5 · 提交失败态 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A5 · 提交失败态（显式提示 + Retry，摘要保留）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-slash"></i><i class="ph ph-wifi-low"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:14 PM</div>
+            <div class="bubble bubble--user">It's still blinking orange after step 3.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div class="summary-card">
+              <div class="summary-row">
+                <span class="summary-row__label">What you've tried</span>
+                <span class="summary-row__value">Pairing troubleshooting steps 1–3: restarted the feeder, re-entered the Wi-Fi password, moved it closer to the router.</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Serial number (SN)</span>
+                <span class="summary-row__value summary-row__value--mono">CF24-08812-BFD</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Device model</span>
+                <span class="summary-row__value">COOLFLY Smart Bird Feeder Pro</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Where you're stuck</span>
+                <span class="summary-row__value">Feeder LED keeps blinking orange and pairing won't finish after the password step. Router is a Netgear AX1800, feeder is about 3 m from it.</span>
+              </div>
+            </div>
+            <div class="fail-note notice-bar" role="alert">
+              <span class="fail-note__text"><i class="ph ph-warning-circle"></i>We couldn't send your request just now. Please try again.</span>
+              <button class="btn btn-secondary w-full" type="button">Retry</button>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button class="btn btn-primary w-full" type="button" onclick="setTimeout(function(){location.href='阶段1_客服对话_客服对话页.html'},800)">Send &amp; connect</button>
+              <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- A6 · 连续失败兜底态 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>A6 · 连续失败兜底态（兜底邮箱，摘要可复制，不出死屏）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-slash"></i><i class="ph ph-wifi-slash"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:14 PM</div>
+            <div class="bubble bubble--user">It's still blinking orange after step 3.</div>
+          </div>
+          <div class="drawer-mask"></div>
+          <div class="drawer" role="dialog" aria-modal="true" aria-label="Here's what we'll send to our team">
+            <div class="drawer__grabber"></div>
+            <h3 class="drawer__title">Here's what we'll send to our team</h3>
+            <div class="summary-card">
+              <div class="summary-row">
+                <span class="summary-row__label">What you've tried</span>
+                <span class="summary-row__value">Pairing troubleshooting steps 1–3: restarted the feeder, re-entered the Wi-Fi password, moved it closer to the router.</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Serial number (SN)</span>
+                <span class="summary-row__value summary-row__value--mono">CF24-08812-BFD</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Device model</span>
+                <span class="summary-row__value">COOLFLY Smart Bird Feeder Pro</span>
+              </div>
+              <div class="summary-row">
+                <span class="summary-row__label">Where you're stuck</span>
+                <span class="summary-row__value">Feeder LED keeps blinking orange and pairing won't finish after the password step. Router is a Netgear AX1800, feeder is about 3 m from it.</span>
+              </div>
+            </div>
+            <div class="fail-note notice-bar" role="alert">
+              <span class="fail-note__text"><i class="ph ph-warning-circle"></i>Still not going through — sorry about that. You can reach our team directly at support@coolfly.com; your summary above is saved here so you can copy it.</span>
+              <div class="btn-row">
+                <button class="btn btn-secondary" type="button"><i class="ph ph-copy mr-2"></i>Copy summary</button>
+                <button class="btn btn-secondary" type="button">Retry</button>
+              </div>
+            </div>
+            <button class="btn btn-secondary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Not now</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section B · 提交成功后 · 会话流状态
+       ============================================================ -->
+  <section class="state-section" id="post-submit-states">
+    <h2 class="state-section__title">提交成功后 · 会话流状态</h2>
+    <p class="state-section__sub">抽屉收起，等待承诺按 G3 层级落回对话页会话流（展示载体 PAGE-F01-01，本页定义其内容与触发）。目标态 / 底线态两套话术互斥启用。</p>
+
+    <div class="frame-grid">
+
+      <!-- B1 · 目标态等待承诺 + push 权限请求 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B1 · 目标态 · 等待承诺①② + 场景化 push 权限请求</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:16 PM</div>
+            <div class="bubble bubble--ai">You're connected to our support team. Expected reply: usually within 2 hours — replies may take longer right now.</div>
+            <div class="bubble bubble--ai">You can close this page — we'll notify you here when they reply.
+              <div class="bubble__meta">2:16 PM</div>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+          <div class="os-alert-mask">
+            <div class="os-alert" role="alertdialog" aria-label="Notification permission">
+              <div class="os-alert__body">
+                <div class="os-alert__title">"COOLFLY" Would Like to Send You Notifications</div>
+                <div class="os-alert__desc">Notifications may include alerts, sounds, and icon badges.</div>
+              </div>
+              <div class="os-alert__actions">
+                <button class="os-alert__btn" type="button">Don't Allow</button>
+                <button class="os-alert__btn" type="button">Allow</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- B2 · 目标态 · push 被拒明示 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B2 · 目标态 · push 被拒明示（不再弹权限）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:16 PM</div>
+            <div class="bubble bubble--ai">You're connected to our support team. Expected reply: usually within 2 hours — replies may take longer right now.</div>
+            <div class="sys-note notice-bar">
+              <i class="ph ph-bell-slash"></i>
+              <span>Notifications are off, so please check back here for your reply.</span>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- B3 · 目标态 · 超时安抚 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B3 · 目标态 · 超时安抚③（超承诺时间 ×1.5 自动下发）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:16 PM</div>
+            <div class="bubble bubble--ai">You're connected to our support team. Expected reply: usually within 2 hours — replies may take longer right now.</div>
+            <div class="bubble bubble--ai">You can close this page — we'll notify you here when they reply.</div>
+            <div class="chat-day">Today 5:20 PM</div>
+            <div class="bubble bubble--ai">Sorry for the wait — our team is still on your case. If it's urgent, reach us at support@coolfly.com.
+              <div class="bubble__meta">5:20 PM</div>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- B4 · 底线态三件套 + 体验反馈 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B4 · 底线态 · 三件套①②③ + 体验反馈（归 F04，本页触发）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:16 PM</div>
+            <div class="bubble bubble--ai">Your request and the summary below have been sent to our support team.</div>
+            <div class="bubble bubble--ai">They'll reply by email (j.mitchell@gmail.com) — usually within a few hours. Please keep an eye on your inbox (and spam folder).</div>
+            <div class="bubble bubble--ai">If you don't hear back within 24 hours, contact us directly at support@coolfly.com.</div>
+            <div class="feedback-chip notice-bar">
+              <span class="feedback-chip__text">How was your experience with our assistant so far?</span>
+              <div class="feedback-chip__actions">
+                <button class="feedback-chip__btn" type="button"><i class="ph ph-thumbs-up"></i>Good</button>
+                <button class="feedback-chip__btn" type="button"><i class="ph ph-thumbs-down"></i>Not great</button>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- B5 · 底线态无邮箱 fallback -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B5 · 底线态 · 无可见邮箱 fallback（Apple 隐私转发 / 未绑定）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 4:48 PM</div>
+            <div class="bubble bubble--ai">Your request and the summary below have been sent to our support team.</div>
+            <div class="bubble bubble--ai">They'll reply by email — please make sure the email address on your COOLFLY account is up to date.</div>
+            <div class="bubble bubble--ai">If you don't hear back within 24 hours, contact us directly at support@coolfly.com.
+              <div class="bubble__meta">4:48 PM</div>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- B6 · 已转接等待 · 目标态继续输入 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B6 · 已转接等待 · 目标态继续输入（入同一会话流，不丢弃）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 2:16 PM</div>
+            <div class="bubble bubble--ai">You're connected to our support team. Expected reply: usually within 2 hours — replies may take longer right now.</div>
+            <div class="bubble bubble--user">Also — the feeder made a clicking sound before the light started blinking.</div>
+            <div class="sys-note notice-bar">
+              <i class="ph ph-check-circle"></i>
+              <span>You're connected with our support team — your message has been added to this conversation for them to see.</span>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- B7 · 已转接等待 · 底线态继续输入 -->
+      <div class="frame">
+        <div class="frame-label"><span class="frame-label__dot"></span>B7 · 已转接等待 · 底线态继续输入（提示 + 继续自助）</div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><span class="flex items-center gap-1"><i class="ph ph-cell-signal-full"></i><i class="ph ph-wifi-high"></i><i class="ph ph-battery-high"></i></span></div>
+          <div class="chat-header">
+            <span class="chat-header__icon"><i class="ph ph-caret-left"></i></span>
+            <span class="chat-header__title">COOLFLY Support</span>
+            <span class="chat-header__icon"><i class="ph ph-dots-three-outline"></i></span>
+          </div>
+          <div class="chat-flow">
+            <div class="chat-day">Today 4:52 PM</div>
+            <div class="bubble bubble--ai">They'll reply by email (j.mitchell@gmail.com) — usually within a few hours. Please keep an eye on your inbox (and spam folder).</div>
+            <div class="bubble bubble--user">Can I also change the delivery address for my seed order?</div>
+            <div class="sys-note notice-bar" style="flex-direction: column; gap: var(--space-3);">
+              <span class="flex items-start gap-2"><i class="ph ph-envelope-simple"></i><span>This conversation has been handed to our support team — they'll reply through the channel above. Need help with something else in the meantime?</span></span>
+              <button class="btn btn-primary w-full" type="button" onclick="location.href='阶段1_客服对话_客服对话页.html'">Continue with the AI assistant</button>
+            </div>
+          </div>
+          <div class="composer">
+            <span class="composer__field">Type a message…</span>
+            <button class="composer__send" type="button" aria-label="Send message"><i class="ph ph-arrow-up"></i></button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer style="max-width: 1760px; margin: 0 auto; padding: 0 var(--space-8) var(--space-12);">
+    <p style="font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);">
+      COOLFLY 智能客服 · PAGE-F03-01 · 高保真原型（静态）。等待时限与联系方式（如 "usually within 2 hours" / "24 hours" / support@coolfly.com）均为 {rolling_estimate} / {promised_window} / {support_email} 变量的示意填充值，实际取滚动统计或系统配置，界面不硬编码固定时长。
+    </p>
+  </footer>
+
+</body>
+</html>

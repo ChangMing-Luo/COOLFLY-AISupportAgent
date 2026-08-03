@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COOLFLY 智能客服 · Design System Showcase</title>
+  <!-- Tailwind 仅用于布局工具类 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- 字体：本系统使用系统字体栈（SF Pro / Roboto / Segoe UI），无需外部字体引入——这是对中老年用户的尊重，不是偷懒（DESIGN.md §3） -->
+  <style>
+/* ============================================================
+   ① tokens.css 原样内联（唯一允许出现 hex 的 CSS 区块）
+   ============================================================ */
+:root {
+  /* ─── Surface (3 levels) ─── */
+  --bg: #F5F7F5;                     /* 页面底色：植物绿灰，晨光感 */
+  --surface: #FFFFFF;                /* 卡片/气泡纸面 */
+  --surface-warm: #EDF3EE;           /* 温感面板：AI 气泡、徽章底、禁用底 */
+  --surface-raised: var(--surface);  /* 浅色模式抬升态与 surface 同值，靠描边/静态阴影区分 */
+  --surface-overlay: var(--surface); /* 模态/底部抽屉（转人工确认面板）最高层 */
+
+  /* ─── Foreground (4 levels) ─── */
+  --fg: #1C2B22;                     /* 正文主色：对 bg 13.76:1 / 对 surface 14.81:1 */
+  --fg-2: #33463B;                   /* 副标题层：对 surface 10.10:1 */
+  --muted: #52655A;                  /* 辅助说明：对 bg 5.79:1 / 对 surface 6.24:1 */
+  --meta: #5E7267;                   /* 时间戳/徽章文字：对 surface 5.15:1 / 对 bg 4.78:1 */
+
+  /* ─── Border (2 levels) ─── */
+  --border: #D7E0DA;                 /* 卡片描边 */
+  --border-soft: #E6ECE7;            /* 卡内分隔线（摘要卡字段行间） */
+
+  /* ─── Accent ─── */
+  --accent: #2E7D4F;                 /* 品牌自然绿（待品牌素材校准）；对 --accent-on 5.05:1 */
+  --accent-on: #FFFFFF;              /* accent 实底上的前景色 */
+  --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+  --accent-active: color-mix(in oklab, var(--accent), black 14%);
+
+  /* ─── Semantic ─── */
+  --success: #23703F;                /* 解决确认；对 surface 6.07:1 */
+  --warn: #8A5A00;                   /* 看板超区间/降级提示；对 surface 5.93:1 */
+  --danger: #B23B2E;                 /* 陶土红：仅小面积状态文字与看板标红；
+                                        情绪路径界面禁止大面积使用——共情场景用色须冷静 */
+
+  /* ─── Typography — fonts ─── */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* ─── Type scale（正文 17px 为 PRD 定稿基准；20px+ 为步骤卡大字） ─── */
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 17px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 28px;
+  --text-3xl: 34px;
+  --text-4xl: 40px;
+
+  /* ─── Leading & Tracking ─── */
+  --leading-body: 1.55;
+  --leading-tight: 1.25;
+  --tracking-display: -0.02em;
+
+  /* ─── Spacing (4px base) ─── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* ─── Section rhythm ─── */
+  --section-y-desktop: 64px;         /* 看板页区块节奏 */
+  --section-y-tablet: 48px;
+  --section-y-phone: 32px;           /* 对话页区块节奏（流内以消息间距为主） */
+
+  /* ─── Radius ─── */
+  --radius-sm: 8px;                  /* 配图内嵌、小元素 */
+  --radius-md: 12px;                 /* 按钮、输入框 */
+  --radius-lg: 16px;                 /* 步骤卡、气泡、图卡、抽屉 */
+  --radius-pill: 9999px;             /* 来源徽章、指示点 */
+
+  /* ─── Surface elevation（静态层级专用；交互反馈禁用阴影） ─── */
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px var(--border);
+  --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);   /* 情绪出口置顶卡 */
+  --elev-float: 0 8px 32px color-mix(in oklab, var(--fg), transparent 88%);   /* 转人工底部抽屉 */
+
+  /* ─── Focus ─── */
+  --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%);
+
+  /* ─── Motion ─── */
+  --motion-fast: 150ms;              /* 色彩响应微反馈 */
+  --motion-base: 200ms;              /* 进场落座 / 抽屉 / 状态切换 */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ─── Layout ─── */
+  --container-max: 1200px;           /* 看板 12 列网格容器；对话页单列 100% 不受此限 */
+  --container-gutter-desktop: 32px;
+  --container-gutter-tablet: 24px;
+  --container-gutter-phone: 16px;
+}
+
+/* ============================================================
+   ② 展示页基底（全部 var() 引用，零硬编码色）
+   ============================================================ */
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: var(--container-max); margin: 0 auto; padding-left: var(--container-gutter-desktop); padding-right: var(--container-gutter-desktop); }
+.section { padding-top: var(--section-y-desktop); padding-bottom: var(--section-y-desktop); border-top: 1px solid var(--border-soft); }
+.sec-eyebrow {
+  font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: var(--space-2);
+}
+.sec-title {
+  font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700;
+  letter-spacing: -0.01em; line-height: var(--leading-tight); color: var(--fg);
+  margin-bottom: var(--space-2);
+}
+.sec-lede { color: var(--muted); font-size: var(--text-base); max-width: 72ch; margin-bottom: var(--space-8); }
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--space-5);
+}
+.panel--warm { background: var(--surface-warm); }
+.label { font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em; color: var(--fg-2); }
+.note { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); }
+.token-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--fg-2); }
+.hexval { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--meta); }
+
+/* 顶部锚点导航 */
+.topnav {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in oklab, var(--surface), transparent 6%);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.topnav a {
+  font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--muted);
+  padding: var(--space-2) var(--space-2); border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+}
+.topnav a:hover { color: var(--accent); background: var(--surface-warm); }
+
+/* 色板 */
+.swatch { border-radius: var(--radius-md); border: 1px solid var(--border); overflow: hidden; background: var(--surface); }
+.swatch__chip { height: 84px; }
+.swatch__meta { padding: var(--space-3); display: flex; flex-direction: column; gap: 2px; background: var(--surface); }
+
+/* 间距条 */
+.space-bar { height: 20px; background: var(--accent); border-radius: var(--radius-sm); opacity: 0.85; }
+.rhythm-bar { width: 28px; background: var(--surface-warm); border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+
+/* 对照表 */
+.spec-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.spec-table th {
+  text-align: left; font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--meta); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border);
+}
+.spec-table td { padding: var(--space-3); border-bottom: 1px solid var(--border-soft); vertical-align: middle; color: var(--fg-2); }
+
+/* 禁忌对照 */
+.taboo-side { border-radius: var(--radius-md); padding: var(--space-4); border: 1px solid var(--border-soft); background: var(--surface); }
+.taboo-side--ok { border-color: color-mix(in oklab, var(--success), transparent 60%); }
+.taboo-side--no { border-color: color-mix(in oklab, var(--danger), transparent 60%); }
+.taboo-tag-ok { color: var(--success); font-weight: 600; font-size: var(--text-sm); }
+.taboo-tag-no { color: var(--danger); font-weight: 600; font-size: var(--text-sm); }
+
+/* 手机对话流示例框 */
+.phone-frame {
+  width: 100%; max-width: 400px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3);
+}
+
+/* ============================================================
+   ③ 组件 CSS —— 从 DESIGN.md §6 原样复制
+   ============================================================ */
+/* §6.1 大按钮双选（设计签名 · Done / It didn't work） */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 48px; padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body); font-size: var(--text-lg);
+  font-weight: 600; letter-spacing: 0.02em; line-height: var(--leading-tight);
+  border: 1.5px solid transparent; cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-standard),
+              border-color var(--motion-fast) var(--ease-standard),
+              color var(--motion-fast) var(--ease-standard);
+}
+.btn-primary { background: var(--accent); color: var(--accent-on); }
+.btn-primary:hover  { background: var(--accent-hover); }
+.btn-primary:active { background: var(--accent-active); }
+.btn-primary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
+.btn-secondary:hover  { border-color: var(--accent); color: var(--accent); }
+.btn-secondary:active { background: var(--surface-warm); border-color: var(--accent); }
+.btn-secondary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.btn-row .btn { flex: 1 1 45%; min-width: 140px; } /* 字号缩放最大档自动上下堆叠，不截断文案 */
+
+/* §6.2 排障步骤卡 */
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.step-card__eyebrow {
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--meta);
+}
+.step-card__title {
+  font-family: var(--font-display); font-size: var(--text-xl);
+  font-weight: 700; letter-spacing: -0.01em;
+  line-height: var(--leading-tight); color: var(--fg);
+}
+.step-card__body { font-size: var(--text-lg); line-height: var(--leading-body); color: var(--fg-2); }
+.step-card__figure { border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border-soft); }
+.step-card__figure img { display: block; width: 100%; max-width: 100%; }
+/* 卡片本体非交互，无 hover 反馈——色彩响应只属于可点元素 */
+
+/* §6.3 消息气泡（AI / 用户） */
+.bubble {
+  max-width: 85%; padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base); line-height: var(--leading-body);
+  border-radius: var(--radius-lg);
+}
+.bubble--ai   { background: var(--surface-warm); color: var(--fg); border-bottom-left-radius: var(--radius-sm); align-self: flex-start; }
+.bubble--user { background: var(--accent); color: var(--accent-on); border-bottom-right-radius: var(--radius-sm); align-self: flex-end; }
+.bubble__meta { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); margin-top: var(--space-1); }
+
+/* §6.4 来源标注小徽章（设计签名） */
+.source-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 2px var(--space-2); min-height: 24px;
+  background: var(--surface-warm);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);
+  transition: border-color var(--motion-fast) var(--ease-standard),
+              color var(--motion-fast) var(--ease-standard);
+}
+.source-badge::before {
+  content: ""; width: 6px; height: 6px; border-radius: var(--radius-pill);
+  background: var(--accent); flex: none;
+}
+.source-badge:hover { border-color: var(--accent); color: var(--fg-2); }
+.source-badge:active { border-color: var(--accent); color: var(--fg); }
+.source-badge:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* §6.5 输入框（自由输入 / Add details） */
+.input {
+  width: 100%; min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body); font-size: var(--text-base);
+  line-height: var(--leading-body); color: var(--fg);
+  transition: border-color var(--motion-fast) var(--ease-standard),
+              background-color var(--motion-fast) var(--ease-standard);
+}
+.input::placeholder { color: var(--meta); }
+.input:hover { border-color: var(--accent); }
+.input:active { border-color: var(--accent); }
+.input:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.input:disabled { background: var(--surface-warm); color: var(--muted); cursor: not-allowed; }
+.input__count { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); text-align: right; }
+.input__count--over { color: var(--danger); } /* danger 的合法小面积用法 */
+
+/* §6.6 情绪出口置顶卡 */
+.exit-card {
+  position: sticky; top: var(--space-2); z-index: 10;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--elev-raised); /* 静态层级阴影，不随交互变化 */
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.exit-card__text { font-size: var(--text-base); line-height: var(--leading-body); color: var(--fg); }
+.exit-card .btn-row .btn { min-height: 44px; font-size: var(--text-base); }
+
+/* §6.7 看板图卡与数值 */
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-2);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+.stat-card:hover { border-color: var(--accent); }          /* 可点图卡（切维度）才启用 */
+.stat-card:active { background: var(--surface-warm); }
+.stat-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.stat-card__label {
+  font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.02em; color: var(--muted);
+}
+.stat-card__value {
+  font-family: var(--font-mono); font-size: var(--text-3xl);
+  font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; color: var(--fg);
+}
+.stat-card__value--alert { color: var(--danger); }
+.stat-card__note { font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta); }
+.stat-card__note--degraded { color: var(--warn); } /* "数据回补中 / 预警线待 G1 回填" */
+
+/* ============================================================
+   ④ 动效 CSS —— 从 DESIGN.md §7 原样复制
+   ============================================================ */
+@keyframes msg-settle {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bubble, .step-card, .exit-card {
+  animation: msg-settle var(--motion-base) var(--ease-standard) both;
+}
+/* 看板图卡 staggered 入场：从左上到右下依次落座，节奏克制（40ms 步进） */
+.stat-card { animation: msg-settle var(--motion-base) var(--ease-standard) both; }
+.stat-card:nth-child(2) { animation-delay: 40ms; }
+.stat-card:nth-child(3) { animation-delay: 80ms; }
+.stat-card:nth-child(4) { animation-delay: 120ms; }
+
+/* responding 指示：流式回复前的三点呼吸，1.2s 缓慢节奏——是等待的陪伴不是催促 */
+@keyframes dot-breathe { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+.typing-dot { display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-pill);
+  background: var(--muted); animation: dot-breathe 1.2s var(--ease-standard) infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* 转人工确认面板：底部抽屉升起 + 遮罩淡入 */
+.drawer-mask {
+  position: fixed; inset: 0; background: color-mix(in oklab, var(--fg), transparent 55%);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--motion-base) var(--ease-standard);
+}
+.drawer {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: var(--surface-overlay);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--elev-float); /* 静态层级 */
+  transform: translateY(100%);
+  transition: transform var(--motion-base) var(--ease-standard);
+}
+.drawer.is-open { transform: translateY(0); }
+.drawer-mask.is-open { opacity: 1; pointer-events: auto; }
+
+/* 恢复提示条 / 转人工提示条：高度无关的淡入落座 */
+.notice-bar { animation: msg-settle var(--motion-base) var(--ease-standard) both; }
+
+/* 看板维度切换：内容交叉淡入，无横向滑动 */
+.panel-swap { opacity: 1; transition: opacity var(--motion-fast) var(--ease-standard); }
+.panel-swap.is-leaving { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble, .step-card, .exit-card, .stat-card, .notice-bar {
+    animation: none;
+  }
+  .drawer, .drawer-mask, .panel-swap {
+    transition-duration: 0.01ms;
+  }
+  .typing-dot { animation: none; opacity: 0.6; }
+}
+
+/* ============================================================
+   ⑤ 展示页专用：静态状态样张（复刻各态样式用于并排展示）
+   ============================================================ */
+.btn-primary.demo-hover   { background: var(--accent-hover); }
+.btn-primary.demo-active  { background: var(--accent-active); }
+.btn-primary.demo-focus   { box-shadow: var(--focus-ring); }
+.btn-secondary.demo-hover  { border-color: var(--accent); color: var(--accent); }
+.btn-secondary.demo-active { background: var(--surface-warm); border-color: var(--accent); }
+.btn-secondary.demo-focus  { box-shadow: var(--focus-ring); }
+.btn.demo-disabled { background: var(--surface-warm); color: var(--muted); border-color: transparent; cursor: not-allowed; }
+.input.demo-focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+.input.demo-error { border-color: var(--danger); }
+.stat-card.demo-hover { border-color: var(--accent); }
+.source-badge.demo-hover { border-color: var(--accent); color: var(--fg-2); }
+/* 抽屉演示容器：把 fixed 收进演示框内 */
+.drawer-demo { position: relative; overflow: hidden; min-height: 260px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.drawer-demo .drawer-mask, .drawer-demo .drawer { position: absolute; }
+/* 摘要卡字段行（border-soft 的真实用法） */
+.summary-row { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px solid var(--border-soft); font-size: var(--text-sm); }
+.summary-row:last-child { border-bottom: none; }
+.summary-row dt { color: var(--muted); flex: none; }
+.summary-row dd { color: var(--fg); font-family: var(--font-mono); font-size: var(--text-xs); text-align: right; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════ 顶部锚点导航（11 Section） ═══════════ -->
+  <nav class="topnav">
+    <div class="wrap flex items-center gap-1 overflow-x-auto" style="padding-top: var(--space-2); padding-bottom: var(--space-2);">
+      <span class="token-name" style="color: var(--accent); margin-right: var(--space-3); white-space: nowrap;">COOLFLY DS</span>
+      <a href="#s1">1 Hero</a><a href="#s2">2 设计理念</a><a href="#s3">3 色彩系统</a><a href="#s4">4 排版系统</a>
+      <a href="#s5">5 间距体系</a><a href="#s6">6 布局与空间</a><a href="#s7">7 圆角与焦点</a><a href="#s8">8 组件库</a>
+      <a href="#s9">9 动效</a><a href="#s10">10 品牌情感</a><a href="#s11">11 设计禁忌</a>
+    </div>
+  </nav>
+
+  <!-- ═══════════ Section 1: Hero（设计系统名片） ═══════════ -->
+  <header id="s1" style="padding-top: var(--space-12); padding-bottom: var(--section-y-desktop);">
+    <div class="wrap">
+      <div class="flex items-center gap-3" style="margin-bottom: var(--space-4);">
+        <span class="source-badge">Media &amp; Consumer</span>
+        <span class="note">浅色单模式 · 56 Tokens · 手机对话页 + 桌面看板页共用一套刻度</span>
+      </div>
+      <h1 style="font-family: var(--font-display); font-size: clamp(40px, 6vw, 64px); font-weight: 800; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); color: var(--fg);">
+        COOLFLY 智能客服<br>
+        <span style="color: var(--accent);">自然绿的冷静安抚系统</span>
+      </h1>
+      <p style="font-size: var(--text-lg); color: var(--fg-2); max-width: 66ch; margin-top: var(--space-5);">
+        为带着挫败进来的中老年用户设计的高可读支持对话界面，浅色单模式，色彩响应交互，来源徽章与 Done / It didn't work 大按钮双选是它的签名。
+      </p>
+
+      <!-- 核心隐喻 -->
+      <div class="panel panel--warm" style="margin-top: var(--space-8); max-width: 860px;">
+        <p class="sec-eyebrow">核心隐喻 · §1</p>
+        <p style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);">清晨的后院，鸟鸣与晨光。</p>
+        <p style="margin-top: var(--space-3); color: var(--fg-2);">
+          一张摊在晨光里的白纸说明书，页边留着大片空白，重点句子用大号字写，每一步只讲一件事。背景是极浅的、几乎察觉不到的植物绿灰，像清晨透过纱窗的光；消息卡是纯白的纸面，浮在背景之上但不投夸张的影子；品牌自然绿只出现在最需要它的地方——那颗告诉你"下一步在这里"的大按钮上。界面必须像一位坐在她身边、语速放慢、把手机转过来指给她看的耐心店员，而不是一个闪烁着高科技光效的机器人。
+        </p>
+      </div>
+
+      <!-- 设计签名：Done / It didn't work 双选 + 来源徽章 -->
+      <div class="grid md:grid-cols-2 gap-6 items-start" style="margin-top: var(--space-8); max-width: 860px;">
+        <div class="panel">
+          <p class="sec-eyebrow">设计签名 ①</p>
+          <p class="label" style="margin-bottom: var(--space-3);">大按钮双选：实底 vs 描边的不对称是刻意的</p>
+          <div class="btn-row">
+            <button class="btn btn-primary">Done</button>
+            <button class="btn btn-secondary">It didn't work</button>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">它无声地说"多数人到这里点 Done"，但绝不把失败选项藏小——两者同高同字号，失败不该有心理惩罚。</p>
+        </div>
+        <div class="panel">
+          <p class="sec-eyebrow">设计签名 ②</p>
+          <p class="label" style="margin-bottom: var(--space-3);">来源徽章：诚实的物证，截图可识别的品牌记号</p>
+          <div><span class="source-badge" tabindex="0">Source: Setup Guide</span></div>
+          <p class="note" style="margin-top: var(--space-3);">胶囊形、绿灰底、13px 文字加书页圆点。刻意做小——诚实是气质，不是广告。</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════ Section 2: 设计理念（来自 §1） ═══════════ -->
+  <section id="s2" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 2 · DESIGN.md §1</p>
+      <h2 class="sec-title">设计理念</h2>
+      <p class="sec-lede">第一情绪使命不是"愉悦"，而是安抚与可靠：用户是带着故障、带着怒气、甚至带着退货念头进来的。</p>
+
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="panel">
+          <p class="label" style="color: var(--accent);"><i class="ph ph-wind"></i> 冷静</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">界面上任何时刻都不出现兴奋、催促、闪烁的元素。没有弹跳动画，没有渐变霓虹，没有大面积警示红。哪怕在情绪路径里，出口置顶卡也用中性纸面 + 绿色行动按钮呈现。</p>
+        </div>
+        <div class="panel">
+          <p class="label" style="color: var(--accent);"><i class="ph ph-compass"></i> 掌控</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">每一步排障卡只呈现一个动作决策（Done / It didn't work），用户永远知道自己在哪、下一步按哪。进度指示、恢复提示条、转人工常驻入口，都是"你不会被丢下"的视觉承诺。</p>
+        </div>
+        <div class="panel">
+          <p class="label" style="color: var(--accent);"><i class="ph ph-hand-heart"></i> 诚实</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">来源徽章把 AI 回答的依据亮在明处；等待承诺按真实通路展示。视觉上用小而清晰的徽章而非炫技的引用卡——诚实应该低调而笃定。</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6" style="margin-top: var(--space-6);">
+        <div class="panel">
+          <p class="label">为什么是浅色单模式</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">不是因为浅色安全，而是因为核心用户是<strong>中老年、老花镜、户外或窗边强光环境</strong>（喂鸟器装在后院，排障经常发生在窗边看着设备的时候）。浅色高对比是这类人群与场景下可读性的最优解：正文对背景对比度 13.8:1，远超 WCAG AA。深色模式跟随主 App 能力后置，本期不做，避免双模式维护摊薄单模式的打磨深度。</p>
+        </div>
+        <div class="panel">
+          <p class="label">为什么是自然绿</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">COOLFLY 卖的是与自然的连接——鸟、后院、清晨。绿色是这个品牌唯一合理的主色（占位色值待品牌素材校准）。同时绿色在支持场景有第二重语义红利：它天然是"没问题、往前走"的颜色。当用户满心挫败时，一颗绿色大按钮说的是"这事能解决"。</p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top: var(--space-6);">
+        <p class="label">风格定位：行业坐标</p>
+        <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">
+          站在 <strong>Apple 人机界面指南（大字号、系统字体、44pt 触达）× 患者/长者友好医疗界面（单任务流、双选决策）× 现代客服产品（Intercom 的会话流骨架）</strong> 的交点上。它刻意远离两类原型：Linear 式的微光玻璃拟态（对老花眼是噪音），以及游戏化客服机器人（对怒气用户是冒犯）。它超越普通客服界面的地方在于：把"排障步骤卡"当成产品的主角来设计——大字、配图、双选节奏——而不是把一切塞进气泡。
+        </p>
+      </div>
+
+      <div style="margin-top: var(--space-6);">
+        <p class="label" style="margin-bottom: var(--space-3);">Prior Art · 参考先例</p>
+        <table class="spec-table panel" style="padding: 0;">
+          <thead><tr><th>参考</th><th>汲取了什么</th></tr></thead>
+          <tbody>
+            <tr><td class="token-name">Apple HIG（健康类 App 排版）</td><td>系统字体栈、17pt 正文基准、44pt 触达下限、Dynamic Type 不破版的工程纪律</td></tr>
+            <tr><td class="token-name">Intercom / 现代会话式支持产品</td><td>会话流承载一切（卡片、提示条、置顶卡皆为流内元素）的信息架构</td></tr>
+            <tr><td class="token-name">Headspace 的冷静色彩纪律</td><td>"单一柔和主色 + 大量留白"的情绪降噪手法，但把插画趣味换成器物级的朴素——我们的用户在修设备，不是在冥想</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 3: 色彩系统（来自 §2 + tokens.css） ═══════════ -->
+  <section id="s3" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 3 · DESIGN.md §2 + tokens.css</p>
+      <h2 class="sec-title">色彩系统</h2>
+      <p class="sec-lede">色彩哲学：绿色是承诺，中性色是空气，语义色是耳语。全部文本/背景配对 ≥ 4.5:1（WCAG 2.2 AA，逐对计算验证）。</p>
+
+      <!-- 3.1 Surface -->
+      <p class="label" style="margin-bottom: var(--space-3);">3.1 Surface 色板（含 Border 底盒对照）</p>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="swatch">
+          <div class="swatch__chip" style="background: var(--bg);"></div>
+          <div class="swatch__meta"><span class="token-name">--bg</span><span class="hexval">#F5F7F5</span><span class="note">页面底色；与纯白卡片 1.06:1 极轻层差，靠色温而非阴影分层</span></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch__chip" style="background: var(--surface); border-bottom: 1px solid var(--border-soft);"></div>
+          <div class="swatch__meta"><span class="token-name">--surface</span><span class="hexval">#FFFFFF</span><span class="note">消息卡/步骤卡/看板图卡纸面；最高可读性载体</span></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch__chip" style="background: var(--surface-warm);"></div>
+          <div class="swatch__meta"><span class="token-name">--surface-warm</span><span class="hexval">#EDF3EE</span><span class="note">AI 气泡与徽章底的温感绿灰；让 AI 的话比系统色更"有人味"</span></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch__chip" style="background: var(--surface-raised); box-shadow: inset var(--elev-ring);"></div>
+          <div class="swatch__meta"><span class="token-name">--surface-raised</span><span class="hexval">= surface</span><span class="note">抬升态；浅色模式同值，靠边框与阴影 token 区分</span></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch__chip" style="background: var(--surface-overlay); box-shadow: inset var(--elev-ring);"></div>
+          <div class="swatch__meta"><span class="token-name">--surface-overlay</span><span class="hexval">= surface</span><span class="note">模态/底部抽屉（转人工确认面板）最高层</span></div>
+        </div>
+      </div>
+
+      <!-- 3.2 Foreground -->
+      <p class="label" style="margin-bottom: var(--space-3);">3.2 Foreground / Text 色板（实际文字渲染，直接看可读性）</p>
+      <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="panel">
+          <p class="note" style="margin-bottom: var(--space-2);">在 --surface 纸面上：</p>
+          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="hexval">#1C2B22</span> <span class="note">对 surface 14.81:1</span></p>
+          <p style="color: var(--fg-2); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg-2</span> <span class="hexval">#33463B</span> <span class="note">对 surface 10.10:1</span></p>
+          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="hexval">#52655A</span> <span class="note">对 surface 6.24:1</span></p>
+          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="hexval">#5E7267</span> <span class="note">对 surface 5.15:1</span></p>
+        </div>
+        <div class="panel" style="background: var(--bg);">
+          <p class="note" style="margin-bottom: var(--space-2);">在 --bg 背景上：</p>
+          <p style="color: var(--fg); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--fg</span> <span class="note">对 bg 13.76:1（老花镜与强光下的安全余量）</span></p>
+          <p style="color: var(--muted); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--muted</span> <span class="note">对 bg 5.79:1，辅助说明仍稳过 AA</span></p>
+          <p style="color: var(--meta); font-size: var(--text-lg);">This is foreground text — <span class="token-name">--meta</span> <span class="note">对 bg 4.78:1，时间戳/徽章文字 AA 达标</span></p>
+          <p style="color: var(--accent); font-size: var(--text-lg);">Accent as link text — <span class="token-name">--accent</span> <span class="note">对 bg 4.69:1（全表最低的一对，仍达标）</span></p>
+        </div>
+      </div>
+
+      <!-- 3.3 Border -->
+      <p class="label" style="margin-bottom: var(--space-3);">3.3 Border 色板（实际带边框的盒子）</p>
+      <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4);">
+          <span class="token-name">--border</span> <span class="hexval">#D7E0DA</span>
+          <p class="note" style="margin-top: var(--space-1);">卡片描边——分隔而不切割</p>
+        </div>
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4);">
+          <span class="token-name">--border-soft</span> <span class="hexval">#E6ECE7</span>
+          <dl style="margin-top: var(--space-2);">
+            <div class="summary-row"><dt>已试步骤</dt><dd>2.4GHz 自查 → 重启路由器</dd></div>
+            <div class="summary-row"><dt>SN</dt><dd>CF-2318-8842-01</dd></div>
+            <div class="summary-row"><dt>卡点</dt><dd>配对进度条卡在 80%</dd></div>
+          </dl>
+          <p class="note">卡内分隔线的真实用法：摘要卡字段行间</p>
+        </div>
+      </div>
+
+      <!-- 3.4 Accent -->
+      <p class="label" style="margin-bottom: var(--space-3);">3.4 Accent 色板（按钮真实状态展示）</p>
+      <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="panel">
+          <div class="flex flex-wrap gap-3 items-center">
+            <button class="btn btn-primary">Default</button>
+            <button class="btn btn-primary demo-hover">Hover</button>
+            <button class="btn btn-primary demo-active">Active</button>
+            <button class="btn btn-primary">试试真实 hover/按压</button>
+          </div>
+          <div class="flex flex-wrap gap-4" style="margin-top: var(--space-4);">
+            <span><span class="token-name">--accent</span> <span class="hexval">#2E7D4F</span> <span class="note">承诺与前进；唯一主行动色（待品牌素材校准）；对 --accent-on（#FFFFFF）5.05:1</span></span>
+          </div>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--accent-hover</span> = color-mix 压暗 8%（手指按上去时颜色沉一分——色彩响应哲学的核心表达）；<span class="token-name">--accent-active</span> = 压暗 14%（确认按下；沉两分）</p>
+        </div>
+        <div class="panel panel--warm">
+          <p class="label" style="color: var(--accent);"><i class="ph ph-scales"></i> 强调色纪律（硬约束）</p>
+          <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">
+            <strong>--accent 每屏最多 2 处可见使用；中性色占画面 70–90%，accent 占 5–10%，语义色占 0–5%。</strong><br>
+            典型组合：1 个主行动大按钮（Done / Send &amp; connect / Talk to a human）+ 1 个来源徽章或内联链接。链接、hover 变色、focus ring 全部计入 accent 用量。双按钮并列时只有 Done 用 accent 实底——这既是用量纪律，也是"推荐下一步"的视觉语义。
+          </p>
+        </div>
+      </div>
+
+      <!-- 3.5 Semantic -->
+      <p class="label" style="margin-bottom: var(--space-3);">3.5 Semantic 色板（状态组件真实渲染）</p>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="panel">
+          <p style="color: var(--success); font-weight: 600;"><i class="ph ph-check-circle"></i> Great — looks like you're all set!</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--success</span> <span class="hexval">#23703F</span> · 解决确认的低语，比 accent 更收敛，避免与主按钮争抢语义（对 surface 6.07:1）</p>
+        </div>
+        <div class="panel">
+          <p style="color: var(--warn); font-weight: 600;"><i class="ph ph-warning-circle"></i> 数据回补中 · 预警线待 G1 回填</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--warn</span> <span class="hexval">#8A5A00</span> · 看板"超预期区间/降级提示"的克制琥珀（对 surface 5.93:1）</p>
+        </div>
+        <div class="panel">
+          <p style="color: var(--danger); font-weight: 600;"><i class="ph ph-arrow-up-right"></i> 拒答率 12.4% · 超预期区间</p>
+          <p class="note" style="margin-top: var(--space-2);"><span class="token-name">--danger</span> <span class="hexval">#B23B2E</span> · 陶土红耳语；只用于小面积状态文字与看板标红，情绪路径界面禁大面积——对怒气用户，红色是火上浇油</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 4: 排版系统（来自 §3 + tokens.css） ═══════════ -->
+  <section id="s4" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 4 · DESIGN.md §3 + tokens.css</p>
+      <h2 class="sec-title">排版系统</h2>
+      <p class="sec-lede">字体哲学：系统字体是对中老年用户的尊重，不是偷懒。SF Pro / Roboto 是这批用户的眼睛读了十年的字形——肌肉记忆就是可读性；品牌字会破坏系统字号缩放（Dynamic Type / fontScale）的原生表现，而"缩放至最大档不破版"是 PRD 硬验收（AC-C-01）。</p>
+
+      <!-- 4.1 字体展示 -->
+      <p class="label" style="margin-bottom: var(--space-3);">4.1 字体三栈</p>
+      <div class="grid md:grid-cols-3 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="panel">
+          <p class="note">Display · <span class="token-name">--font-display</span></p>
+          <p style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 700; letter-spacing: var(--tracking-display); line-height: var(--leading-tight); margin-top: var(--space-2);">The quick brown fox</p>
+          <p class="note" style="margin-top: var(--space-3);">-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif</p>
+          <p class="note" style="margin-top: var(--space-1);">步骤卡标题、看板大数、开场标题</p>
+        </div>
+        <div class="panel">
+          <p class="note">Body · <span class="token-name">--font-body</span></p>
+          <p style="font-family: var(--font-body); font-size: var(--text-base); margin-top: var(--space-2);">Hi! I'm COOLFLY's AI assistant. I'll do my best to help you fix things fast — and I'll bring in a human teammate whenever you need one.</p>
+          <p class="note" style="margin-top: var(--space-3);">-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif</p>
+          <p class="note" style="margin-top: var(--space-1);">对话正文 17px 基准（PRD 定稿）</p>
+        </div>
+        <div class="panel">
+          <p class="note">Mono · <span class="token-name">--font-mono</span></p>
+          <p style="font-family: var(--font-mono); font-size: var(--text-lg); margin-top: var(--space-2);">SN: CF-2318-8842-01<br>62.4% · 1,847 sessions</p>
+          <p class="note" style="margin-top: var(--space-3);">ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace</p>
+          <p class="note" style="margin-top: var(--space-1);">只服务一处：SN 序列号与看板数值——数字像刻度一样对齐，传达"这是准确的数据"</p>
+        </div>
+      </div>
+
+      <!-- 4.2 字号梯度 -->
+      <p class="label" style="margin-bottom: var(--space-3);">4.2 字号梯度（8 级 · 基准 17px，向上按 ~1.18–1.2 爬升）</p>
+      <div class="panel" style="margin-bottom: var(--space-8); display: flex; flex-direction: column; gap: var(--space-3);">
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-xs · 13px</span><span style="font-size: var(--text-xs); letter-spacing: 0.02em;">徽章、时间戳（下限，不再小）— Source: Setup Guide</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-sm · 15px</span><span style="font-size: var(--text-sm);">辅助说明、看板轴标签 — Not relevant / Hard to understand</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-base · 17px</span><span style="font-size: var(--text-base);">正文基准（PRD 定稿：对话正文 17pt）— Type your question…</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-lg · 20px</span><span style="font-size: var(--text-lg);">步骤卡说明大字（PRD 定稿：20pt+）</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-xl · 24px</span><span style="font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em;">步骤卡标题、抽屉标题</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-2xl · 28px</span><span style="font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.01em;">对话页开场标题</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-3xl · 34px</span><span style="font-family: var(--font-mono); font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.02em;">62.4%</span><span class="note">看板核心数值</span></div>
+        <div class="flex items-baseline gap-4"><span class="token-name" style="width: 110px; flex: none;">--text-4xl · 40px</span><span style="font-family: var(--font-mono); font-size: var(--text-4xl); font-weight: 700; letter-spacing: var(--tracking-display);">60%</span><span class="note">看板北极星大数</span></div>
+      </div>
+
+      <!-- 4.3 Letter-spacing -->
+      <p class="label" style="margin-bottom: var(--space-3);">4.3 Letter-spacing 硬规则（每行为真实渲染）</p>
+      <table class="spec-table panel" style="padding: 0; margin-bottom: var(--space-8);">
+        <thead><tr><th>场景</th><th>数值</th><th>真实渲染</th></tr></thead>
+        <tbody>
+          <tr><td>ALL CAPS 文本（徽章 "SOURCE"）</td><td class="token-name">0.06em（无例外）</td><td><span style="font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--meta);">SOURCE: SETUP GUIDE · STEP 2</span></td></tr>
+          <tr><td>Display 大字（40px+ 看板大数）</td><td class="token-name">-0.02em</td><td><span style="font-family: var(--font-display); font-size: var(--text-4xl); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1;">1,847</span></td></tr>
+          <tr><td>标题（24–34px）</td><td class="token-name">-0.01em</td><td><span style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em;">Check your Wi-Fi band</span></td></tr>
+          <tr><td>小文本（13px 徽章/时间戳）</td><td class="token-name">0.02em</td><td><span style="font-size: var(--text-xs); letter-spacing: 0.02em; color: var(--meta);">Today · 9:41 AM</span></td></tr>
+          <tr><td>UI 标签/按钮</td><td class="token-name">0.02em</td><td><span style="font-size: var(--text-base); font-weight: 600; letter-spacing: 0.02em;">Send &amp; connect</span></td></tr>
+          <tr><td>正文（15–20px）</td><td class="token-name">0</td><td><span style="font-size: var(--text-base); letter-spacing: 0;">We've tried the usual fixes.</span></td></tr>
+        </tbody>
+      </table>
+
+      <!-- 4.4 Line-height -->
+      <p class="label" style="margin-bottom: var(--space-3);">4.4 Line-height（实际段落效果）</p>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="panel">
+          <p class="note"><span class="token-name">--leading-body: 1.55</span> · 正文宽行距</p>
+          <p style="line-height: var(--leading-body); margin-top: var(--space-2); color: var(--fg-2);">We've tried the usual fixes. This one needs a human with your device's serial number — let me hand you over with everything you've already tried.</p>
+          <p class="note" style="margin-top: var(--space-2);">排障说明常为两三行完整句子，宽行距给老花眼留出行间呼吸——"说明书被人重新排过版"的从容感。</p>
+        </div>
+        <div class="panel">
+          <p class="note"><span class="token-name">--leading-tight: 1.25</span> · 标题/按钮紧行距</p>
+          <p style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight); margin-top: var(--space-2);">Is your phone connected to a 2.4GHz Wi-Fi network?</p>
+          <p class="note" style="margin-top: var(--space-2);">大字标题结成一个视觉块；看板数值在组件内覆写为 1.1——数字要像仪表读数一样紧凑笃定。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 5: 间距体系（来自 §4 + tokens.css） ═══════════ -->
+  <section id="s5" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 5 · DESIGN.md §4 + tokens.css</p>
+      <h2 class="sec-title">间距体系</h2>
+      <p class="sec-lede">间距是这套系统的语速。对挫败中的用户，界面"说话"必须慢而清楚——4px 基准之上刻意偏大：消息间 12px、卡片内距 20px、按钮区上方 24px。留白不是浪费屏幕，是把"一次只讲一件事"翻译成像素。4px 基准与 iOS/Android 原生网格兼容，44pt 触达高度落在整数倍上。</p>
+
+      <div class="panel" style="display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-8);">
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-1 · 4px</span><div class="space-bar" style="width: var(--space-1);"></div></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-2 · 8px</span><div class="space-bar" style="width: var(--space-2);"></div></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-3 · 12px</span><div class="space-bar" style="width: var(--space-3);"></div><span class="note">消息与消息之间</span></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-4 · 16px</span><div class="space-bar" style="width: var(--space-4);"></div><span class="note">对话页左右 gutter</span></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-5 · 20px</span><div class="space-bar" style="width: var(--space-5);"></div><span class="note">卡片内边距</span></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-6 · 24px</span><div class="space-bar" style="width: var(--space-6);"></div><span class="note">步骤卡按钮区上方留白 / 看板网格 gap</span></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-8 · 32px</span><div class="space-bar" style="width: var(--space-8);"></div><span class="note">看板 gutter</span></div>
+        <div class="flex items-center gap-4"><span class="token-name" style="width: 120px; flex: none;">--space-12 · 48px</span><div class="space-bar" style="width: var(--space-12);"></div></div>
+      </div>
+
+      <p class="label" style="margin-bottom: var(--space-3);">Section rhythm（区块垂直节奏对比）</p>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="panel flex items-end gap-4">
+          <div class="rhythm-bar" style="height: var(--section-y-desktop);"></div>
+          <div><span class="token-name">--section-y-desktop · 64px</span><p class="note" style="margin-top: var(--space-1);">看板 1280+：图卡区块间大呼吸，周报浏览是扫读节奏</p></div>
+        </div>
+        <div class="panel flex items-end gap-4">
+          <div class="rhythm-bar" style="height: var(--section-y-tablet);"></div>
+          <div><span class="token-name">--section-y-tablet · 48px</span><p class="note" style="margin-top: var(--space-1);">过渡档（本期无承诺形态，仅保刻度连续）</p></div>
+        </div>
+        <div class="panel flex items-end gap-4">
+          <div class="rhythm-bar" style="height: var(--section-y-phone);"></div>
+          <div><span class="token-name">--section-y-phone · 32px</span><p class="note" style="margin-top: var(--space-1);">对话 375–430pt：流内以消息间距为主节奏，区块间距收紧保首屏信息量</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 6: 布局与空间（来自 §5 + tokens.css） ═══════════ -->
+  <section id="s6" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 6 · DESIGN.md §5 + tokens.css</p>
+      <h2 class="sec-title">布局与空间</h2>
+      <p class="sec-lede">一条河（对话页）与一张桌（看板页），共用同一套河床石头。手机端是单列时间流——Bento 的格子排成了一条竖直的河；桌面看板是标准 Bento Grid：12 列、24px gap，图卡按 span 3/4/6/8/12 组合。</p>
+
+      <!-- Bento Grid 示例 -->
+      <p class="label" style="margin-bottom: var(--space-3);">Bento Grid 示例（看板页 · <span class="token-name">--container-max: 1200px</span> · gutter <span class="token-name">32px</span> · gap 24px）</p>
+      <p class="note" style="margin-bottom: var(--space-3);">1200px 让 12 列网格在 1280 屏上留出 40px 双侧余量；再宽则周粒度折线图被拉稀，数据密度失去仪表感。1280 以下仅保证不横向溢出，不做移动适配承诺。</p>
+      <div class="grid grid-cols-12 gap-6" style="margin-bottom: var(--space-8);" id="bento-demo">
+        <div class="stat-card col-span-12 md:col-span-8" tabindex="0">
+          <span class="stat-card__label">双口径自助解决率（周粒度 · 高频类）</span>
+          <span class="stat-card__value">62.4%<span style="font-size: var(--text-sm); color: var(--muted); letter-spacing: 0;"> 严口径</span> · 71.8%<span style="font-size: var(--text-sm); color: var(--muted); letter-spacing: 0;"> 宽口径</span></span>
+          <span class="stat-card__note">span 8 · 目标 60% / 底线 45%（3 个月）· 按入口来源分层呈报</span>
+        </div>
+        <div class="stat-card col-span-12 md:col-span-4" tabindex="0">
+          <span class="stat-card__label">拒答率（按触发层分列）</span>
+          <span class="stat-card__value stat-card__value--alert">12.4%</span>
+          <span class="stat-card__note" style="color: var(--danger);">span 4 · 超预期区间标红（--danger 在看板的唯一合法大字用法）</span>
+        </div>
+        <div class="stat-card col-span-6 md:col-span-3" tabindex="0"><span class="stat-card__label">转人工量</span><span class="stat-card__value">312</span><span class="stat-card__note">span 3 · 叠加容量预警线</span></div>
+        <div class="stat-card col-span-6 md:col-span-3" tabindex="0"><span class="stat-card__label">48h 复问率</span><span class="stat-card__value">8.1%</span><span class="stat-card__note">span 3</span></div>
+        <div class="stat-card col-span-6 md:col-span-3" tabindex="0"><span class="stat-card__label">会话满意度</span><span class="stat-card__value">4.5</span><span class="stat-card__note">span 3</span></div>
+        <div class="stat-card col-span-6 md:col-span-3" tabindex="0"><span class="stat-card__label">语言分布 · 非英语</span><span class="stat-card__value">6.2%</span><span class="stat-card__note stat-card__note--degraded">span 3 · 数据回补中</span></div>
+      </div>
+
+      <!-- 深度与层级 -->
+      <p class="label" style="margin-bottom: var(--space-3);">深度与层级（纸感 Z 轴，非发光；hover 不改变阴影与位置——阴影只属于静态层级）</p>
+      <div class="grid md:grid-cols-4 gap-6 items-start" style="background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius-lg); padding: var(--space-6);">
+        <div style="border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-flat);">
+          <span class="token-name">--elev-flat</span>
+          <p class="note" style="margin-top: var(--space-1);">层级 0：绿灰背景本身（none）</p>
+        </div>
+        <div style="background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-ring);">
+          <span class="token-name">--elev-ring</span>
+          <p class="note" style="margin-top: var(--space-1);">层级 1：白色卡片 + 1px 描边环（消息卡/图卡）</p>
+        </div>
+        <div style="background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-raised);">
+          <span class="token-name">--elev-raised</span>
+          <p class="note" style="margin-top: var(--space-1);">层级 2：情绪出口置顶卡——必须"压"在滚动流之上的弥散淡影</p>
+        </div>
+        <div style="background: var(--surface); border-radius: var(--radius-lg); padding: var(--space-4); box-shadow: var(--elev-float);">
+          <span class="token-name">--elev-float</span>
+          <p class="note" style="margin-top: var(--space-1);">层级 3：转人工底部抽屉 + 遮罩</p>
+        </div>
+      </div>
+      <p class="note" style="margin-top: var(--space-3);">重要的东西浮上来的方式是"更白、更完整的纸面 + 更大的字"，不是更粗的边框——边框是切割，纸面是承载；对老花眼，一张干净的白卡远比一圈粗线更易聚焦。对话页单列 100%、gutter 16px；步骤卡与气泡全部不定高（min-height 而非 height），字号缩放最大档下双大按钮自动换行堆叠（AC-C-01 不截断按钮文案）。</p>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 7: 圆角与焦点（来自 tokens.css） ═══════════ -->
+  <section id="s7" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 7 · tokens.css</p>
+      <h2 class="sec-title">圆角与焦点</h2>
+      <p class="sec-lede">圆角 12px 的按钮：足够友好、不至于软塌。焦点环是 accent 的 30% 透明扩散——键盘可达性与色彩响应哲学同源。</p>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="panel flex flex-col items-start gap-3">
+          <div style="width: 96px; height: 64px; background: var(--surface-warm); border: 1px solid var(--border); border-radius: var(--radius-sm);"></div>
+          <div><span class="token-name">--radius-sm · 8px</span><p class="note">配图内嵌、小元素</p></div>
+        </div>
+        <div class="panel flex flex-col items-start gap-3">
+          <div style="width: 96px; height: 64px; background: var(--surface-warm); border: 1px solid var(--border); border-radius: var(--radius-md);"></div>
+          <div><span class="token-name">--radius-md · 12px</span><p class="note">按钮、输入框</p></div>
+        </div>
+        <div class="panel flex flex-col items-start gap-3">
+          <div style="width: 96px; height: 64px; background: var(--surface-warm); border: 1px solid var(--border); border-radius: var(--radius-lg);"></div>
+          <div><span class="token-name">--radius-lg · 16px</span><p class="note">步骤卡、气泡、图卡、抽屉</p></div>
+        </div>
+        <div class="panel flex flex-col items-start gap-3">
+          <div style="width: 96px; height: 36px; background: var(--surface-warm); border: 1px solid var(--border); border-radius: var(--radius-pill);"></div>
+          <div><span class="token-name">--radius-pill · 9999px</span><p class="note">来源徽章、指示点</p></div>
+        </div>
+      </div>
+
+      <p class="label" style="margin-bottom: var(--space-3);">Focus Ring · <span class="token-name">--focus-ring</span> = 0 0 0 3px color-mix(accent, transparent 70%)</p>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="panel">
+          <p class="note" style="margin-bottom: var(--space-2);">聚焦态样张（静态复刻）：</p>
+          <input class="input demo-focus" value="CF-2318-8842-01" readonly>
+          <p class="note" style="margin-top: var(--space-3);">输入框聚焦 = 边框着色 + focus ring，无尺寸变化</p>
+        </div>
+        <div class="panel">
+          <p class="note" style="margin-bottom: var(--space-2);">真实可聚焦（用 Tab 键试试）：</p>
+          <div class="flex flex-wrap gap-3">
+            <button class="btn btn-primary">Send &amp; connect</button>
+            <input class="input" style="max-width: 260px;" placeholder="Type your question…">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 8: 组件库（来自 §6） ═══════════ -->
+  <section id="s8" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 8 · DESIGN.md §6（组件 CSS 原样复制）</p>
+      <h2 class="sec-title">组件库</h2>
+      <p class="sec-lede">每个组件都在回答同一个问题——"一位戴老花镜、正在生气的用户，能不能在一秒内看懂它、按准它"。三条铁律：触达 ≥44px、文字 ≥15px、状态变化用颜色说话。交互哲学全站统一为<strong>色彩响应型</strong>：hover/active 只改背景、边框、文字颜色；禁止阴影提升、禁止 transform 位移。</p>
+
+      <!-- 8.1 按钮全状态 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.1 按钮 · 全状态（前两行为静态样张，第三行真实可交互）</p>
+      <div class="panel" style="margin-bottom: var(--space-8);">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="note" style="width: 90px; flex: none;">Primary</span>
+          <button class="btn btn-primary">Done</button>
+          <button class="btn btn-primary demo-hover">hover</button>
+          <button class="btn btn-primary demo-active">active</button>
+          <button class="btn btn-primary demo-focus">focus-visible</button>
+          <button class="btn demo-disabled" disabled>disabled</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3" style="margin-top: var(--space-4);">
+          <span class="note" style="width: 90px; flex: none;">Secondary</span>
+          <button class="btn btn-secondary">It didn't work</button>
+          <button class="btn btn-secondary demo-hover">hover</button>
+          <button class="btn btn-secondary demo-active">active</button>
+          <button class="btn btn-secondary demo-focus">focus-visible</button>
+        </div>
+        <div class="btn-row" style="margin-top: var(--space-5); max-width: 420px;">
+          <button class="btn btn-primary">Done</button>
+          <button class="btn btn-secondary">It didn't work</button>
+        </div>
+        <p class="note" style="margin-top: var(--space-3);">min-height 48px；.btn-row 中 flex: 1 1 45% + min-width 140px——字号缩放最大档自动上下堆叠，不截断文案。</p>
+      </div>
+
+      <!-- 8.2 排障步骤卡 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.2 排障步骤卡（会话流内全宽消息卡 · 一步一屏 · 本体非交互无 hover）</p>
+      <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
+        <div class="step-card" style="max-width: 400px;">
+          <span class="step-card__eyebrow">Step 2</span>
+          <span class="step-card__title">Is your phone connected to a 2.4GHz Wi-Fi network?</span>
+          <div class="step-card__figure" style="background: var(--surface-warm); padding: var(--space-5); display: flex; align-items: center; justify-content: center; gap: var(--space-3);">
+            <!-- 排障配图占位：说明书式线描 + 单色 accent 点缀 -->
+            <i class="ph ph-wifi-high" style="font-size: 40px; color: var(--accent);"></i>
+            <i class="ph ph-arrows-left-right" style="font-size: 24px; color: var(--muted);"></i>
+            <i class="ph ph-device-mobile" style="font-size: 40px; color: var(--muted);"></i>
+          </div>
+          <span class="step-card__body">Open your Wi-Fi settings and check the network name. COOLFLY feeders connect on 2.4GHz only — 5GHz won't work.</span>
+          <div class="btn-row">
+            <button class="btn btn-primary">Done</button>
+            <button class="btn btn-secondary">It didn't work</button>
+          </div>
+        </div>
+        <div class="flex flex-col gap-4">
+          <div class="panel">
+            <p class="note">要点</p>
+            <ul style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2); list-style: disc; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
+              <li>20px 大字说明（--text-lg）+ 24px 标题；圆角 16px 比气泡大一号，宣告"我是主角"</li>
+              <li>进度指示 "Step 2" <strong>不带总步数分母</strong>——分支换路径时总数会变（PRD §5.3 写死）</li>
+              <li>配图说明书式线描、白底、圆角 8px 内嵌；加载失败时文字必须独立完整</li>
+              <li>卡片内不叠 👍/👎——"It didn't work" 本身即该步骤负反馈</li>
+            </ul>
+          </div>
+          <!-- 恢复提示条 -->
+          <div class="notice-bar panel panel--warm" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4);">
+            <i class="ph ph-arrow-counter-clockwise" style="color: var(--accent); font-size: 20px;"></i>
+            <span style="font-size: var(--text-sm); color: var(--fg-2);">Welcome back! You were on Step 2 — ready to pick up where you left off?</span>
+          </div>
+          <p class="note">恢复提示条：中途离开（去改路由器设置）返回后淡入落座，点击回到离开时的步骤。</p>
+        </div>
+      </div>
+
+      <!-- 8.3 消息气泡 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.3 消息气泡（AI 温感绿灰 / 用户 accent 实底）+ 来源徽章</p>
+      <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
+        <div class="phone-frame">
+          <div class="bubble bubble--ai">
+            Hi! I'm COOLFLY's AI assistant. I'll do my best to help you fix things fast — and I'll bring in a human teammate whenever you need one.
+          </div>
+          <div class="bubble bubble--user">My feeder won't pair with the app.</div>
+          <div class="bubble bubble--ai">
+            COOLFLY feeders pair over 2.4GHz Wi-Fi. If your router combines 2.4GHz and 5GHz into one name (a mesh setup), turn off the 5GHz band while pairing, then turn it back on.
+            <div style="margin-top: var(--space-2);"><span class="source-badge" tabindex="0">Source: Setup Guide</span></div>
+            <div class="bubble__meta">9:41 AM</div>
+          </div>
+          <div class="bubble bubble--ai" style="display: inline-flex; gap: var(--space-1); align-items: center; padding: var(--space-3) var(--space-4);">
+            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+          </div>
+        </div>
+        <div class="panel">
+          <p class="note">要点</p>
+          <ul style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2); list-style: disc; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
+            <li>AI 气泡用 --surface-warm 而非纯白——AI 的话应该比系统提示更有体温</li>
+            <li>用户气泡 accent 实底白字，一眼找到"我说过什么"（历史内容不计入当屏 2 处 accent 行动位纪律）</li>
+            <li>事实性回答末尾附来源徽章 "Source: {document title}"（R2-裁决 4：可见但轻量，不展开全文、不加跳转承诺）</li>
+            <li>底部三点为 responding 指示：1.2s 呼吸节奏，用 --muted 不用 accent——等待不该被高亮</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 8.4 输入框 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.4 输入框 · 全状态</p>
+      <div class="grid md:grid-cols-2 gap-4" style="margin-bottom: var(--space-8);">
+        <div class="panel flex flex-col gap-4">
+          <div><p class="note" style="margin-bottom: var(--space-1);">default（真实可交互，试试 hover / 聚焦）</p><input class="input" placeholder="Type your question…"></div>
+          <div><p class="note" style="margin-bottom: var(--space-1);">focus（静态样张：边框着色 + ring）</p><input class="input demo-focus" value="The pairing light keeps blinking" readonly></div>
+        </div>
+        <div class="panel flex flex-col gap-4">
+          <div>
+            <p class="note" style="margin-bottom: var(--space-1);">error（超长输入：计数提示 + 禁止发送，--danger 合法小面积用法）</p>
+            <input class="input demo-error" value="It failed again and again and the light never stops blinking and I already reset the router twice and…" readonly>
+            <div class="input__count input__count--over" style="margin-top: var(--space-1);">1,024 / 1,000</div>
+          </div>
+          <div><p class="note" style="margin-bottom: var(--space-1);">disabled（离线时，--surface-warm 禁用底）</p><input class="input" disabled value="Anything else we should know?"></div>
+        </div>
+      </div>
+
+      <!-- 8.5 徽章 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.5 徽章 / Badge（来源徽章各态 + 语义徽章）</p>
+      <div class="panel flex flex-wrap items-center gap-4" style="margin-bottom: var(--space-8);">
+        <span class="source-badge" tabindex="0">Source: Setup Guide</span>
+        <span class="source-badge demo-hover">hover：边框着色</span>
+        <span class="source-badge" style="border-color: var(--accent); color: var(--fg);">active：文字沉到 --fg</span>
+        <span class="source-badge" style="color: var(--success); border-color: color-mix(in oklab, var(--success), transparent 60%);"><i class="ph ph-check"></i> Resolved</span>
+        <span class="source-badge" style="color: var(--warn); border-color: color-mix(in oklab, var(--warn), transparent 60%);"><i class="ph ph-clock"></i> Waiting for support</span>
+        <span class="source-badge" style="color: var(--danger); border-color: color-mix(in oklab, var(--danger), transparent 60%);"><i class="ph ph-arrow-up-right"></i> Escalated</span>
+      </div>
+
+      <!-- 8.6 情绪出口置顶卡 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.6 情绪出口置顶卡（旅程 C · 全卡无一处红色 · 唯一带弥散淡影的流内元素）</p>
+      <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
+        <div class="phone-frame" style="position: relative; overflow: auto; max-height: 340px;">
+          <div class="exit-card">
+            <span class="exit-card__text">I'm really sorry — you've spent way too long on this, and that's frustrating. Let's get this sorted.</span>
+            <div class="btn-row">
+              <button class="btn btn-primary">Talk to a human</button>
+              <button class="btn btn-secondary">Refund &amp; return policy</button>
+            </div>
+          </div>
+          <div class="bubble bubble--user">I want a refund. This thing never works.</div>
+          <div class="bubble bubble--ai">If you're open to one last quick check, there's one step that fixes this most often — your call.</div>
+          <div class="bubble bubble--ai">Scroll 一下——置顶卡常驻，不随消息滚动消失。</div>
+          <div class="bubble bubble--ai" style="min-height: 120px;">（占位消息，用于滚动演示）</div>
+        </div>
+        <div class="panel">
+          <p class="note">要点</p>
+          <ul style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2); list-style: disc; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
+            <li>共情语 + 双按钮（Talk to a human / Refund &amp; return policy）常驻置顶</li>
+            <li>退货政策入口用中性描边按钮，与转人工同排——<strong>全卡零红色</strong>，刺激性红色只会给怒气添柴</li>
+            <li>--elev-raised 是静态层级阴影，不随交互变化</li>
+            <li>无任何 "(priority)" 等用户可见优先承诺（R2-裁决 7）</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 8.7 转人工摘要卡 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.7 转人工摘要预览卡（固定字段顺序：已试步骤 / SN / 型号 / 卡点 · 对用户完整可见）</p>
+      <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
+        <div class="panel" style="max-width: 400px;">
+          <p style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight);">Here's what we'll send to our team</p>
+          <dl style="margin-top: var(--space-4);">
+            <div class="summary-row"><dt>Steps tried</dt><dd>2.4GHz check → router restart → re-scan QR</dd></div>
+            <div class="summary-row"><dt>SN</dt><dd>CF-2318-8842-01</dd></div>
+            <div class="summary-row"><dt>Model</dt><dd>COOLFLY Feeder Pro 2</dd></div>
+            <div class="summary-row"><dt>Where it's stuck</dt><dd>Pairing stops at 80%</dd></div>
+          </dl>
+          <div style="margin-top: var(--space-4);">
+            <p class="note" style="margin-bottom: var(--space-1);">Add details</p>
+            <input class="input" placeholder="Anything else we should know?">
+          </div>
+          <div class="btn-row" style="margin-top: var(--space-5);">
+            <button class="btn btn-primary">Send &amp; connect</button>
+            <button class="btn btn-secondary">Not now</button>
+          </div>
+        </div>
+        <div class="panel">
+          <p class="note">要点</p>
+          <ul style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2); list-style: disc; padding-left: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1);">
+            <li>零复述承诺的落地件：摘要自动生成、用户可补充后确认</li>
+            <li>字段行间用 --border-soft 分隔线；SN 用 --font-mono——数字像刻度一样对齐</li>
+            <li>Send &amp; connect 提交中置灰防重复提交；Not now 返回原会话不转接</li>
+            <li>转接成功后等待承诺按真实通路分目标态/底线态两套话术，禁止硬编码固定时长</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 8.8 看板图卡 -->
+      <p class="label" style="margin-bottom: var(--space-3);">8.8 看板图卡与数值（B 端 = C 端 token 的档位切换，不是新系统）</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="stat-card" tabindex="0">
+          <span class="stat-card__label">高频类严口径解决率</span>
+          <span class="stat-card__value">62.4%</span>
+          <span class="stat-card__note">default → 试试 hover（仅边框着色）</span>
+        </div>
+        <div class="stat-card demo-hover">
+          <span class="stat-card__label">高频类严口径解决率</span>
+          <span class="stat-card__value">62.4%</span>
+          <span class="stat-card__note">hover 样张：border-color → accent，无阴影无位移</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-card__label">拒答率 · 第②层</span>
+          <span class="stat-card__value stat-card__value--alert">12.4%</span>
+          <span class="stat-card__note stat-card__note--degraded">数据回补中 · 预警线待 G1 回填</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 9: 动效与交互物理（来自 §7 + tokens.css） ═══════════ -->
+  <section id="s9" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 9 · DESIGN.md §7 + tokens.css</p>
+      <h2 class="sec-title">动效与交互物理</h2>
+      <p class="sec-lede">这套界面的动效是呼吸，不是心跳。所有动效只做两件事：①确认"你的操作被听到了"（颜色沉降，150ms）；②交代"新内容从哪来"（进场浮现，200ms）。没有弹簧、没有回弹、没有超过 240ms 的任何东西。运动属性只有 opacity 与颜色，加上进场时一次性的轻微位移——进场位移是叙事，交互位移是禁忌。</p>
+
+      <div class="grid md:grid-cols-3 gap-6" style="margin-bottom: var(--space-8);">
+        <!-- Motion 时长 -->
+        <div class="panel">
+          <p class="label">Motion 时长（hover 试试）</p>
+          <div class="flex flex-col gap-3" style="margin-top: var(--space-3);">
+            <button class="btn btn-secondary" style="transition-duration: var(--motion-fast);">--motion-fast · 150ms 色彩响应</button>
+            <button class="btn btn-secondary" style="transition-duration: var(--motion-base);">--motion-base · 200ms 状态切换</button>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">微反馈统一 background-color / border-color / color 三属性过渡。</p>
+        </div>
+        <!-- Easing 曲线 -->
+        <div class="panel">
+          <p class="label">Easing · <span class="token-name">--ease-standard</span></p>
+          <svg viewBox="0 0 120 120" style="width: 120px; height: 120px; margin-top: var(--space-3);" aria-label="cubic-bezier(0.2, 0, 0, 1) 曲线">
+            <rect x="10" y="10" width="100" height="100" fill="none" stroke="var(--border)" stroke-width="1" rx="4"/>
+            <!-- cubic-bezier(0.2, 0, 0, 1)：起点(10,110) 终点(110,10) -->
+            <path d="M 10 110 C 30 110, 10 10, 110 10" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+            <circle cx="10" cy="110" r="3" fill="var(--muted)"/>
+            <circle cx="110" cy="10" r="3" fill="var(--accent)"/>
+          </svg>
+          <p class="token-name" style="margin-top: var(--space-2);">cubic-bezier(0.2, 0, 0, 1)</p>
+          <p class="note" style="margin-top: var(--space-1);">快出缓入——内容"落座"，不弹跳。</p>
+        </div>
+        <!-- 微反馈 -->
+        <div class="panel">
+          <p class="label">微反馈（真实按压试试）</p>
+          <div class="flex flex-col gap-3" style="margin-top: var(--space-3);">
+            <button class="btn btn-primary">按住我：颜色沉两分</button>
+            <input class="input" placeholder="聚焦我：边框着色 + ring">
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">按压 = 颜色沉降；聚焦 = 边框着色，均无尺寸变化、无位移、无阴影。</p>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- staggered 进场 -->
+        <div class="panel">
+          <div class="flex items-center justify-between" style="margin-bottom: var(--space-3);">
+            <p class="label">Staggered 进场（40ms 步进）+ responding 指示</p>
+            <button class="btn btn-secondary" style="min-height: 44px; font-size: var(--text-sm);" onclick="replayStagger()">重播进场</button>
+          </div>
+          <div id="stagger-demo" class="grid grid-cols-2 gap-4">
+            <div class="stat-card"><span class="stat-card__label">解决率</span><span class="stat-card__value" style="font-size: var(--text-xl);">62.4%</span></div>
+            <div class="stat-card"><span class="stat-card__label">拒答率</span><span class="stat-card__value" style="font-size: var(--text-xl);">7.2%</span></div>
+            <div class="stat-card"><span class="stat-card__label">转人工</span><span class="stat-card__value" style="font-size: var(--text-xl);">312</span></div>
+            <div class="stat-card"><span class="stat-card__label">复问率</span><span class="stat-card__value" style="font-size: var(--text-xl);">8.1%</span></div>
+          </div>
+          <div class="flex items-center gap-2" style="margin-top: var(--space-4);">
+            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+            <span class="note" style="margin-left: var(--space-2);">responding：1.2s 呼吸——是等待的陪伴不是催促</span>
+          </div>
+        </div>
+        <!-- 抽屉演示 -->
+        <div class="panel">
+          <div class="flex items-center justify-between" style="margin-bottom: var(--space-3);">
+            <p class="label">转人工底部抽屉（200ms 升起 + 遮罩淡入）</p>
+            <button class="btn btn-secondary" style="min-height: 44px; font-size: var(--text-sm);" onclick="toggleDrawer()">开 / 关抽屉</button>
+          </div>
+          <div class="drawer-demo">
+            <div style="padding: var(--space-4);"><p class="note">会话流（被遮罩压暗的底层内容）</p>
+              <div class="bubble bubble--ai" style="animation: none; margin-top: var(--space-2);">Let me hand you over with everything you've already tried.</div>
+            </div>
+            <div class="drawer-mask" id="demoMask" onclick="toggleDrawer()"></div>
+            <div class="drawer" id="demoDrawer" style="padding: var(--space-5);">
+              <p style="font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.01em;">Here's what we'll send to our team</p>
+              <div class="btn-row" style="margin-top: var(--space-4);">
+                <button class="btn btn-primary" style="min-height: 44px; font-size: var(--text-base);">Send &amp; connect</button>
+                <button class="btn btn-secondary" style="min-height: 44px; font-size: var(--text-base);" onclick="toggleDrawer()">Not now</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel panel--warm" style="margin-top: var(--space-6);">
+        <p class="label"><i class="ph ph-person-simple"></i> prefers-reduced-motion</p>
+        <p style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-2);">针对具体类名禁用（.bubble / .step-card / .exit-card / .stat-card / .notice-bar 动画置 none；.drawer / .drawer-mask / .panel-swap 过渡缩到 0.01ms；typing-dot 停止呼吸定格 0.6 透明度），<strong>禁用全局 <span class="token-name">*</span> 选择器</strong>——精确尊重系统无障碍设置，不误伤颜色过渡。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 10: 品牌情感与声音（来自 §8） ═══════════ -->
+  <section id="s10" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 10 · DESIGN.md §8</p>
+      <h2 class="sec-title">品牌情感与声音</h2>
+      <p class="sec-lede">如果这个界面是一个人，ta 是社区五金店里那位退休的老电工。</p>
+
+      <!-- 品牌关键词 -->
+      <div class="flex flex-wrap gap-x-8 gap-y-4" style="margin-bottom: var(--space-8);">
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">耐心</span><p class="note">一步一步讲，从不因为你没听懂而加快语速</p></div>
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">诚实</span><p class="note">知道就告诉你出处，不知道就直说并交给真人</p></div>
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">沉稳</span><p class="note">你拍桌子的时候 ta 不慌（零红色、零打断、出口常驻）</p></div>
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">可靠</span><p class="note">说"会有人回复你"就真的按查证过的通路承诺</p></div>
+        <div><span style="font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 800; letter-spacing: -0.02em; color: var(--accent);">谦逊</span><p class="note">绿色只出现在该出现的地方（accent 每屏 ≤2 处）</p></div>
+      </div>
+
+      <!-- 情感化细节：真实渲染 -->
+      <p class="label" style="margin-bottom: var(--space-3);">情感化细节（边缘时刻 · 真实渲染）</p>
+      <div class="grid md:grid-cols-2 gap-6" style="margin-bottom: var(--space-8);">
+        <!-- 空状态 -->
+        <div class="phone-frame">
+          <p class="note" style="text-align: center;">空状态 = 新会话首屏：没有"空"的时刻，只有"从这里开始"的时刻。不放插画，放行动。</p>
+          <div class="bubble bubble--ai">Hi! I'm COOLFLY's AI assistant. I'll do my best to help you fix things fast — and I'll bring in a human teammate whenever you need one.</div>
+          <div class="grid grid-cols-2 gap-3">
+            <button class="btn btn-secondary" style="font-size: var(--text-base);">Setup</button>
+            <button class="btn btn-secondary" style="font-size: var(--text-base);">Won't connect</button>
+            <button class="btn btn-secondary" style="font-size: var(--text-base);">Pairing failed</button>
+            <button class="btn btn-secondary" style="font-size: var(--text-base);">Membership</button>
+          </div>
+          <input class="input" placeholder="Type your question…">
+        </div>
+        <div class="flex flex-col gap-4">
+          <!-- Loading -->
+          <div class="panel flex items-center gap-3">
+            <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>
+            <span style="font-size: var(--text-sm); color: var(--fg-2);">Loading / responding：三点缓慢呼吸（1.2s），配色 --muted 而非 accent——等待不该被高亮。</span>
+          </div>
+          <!-- 故障态 -->
+          <div class="panel panel--warm">
+            <p style="font-size: var(--text-base); color: var(--fg);">We couldn't send your request just now. Please try again.</p>
+            <button class="btn btn-secondary" style="margin-top: var(--space-3); min-height: 44px; font-size: var(--text-base);">Retry</button>
+            <p class="note" style="margin-top: var(--space-2);">故障态（C1/C2/C3）：与 AI 气泡相同的温感纸面 + .btn-secondary——故障提示长得越"平常"，用户越不慌。</p>
+          </div>
+          <!-- 解决确认 -->
+          <div class="panel flex items-start gap-3">
+            <i class="ph-fill ph-check-circle" style="color: var(--success); font-size: 24px; flex: none;"></i>
+            <div>
+              <p style="font-size: var(--text-base); font-weight: 600; color: var(--success);">Great — looks like you're all set!</p>
+              <p class="note" style="margin-top: var(--space-1);">全系统唯一的庆祝时刻，也仅此而已——克制的喜悦才可信。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Prompt Guide -->
+      <div class="panel">
+        <p class="label"><i class="ph ph-robot"></i> Agent 设计指令（给生成 HTML 的 agent）</p>
+        <ol style="font-size: var(--text-sm); color: var(--fg-2); margin-top: var(--space-3); list-style: decimal; padding-left: var(--space-6); display: flex; flex-direction: column; gap: var(--space-2);">
+          <li>tokens.css 的 <span class="token-name">:root</span> 块原样内联进每个页面 <span class="token-name">&lt;style&gt;</span>，全文只用 <span class="token-name">var(--xxx)</span>，出现一个裸 hex 即违规。</li>
+          <li>每屏自查 accent 用量 ≤2 处可见行动位；情绪路径界面禁止任何红色元素（含图标）。</li>
+          <li>所有可点元素 min-height ≥44px、字号 ≥15px；用字号缩放 1.35 倍预演布局，按钮换行不截断。</li>
+          <li>交互反馈只改颜色：禁止 hover 阴影、禁止 hover/active 位移；阴影只用于 exit-card / drawer 的静态层级。</li>
+          <li>文案一律引用 PRD §5 定稿英文原文，禁止自造或改写用户可见文案。</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════ Section 11: 设计禁忌（来自 §9） ═══════════ -->
+  <section id="s11" class="section">
+    <div class="wrap">
+      <p class="sec-eyebrow">Section 11 · DESIGN.md §9</p>
+      <h2 class="sec-title">设计禁忌</h2>
+      <p class="sec-lede">最有评审价值的部分——什么不能做，以及为什么。</p>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- 禁忌 1 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">1 · 情绪路径界面禁止大面积红色/警示色块</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确</p>
+              <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3); margin-top: var(--space-2);">
+                <p style="font-size: var(--text-xs); color: var(--fg);">Let's get this sorted.</p>
+                <span style="display: inline-block; margin-top: var(--space-1); background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 10px; border-radius: var(--radius-sm);">Talk to a human</span>
+              </div>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止</p>
+              <div style="background: color-mix(in oklab, var(--danger), transparent 82%); border: 1px solid var(--danger); border-radius: var(--radius-md); padding: var(--space-3); margin-top: var(--space-2);">
+                <p style="font-size: var(--text-xs); color: var(--danger); font-weight: 700;">⚠ REFUND REQUEST DETECTED</p>
+              </div>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：怒气用户面前红色是刺激源不是信息；--danger 只允许小面积状态文字与看板标红。共情场景只允许中性纸面 + 绿色行动按钮。</p>
+        </div>
+
+        <!-- 禁忌 2 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">2 · 禁止 hover/active 阴影提升或 transform 位移</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确（hover 试试：仅边框着色）</p>
+              <div class="stat-card" style="animation: none; margin-top: var(--space-2); padding: var(--space-3);"><span class="stat-card__label" style="font-size: var(--text-xs);">色彩响应</span></div>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止（hover 试试：浮起+投影）</p>
+              <div class="stat-card taboo-lift" style="animation: none; margin-top: var(--space-2); padding: var(--space-3);"><span class="stat-card__label" style="font-size: var(--text-xs);">阴影 + 位移</span></div>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：位移与浮起是"轻快"的语言，这个产品的语言是"稳"；混入即破坏 RN/Web 双端一致性与"沉稳"人格。阴影只属于 exit-card / drawer 的静态层级。</p>
+        </div>
+
+        <!-- 禁忌 3 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">3 · 禁止正文/按钮文字 &lt;15px、可点区域 &lt;44px</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确</p>
+              <button class="btn btn-primary" style="margin-top: var(--space-2); min-height: 44px; font-size: var(--text-base);">Done</button>
+              <p class="note" style="margin-top: var(--space-1);">≥44px 触达 · ≥15px 文字</p>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止</p>
+              <span style="display: inline-block; margin-top: var(--space-2); background: var(--accent); color: var(--accent-on); font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm); cursor: not-allowed;">done</span>
+              <p class="note" style="margin-top: var(--space-1);">11px 文字 · 20px 高——中老年用户按不准</p>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：中老年用户与 AC-C-01 硬验收不接受例外；徽章/时间戳 13px 是唯一下限且不可点。</p>
+        </div>
+
+        <!-- 禁忌 4 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">4 · 禁止给容器写死高度</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确 · min-height + 弹性布局</p>
+              <p class="token-name" style="margin-top: var(--space-2);">min-height: 48px;<br>flex-wrap: wrap;</p>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止 · 写死 height</p>
+              <p class="token-name" style="margin-top: var(--space-2); color: var(--danger);">height: 48px;<br>overflow: hidden;</p>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：系统字号缩放最大档下卡片必须自动生长，写死 height = 破版即验收失败（AC-C-01）。</p>
+        </div>
+
+        <!-- 禁忌 5 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">5 · 禁止 accent 每屏超过 2 处可见行动位</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确：1 主按钮 + 1 徽章</p>
+              <div class="flex flex-col items-start gap-2" style="margin-top: var(--space-2);">
+                <span style="background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 10px; border-radius: var(--radius-sm);">Done</span>
+                <span class="source-badge" style="pointer-events: none;">Source: Setup Guide</span>
+              </div>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止：满屏皆绿</p>
+              <div class="flex flex-wrap gap-1" style="margin-top: var(--space-2);">
+                <span style="background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm);">Done</span>
+                <span style="background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm);">Retry</span>
+                <span style="background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm);">Help</span>
+                <span style="background: var(--accent); color: var(--accent-on); font-size: var(--text-xs); padding: 4px 8px; border-radius: var(--radius-sm);">More</span>
+              </div>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：绿色的指路价值来自稀缺；到处是绿等于没有路标。</p>
+        </div>
+
+        <!-- 禁忌 6 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">6 · 禁止排障步骤卡脱离会话流做成全屏页/浮层</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确：流内全宽消息卡</p>
+              <div style="margin-top: var(--space-2); display: flex; flex-direction: column; gap: 4px;">
+                <div style="background: var(--surface-warm); border-radius: var(--radius-sm); height: 12px; width: 60%;"></div>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); height: 32px;"></div>
+                <div style="background: var(--surface-warm); border-radius: var(--radius-sm); height: 12px; width: 45%;"></div>
+              </div>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止：独立全屏排障模式</p>
+              <div style="margin-top: var(--space-2); background: var(--surface); border: 1px solid var(--danger); border-radius: var(--radius-sm); height: 64px; display: flex; align-items: center; justify-content: center;">
+                <span class="note" style="color: var(--danger);">Fullscreen wizard</span>
+              </div>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：PRD R5-S1 写死会话流承载；破坏它就破坏了"当前步骤可回达"与上下文衔接。</p>
+        </div>
+
+        <!-- 禁忌 7 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">7 · 禁止非系统字体渲染用户可见文字</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确：系统字体栈</p>
+              <p style="font-family: var(--font-body); font-size: var(--text-base); margin-top: var(--space-2);">Done — you're all set.</p>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止：品牌字/装饰字</p>
+              <p style="font-family: cursive; font-size: var(--text-base); margin-top: var(--space-2); color: var(--muted);">Done — you're all set.</p>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：品牌字破坏 Dynamic Type 原生缩放且增加中老年用户认知摩擦；等宽栈仅用于 SN 与看板数值。</p>
+        </div>
+
+        <!-- 禁忌 8 -->
+        <div class="panel">
+          <p class="label" style="margin-bottom: var(--space-3);">8 · 禁止进度指示出现总步数分母</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="taboo-side taboo-side--ok">
+              <p class="taboo-tag-ok"><i class="ph ph-check"></i> 正确</p>
+              <p class="step-card__eyebrow" style="margin-top: var(--space-2);">Step 2</p>
+            </div>
+            <div class="taboo-side taboo-side--no">
+              <p class="taboo-tag-no"><i class="ph ph-x"></i> 禁止</p>
+              <p class="step-card__eyebrow" style="margin-top: var(--space-2); color: var(--danger);">Step 2 of 5</p>
+            </div>
+          </div>
+          <p class="note" style="margin-top: var(--space-3);">理由：分支换路径时总数会变，虚假的确定性比没有确定性更伤信任（PRD §5.3 写死）。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="padding: var(--space-8) 0; border-top: 1px solid var(--border-soft);">
+    <div class="wrap flex flex-wrap items-center justify-between gap-4">
+      <span class="note">COOLFLY 智能客服 · Design System Showcase · 由 DESIGN.md + tokens.css 生成（两文件为唯一真理来源）</span>
+      <span class="source-badge">Source: DESIGN.md · tokens.css</span>
+    </div>
+  </footer>
+
+  <style>
+    /* 禁忌 2 的"错误示范"专用（仅用于演示违规效果，色值全部 var 引用） */
+    .taboo-lift { transition: transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard); }
+    .taboo-lift:hover { transform: translateY(-4px); box-shadow: var(--elev-float); border-color: var(--border); }
+  </style>
+
+  <script>
+    // 重播 staggered 进场：移除并重新触发动画
+    function replayStagger() {
+      document.querySelectorAll('#stagger-demo .stat-card').forEach(function (el) {
+        el.style.animation = 'none';
+        void el.offsetWidth; // 强制 reflow
+        el.style.animation = '';
+      });
+    }
+    // 抽屉开合演示
+    function toggleDrawer() {
+      document.getElementById('demoDrawer').classList.toggle('is-open');
+      document.getElementById('demoMask').classList.toggle('is-open');
+    }
+  </script>
+</body>
+</html>

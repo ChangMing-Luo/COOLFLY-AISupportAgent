@@ -4,12 +4,15 @@
 - 约束：使用营队工具链（prd-master → design-master → tdd-master → git-master）
 
 ## 当前状态
-- ✅ 已完成：prd-master 全流程（阶段 0–6）。PRD详细版 1424 行过 5 项硬校验（可执行性 81.7%）；requirements.md 契约（116 稳定对象）过校验；PRD-summary/dev 分层输出；方案 PPT 11 页 HTML 过全局自校验。全部产物已提交推送
-- ▶️ 进行中：无（PRD 链路收官，待进入 design-master）
-- ⏸️ 待办：用户侧并行动作=G1-G4 前置门槛（≤2 周硬窗口）+ 拍板 2 名单后补；下游=design-master 消费 output/PRD详细版.md + requirements.md
-- ❓ 待确认：拍板 1（重建vs升级）、拍板 3（上线时间表）——待 G1/G2 证据后拍（PRD 已标 OPEN_QUESTION）；两条 Controller 补写规则待企业家追认（拍板2超窗回退扩展、G窗口时间线owner默认=企业家本人）
+- ✅ 已完成：①prd-master 全流程（PRD详细版 1424 行+requirements 116 稳定对象+summary/dev+PPT 11 页，5 项硬校验全过）；②design-master 全流程（设计决策蓝图确认→页面清单 4 MVP+6 planned→DESIGN.md 497 行+tokens.css→4 份页面文档+4 份高保真 HTML→串联死链 0→showcase→技术方案 451 行版本实测→追溯矩阵 96 covered/6 planned 校验一次通过）。全部产物已提交推送
+- ▶️ 进行中：无（设计链路收官，待进入 tdd-master）
+- ⏸️ 待办：下游=tdd-master 消费 pages/*.md 出《TDD验收契约》；用户侧=G1-G4 前置门槛（≤2 周硬窗口）+ 拍板 2 名单后补 + 提供现有 App 品牌素材（校准 tokens 色值）
+- ❓ 待确认：拍板 1（重建vs升级）、拍板 3（上线时间表）——待 G1/G2 证据后拍；两条 Controller 补写规则待企业家追认；技术选型（Claude/Fastify/Drizzle 等）待技术负责人终确认
 
 ## 决策记录（实时维护）
+- [08-04-2026 00:06:57] design-master 阶段II/III 收官｜背景：8 步静默产出全部完成｜结论：交付=页面清单（4 MVP+6 planned）/DESIGN.md+tokens.css（自然绿占位待品牌素材校准，对比度实算全过）/4 份页面文档（对话页 19 态 527 行等）/4 份高保真 HTML（文案逐字 PRD 定稿、零硬编码色）/串联 24 条接线死链 0/design-system-showcase（11 Section）/技术方案 451 行（Fastify+Drizzle+pgvector+Vercel AI SDK+Claude，版本全实测；选A主线+选B适配面）/设计追溯矩阵 247 行（96 covered+6 planned，check_traceability 一次通过）。DEC 撞号修复：看板页 MD 局部 DEC-001/002 改号 DEC-003/004 对齐矩阵注册。预览：.claude/launch.json pages-preview（8935 端口）｜来源：AI
+- [08-04-2026 00:04:13] 阶段II步骤5：MVP页面串联+死链检测完成｜背景：4份MVP HTML彼此孤立，按页面串联器规范只接线不加件｜结论：注入24条onclick（转人工面板12条：Send&connect×5延迟跳转+Not now×6+Continue with the AI assistant×1→对话页；集成点规格12条：Support×2/Get help×4/开场确认Yes×3/不同问题×3→对话页）；对话页既有14条→面板链接复核全部有效，未改动；看板页按蓝图保持无站内导航（规范禁止添加新元素，故不注入评审导航条）；对话页6处留`#`不注假链接（Refund & return policy=宿主退货政策页、3条guide-link=排障文章、Show quick topics/End conversation=页内功能，均无本轮生成的目标页面）；死链检测0断链0自引用；浏览器抽查3条跳转链路全通。另建.claude/launch.json（pages-preview，python3 http.server 8935 服务 output/pages）供预览验证｜来源：AI
+- [08-03-2026 23:30:55] 设计总蓝图确认，进入阶段II静默产出｜背景：设计决策蓝图.md 落盘（MVP 四份施工图：对话页/转人工面板/看板页/宿主集成规格；RN Expo+引擎API+Node/TS+Postgres+Claude+跟随现有云；浅色适老、自然绿占位）｜结论：用户确认"开始产出"，阶段 II 一气呵成不再提问（新重大依赖除外）｜来源：用户
 - [08-03-2026 23:16:25] design-master 启动·目标对齐+客户端承载拍板｜背景：设计阶段 I 苏格拉底问答开始｜结论：①用户确认业务目标复述无误（嵌入现有 App 的客服模块+看板+形态无关技术方案）；②现有 COOLFLY App 为**原生双端**（先答跨端后更正）；③本次客服模块前台用 **RN Expo** 开发，brownfield 嵌入双端原生工程；EAS Update JS 热更使卡片 UI/按钮组/文案不依赖发版，发版线收窄到原生入口本身；④F06 看板=自建轻量内部 Web 看板（与引擎同仓部署、直连埋点库，飞书机器人只做预警推送）；⑤视觉风格=贴合现有 COOLFLY App，用户后续提供截图/品牌色素材（素材未到前用自然绿占位、到位后校准 tokens 色值，不阻塞流程）；⑥LLM 方向=Anthropic Claude（对话 Sonnet 档/分类检测 Haiku 档；架构建议，技术负责人确认前不算终决）；⑦服务端部署=跟随现有 App 后端所在云（具体云与区域列入 G2 盘点确认）｜来源：用户
 - [08-03-2026 22:11:53] 拍板：MVP 不变，两项登记阶段二储备并预留接口｜背景：语音/无屏与 AI 知识库两方向讨论后｜结论：保留当前 MVP 方案；①语音/无屏渠道、②AI 生成型知识库（AI 起草+人工审核，禁全自动）登记进 PRD §0.1 后置清单；接口预留=既有约束（§3.7 引擎渠道无关+channel 字段、§4.1 条目 schema 渠道中立、F05 回流管道+评测集回归），本期零额外开发。已全链路同步：PRD详细版/§3.7/§5.6、requirements.md（非规范登记，不新增 REQ）、PRD-summary、PRD-dev、ppt.md P10+p10.html；5 项硬校验重跑无回归（可执行性 82%✅）｜来源：用户
 - [08-03-2026 21:42:38] 用户提出两个新方向（待拍板是否入 PRD）｜背景：PRD 收官后用户提问｜结论：①语音/无屏交互（用户直接语音获取信息）；②AI 型知识库（自动采集 App 内客诉/应用商店评分/客服邮件+客服回复，自动生成与更新知识条目，替代纯人工撰写）。AI 判断均为阶段二+方向：①=F07 演进约束预留的新渠道场景；②=F05 回流机制的自然升级（AI 起草+人工审核，不可全自动）。是否登记进 PRD 后置储备待用户拍板｜来源：用户（AI 判断随附）
