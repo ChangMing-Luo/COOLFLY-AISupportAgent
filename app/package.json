@@ -1,0 +1,16 @@
+{
+  "name": "coolfly-kb-console",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter @kb/server test",
+    "build": "pnpm --filter @kb/contracts build && pnpm --filter @kb/web build && pnpm --filter @kb/server build",
+    "db:migrate": "pnpm --filter @kb/server db:migrate",
+    "db:seed": "pnpm --filter @kb/server db:seed",
+    "dev:server": "pnpm --filter @kb/server dev",
+    "dev:web": "pnpm --filter @kb/web dev",
+    "start": "pnpm --filter @kb/server start"
+  }
+}

@@ -1,2 +1,5 @@
 # Claude Code local (per-machine) settings — not shared
 .claude/settings.local.json
+app/node_modules/
+app/*/node_modules/
+app/*/dist/
