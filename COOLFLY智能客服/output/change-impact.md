@@ -1,4 +1,4 @@
-# change-impact（上游 requirements.md 增量影响记录：revision 1→2、revision 2→3、revision 3→4）
+# change-impact（上游 requirements.md 增量影响记录：revision 1→2、revision 2→3、revision 3→4、revision 4→5）
 
 - 变更来源：08-04-2026 拍板「新增 F09 知识库管理台（MVP 范围变更）」——管理台=知识库唯一权威源（飞书 120+ 篇一次性导入、不做双向同步）、会话自动提炼（AI 起草+人审发布）进第一版、F09 不卡六项及格线验收（同 F05 待遇）。
 - 本文件按《追溯与增量同步规范》产出；截至本次校验，全部受影响行已修复并复核，**无遗留 stale**。矩阵 revision 1 → 2。
@@ -150,3 +150,66 @@
 - 四份既有 MVP 施工图（客服对话页/转人工确认面板/内部效果看板页/宿主App集成点规格 MD+HTML）零改动；DESIGN.md 与 tokens.css 零改动；页面清单.md 零改动（PAGE ID 集合与命名不变）。
 - F01–F08 全部矩阵行零触碰（REQ-F05-01/02、AC-F05-02 行指向的管理台章节在重构版中编号与语义均保持有效，行内容未动）；SEQ 注册表零改动；PAGE-F06-01 独立看板页保留、相关矩阵行零改动。
 - 既有设计 ID 语义除 §3 所列退役/同号更新外均保持；已确认视觉决策（冰青/青蓝品牌校准）不回退。
+
+---
+
+# revision 4 → 5（08-04-2026 架构转向 D-10：F01–F08 全系 retire + 中台十视图契约）
+
+- 变更来源：08-04-2026 18:30:58 用户拍板 **D-10 架构转向**（PRD 重大转向声明，commit a91bee9）——C 端服务由 Zendesk 生态承担（Guide 帮助中心中英双语文章 / AI bot 在线聊天 / Support 邮件与转人工工单 / Explore 客服工作报表），自研范围收缩为**知识运营中台**（独立内部 Web，十视图五组，功能标准=用户自制 v3 原型收编）；App 侧本期完全不动。
+- 变更量级：**retired 135**（US×24 + REQ×43 + AC×65 + NFR×3；含 F01–F08 全系与 F09 五区版旧对象）/ **新增 46**（US-F09-05…16 ×12 + REQ-F09-11…19 ×9 + AC-F09-14…38 ×25，Revision 起始=5）/ **修订续用 8**（REQ-F09-02/04/07/08、AC-F09-06/10、NFR-002/004，Revision→5）。active 由 143（rev4 名义全 active）收敛为 **54**。
+- 截至本次校验，全部受影响行已修复并复核，**无遗留 stale**。矩阵 revision 4 → 5（**全量重建**：119 行 active 矩阵 → 42 行 active + retired 总登记段；校验通过输出「42 个 MVP source 施工级覆盖 / 0 个后续 source 已规划」）。
+
+## 1. 新增 source ID（46 个，Revision 起始=5，全部 covered）
+
+| 类型 | 新增 ID | 设计落点（矩阵行） |
+| :--- | :--- | :--- |
+| US ×12 | US-F09-05…16（PRD §2.4 现役序列） | 经 REQ-F09-11…19 + 修订续用 REQ 承载（矩阵 §4 US 对照表；US 层不进校验 source 域） |
+| REQ ×9 | REQ-F09-11…19（十视图①②③④⑤⑥⑧⑨⑩；⑦=修订续用 REQ-F09-07，统一过审铁律=修订续用 REQ-F09-04） | PAGE-F09-01 + 新注册 CMP-F09-11…32 / API-F09-07…16 / DATA-F09-08…14 / SEQ-F09-01…03 / DEC-014…020（矩阵 §1.1，全部 covered） |
+| AC ×25 | AC-F09-14…38（一一对应 PRD §10.1 AC-P-01…25） | 矩阵 §1.2，全部 covered（Artifact 含页面 MD §11.1 AC-P 对照行——页面 MD §1「契约 ID 待 rev5 映射」的映射关系由矩阵承载） |
+
+## 2. 修订续用的既有 source（8 个，Revision→5，修复后恢复 covered）
+
+| Changed Source | Old→New Revision | Affected Design IDs | Artifacts | Action | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| REQ-F09-02（录入与批量导入：入库面从「知识库总页面+F01 检索库」换锚「审核中心+同步 Zendesk」） | 4→5 | API-F09-03（续用改锚）、API-F09-08、CMP-F09-23、DATA-F09-12 | pages/阶段1_知识运营_知识运营中台.md §5.5/§7.2 + v3 原型; 技术方案.md §4.3/§8.2-8; PRD §9.5 | regenerate + review（已完成） | covered |
+| REQ-F09-04（审核队列界面 REQ → 统一过审铁律横切 + 四眼原则；界面拆至 REQ-F09-15） | 4→5 | API-F09-09、CMP-F09-15/23、DATA-F09-14、SEQ-F09-01 | 页面 MD §6.2/§6.3/§8.3 + v3 原型; 技术方案.md §4.2/§4.3 | regenerate + review（已完成） | covered |
+| REQ-F09-07（双子板 → 十视图⑦三页签；数据源换锚 Zendesk 信号；Explore 指向不重建） | 4→5 | CMP-F09-29、API-F09-13、DATA-F09-13 | 页面 MD §5.7 + v3 原型; 技术方案.md §4.3/§5.1 信号域 | regenerate + review（已完成） | covered |
+| REQ-F09-08（作用面五区→十视图全域；条目语言口径改「中文权威源+英文同步版本」——rev4 登记的 REQ-F07-02 口径张力随 F07 retire 收敛闭合） | 4→5 | DATA-F09-05（续用改锚） | 页面 MD §5.11/§2.4 + v3 原型; 技术方案.md §3.2 | regenerate + review（已完成） | covered |
+| AC-F09-06（批量导入部分失败逐条报告：随审核中心更名与 Zendesk 换锚同步文字，口径不变） | 4→5 | API-F09-03/08、CMP-F09-23 | 页面 MD §7.2 + v3 原型; 技术方案.md §4.3 | regenerate + review（已完成） | covered |
+| AC-F09-10（界面语言最小 AC：作用面十视图；条目语言=中文权威源+英文同步版本） | 4→5 | DATA-F09-05 | 页面 MD §5.11/§2.4 + v3 原型 | regenerate + review（已完成） | covered |
+| NFR-002（合规：来源 §9.14 App 侧 → §9.7 中台合规；加州 bot 披露/push 权限项移除，DPA/脱敏/账号/审计五项就位） | 1→5 | DATA-F09-12/14、API-F09-07、CMP-F09-16 | 技术方案.md §6.1/§5.1/§7.2/§4.2-2; 页面 MD §10.3 | regenerate + review（已完成） | covered |
+| NFR-004（数据治理：三口径时区/埋点最终一致随自研埋点废止 → 中台/Zendesk 跨源治理+单向同步最终一致+drift 比对+永久保留版本效果） | 1→5 | DATA-F09-08/11/13/14、SEQ-F09-03 | 技术方案.md §5.1/§4.4-3; PRD §4.6/§6.3 | regenerate + review（已完成） | covered |
+
+## 3. retired（135 个）与设计 ID 处置
+
+- **source 层**：F01–F08 全系（US×20/REQ×37/AC×54）+ F09 五区版旧对象（US-F09-01…04、REQ-F09-01/03/05/06/09/10、AC-F09-01…05/07/08/09/11/12/13）+ NFR-001/003/005——旧矩阵行**整段移除**，改为矩阵 §3「retired 总登记」（按 Feature 分组一行汇总 + 指向 requirements.md 各块 Retirement note 与 PRD §0.4/§12.4）；保留旧行会伪示"仍被设计覆盖"（其落点产物已 retire/归档）。
+- **设计 ID 层（编号永不复用）**：retired = CMP×26（F01–F08 系 16 + CMP-F09-01…10 五区版）、API×15（自研引擎面 10 + API-F09-01/02/04/05/06）、DATA×14（引擎/埋点域 8 + DATA-F09-01/02/03/04/06/07）、SEQ×5（SEQ-F01/02/03/06/08 系）、DEC×10（DEC-001…005/007/009/010/012/013；DEC-011 已于 rev4 retired）。**修订续用** = API-F09-03（批量导入管道）、DATA-F09-05（zh-CN 语言资源）、DEC-006（无 Agent 框架）、DEC-008（node-cron 单进程作业）。**新注册** = CMP-F09-11…32（十视图 22 组件）、API-F09-07…16（技术方案 §4.3 九分组 + §4.4 Zendesk 集成层）、DATA-F09-08…14（§5.1 七域）、SEQ-F09-01…03（PRD §6 D-10 三图）、DEC-014…020（v3 收编命名偏差/TipTap 内部段落节点/jsdiff/自建账号体系/Zendesk 零 SDK/审核队列非独立表/英文侧查重语料策略）。
+- **PAGE 层**（权威=页面清单.md rev3）：PAGE-F09-01 沿用升级（十视图，原型换代）；retired ×6（PAGE-F01-01/F03-01/F06-01/F08-01 + 原 planned PAGE-F03-02/F01-03）；planned 更新为 5 项（新增 PAGE-F08-02，PAGE-F07-01 范围改写为中台 UI 多语言）。
+
+## 4. 受影响产物全清单（均已重生/同步）
+
+| 产物 | 本次动作 |
+| :--- | :--- |
+| PRD详细版.md（951 行，commit a91bee9） | 上游已定稿（D-10 大重构：§0 路线图/§2.1 RBAC/§4 中台 schema/§5.10 十视图/§6 三图/§9.2 Zendesk/§10.1 AC-P/§12.4 retired 登记），本轮零改动 |
+| requirements.md（revision 5，2728 行，189 稳定对象=active 54+retired 135） | 上游已定稿（本轮前置提交 671e97a 波次），本轮零改动 |
+| 设计决策蓝图.md（rev3） | 已重生：转向声明+历史拍板保留标注状态（RN/EAS/Basic Auth 废止、品牌与简洁化结论延续）、站点地图十视图化、§10 覆盖承诺 rev5 口径 |
+| 页面清单.md（rev3） | 已重生：MVP 收敛 1 页（PAGE-F09-01 沿用升级）、表 0 retired 登记 ×6+旧原型归档行、表 2 planned 五项更新、表 3 无界面登记中台化 |
+| pages/阶段1_知识运营_知识运营中台.md（505 行） | 新建（v3 原型行为规格化施工说明，11 节；替代旧五区版 MD）；§1「契约 ID 待 rev5 映射」占位的映射关系由矩阵 §1.2 承载（AC-F09-14…38 ↔ AC-P-01…25，经 requirements.md 双 ID 表），MD 文本占位不阻塞追溯 |
+| pages/知识运营中台v3.dc.html（2162 行）+ pages/support.js（1911 行） | 用户自制 v3 原型**收编为权威 UI**（不重制）；无 page-id 元信息，身份以原型标题+MD §1 互认（矩阵文头登记，DEC-014） |
+| pages/archive-v2/（旧五区管理台 MD+HTML） | 已归档（原型换代，PAGE-F09-01 ID 沿用） |
+| 技术方案.md（v2.0，394 行） | 已重生：C 端技术线整体废止登记（§1.5）、保留栈用途改写、新增 TipTap/jsdiff/argon2/@fastify/cookie 实测选型、Zendesk 零 SDK 集成层、七域数据模型、翻译/挖掘/门禁三管道 |
+| 设计追溯矩阵.md（revision 5） | 本轮**全量重建**：active 42 行（REQ×13/AC×27/NFR×2）全部 covered；§0 注册表重建（retired/续用/新注册三档处置）；§2 planned 五行更新；§3 retired 总登记段（替代旧 source 行）；§4 US 对照表重建（12 active）；§5 反向覆盖闸自检更新 |
+| change-impact.md | 本轮追加本节 |
+
+## 5. 衍生文档同步状态
+
+| 衍生文档 | 状态 |
+| :--- | :--- |
+| PRD-summary.md / PRD-dev.md | 由并行任务随 D-10 重构重生（分层文档波次），不在本任务范围；以其任务产出为准 |
+| ppt（ppt.md / ppt/ / ppt.zip） | **stale 待重生**：现存 PPT 仍为转向前口径（未纳入 rev3 效果看板、rev4 五区重构与 rev5 Zendesk 转向）；PPT 为汇报物、非追溯链路产物，不阻塞矩阵校验与 tdd-master 交接，待下次 PPT 重生时按 D-10 口径整体重做 |
+
+## 6. 未受影响声明
+
+- **DESIGN.md 与 tokens.css 零改动**：冰青/青蓝品牌校准（#4CC8E8→#0D7594 达标对）与视觉简洁化结论（字号 13–20px/无阴影堆叠）经蓝图 §6 确认**延续有效**——v3 原型同色系，收编后 tokens 校准结论不回退。
+- 旧四份施工图文件（客服对话页/转人工确认面板/内部效果看板页/宿主App集成点规格 MD+HTML）**留存原位不删**（retired 留档，页面清单.md 表 0 登记承接方）；本轮未触碰其内容。
+- retired source 的 EARS 正文与 ID 在 requirements.md 内原样保留（契约史料，永不复用）；git 历史（671e97a 及之前）为旧矩阵行与旧技术线全文的追溯入口。
