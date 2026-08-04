@@ -227,7 +227,7 @@ export async function saveEntry(
       await client.query(
         `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
            labels, device_models, body, status, review_source, owner_id, review_cycle_days)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,'draft','manual',$13,$14)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,'draft','manual',COALESCE($13,$15),$14)`,
         [
           id,
           code,
@@ -243,6 +243,7 @@ export async function saveEntry(
           JSON.stringify(input.body),
           input.ownerId,
           input.reviewCycleDays,
+          user.id,
         ],
       );
     }

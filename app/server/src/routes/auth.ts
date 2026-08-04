@@ -16,7 +16,7 @@ import { writeAudit } from '../core/audit.js';
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/api/auth/login',
-    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: Number(process.env.LOGIN_RATE_MAX ?? '10'), timeWindow: '1 minute' } } },
     async (req, reply) => {
       const { email, password } = loginSchema.parse(req.body);
       const { rows } = await query<DbUser>('SELECT * FROM users WHERE email = $1', [email]);

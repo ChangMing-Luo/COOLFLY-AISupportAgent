@@ -12,5 +12,8 @@
     "dev:server": "pnpm --filter @kb/server dev",
     "dev:web": "pnpm --filter @kb/web dev",
     "start": "pnpm --filter @kb/server start"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }
