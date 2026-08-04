@@ -21,7 +21,7 @@
 | FLOW-05 | pass | 数据看板三页签 + 反馈回流信号矩阵（四渠道 + 确定性档位 + 五来源候选） | `PASS FLOW-05 低覆盖场景可见=true、样本积累中=true、缺口与无结果关键词=true、客服工作数据仅 Explore 指向=true、信号四渠道=true、确定性档位=true、五来源候选=true`；vitest 断言样本不足条目 solveRate=null/label=样本积累中、低解决率升序浮顶 |
 | FLOW-06 | pass | 翻译状态机：AI 翻译→待人工校验→确认；内部段落不翻译；中文改动→英文 stale + 同步阻断 + 向量 stale | `PASS FLOW-06 翻译后=pending_human、内部段落未翻译=true、人工确认=confirmed、中文改动后英文=stale、向量=stale`；vitest 断言英文未确认时 `runSyncTask` → blocked（reason=英文未确认），门禁 english 项 passed=false 且不入队 |
 | FLOW-07 | pass | 总览三库/两级结构树/Section 映射/组合筛选/复核三档/含条目章节禁删 | `PASS FLOW-07 三库可切换=true、仅内部库说明=true、Section 映射标识=true、映射说明条=true、超期标注=true、筛选器=5 个、含条目章节删除拦截=409「该章节下仍有 2 个条目、0 个子章节——请先移空…」` |
-| DESIGN-01 | pending | 第 1 轮：独立视觉验收官逐张看 20 图 → **fail, blocking=1**（B-01 知识库总览 13 列表格挤压致中文标题逐字竖排、行高≈350px、一屏仅 2 条）。已修复（结构树定宽 260px + `.table--wide{min-width:1180px}` + 关键列 nowrap + 横向滚动容器），Playwright 实测行高 350→**57px**、标题单行、一屏 **6 条**（标准 ≥5）；截图对已按修复后代码全量重捕，**第 2 轮复验进行中，结论未回不得填 pass** | 第 1 轮：`reviewer=independent-visual; review=fail; blocking=1`（B-01）+ 11 项 non-blocking 差异登记；修复实测：`{rowCount:6, firstRowHeight:57, titleText:'E2E 翻译状态机 19190'(单行), visibleRows:6}`；回归 `node e2e/flows.mjs` → 8/8 通过；第 2 轮 reviewer 结论待回填 |
+| DESIGN-01 | pass | 第 1 轮独立视觉验收官逐张看 20 图 → **fail, blocking=1**（B-01 条目列表挤压致中文逐字竖排、行高≈350px、一屏 2 条）；修复后全量重捕截图，第 2 轮复验逐图核对 → **pass, blocking=0** | baseline=`tests/visual/PAGE-F09-01-baseline-{work,kb,entry,mine,review,sync,dash,feedback,logs,rbac}.png`; actual=`tests/visual/PAGE-F09-01-actual-*.png`; reviewer=independent-visual; review=pass; blocking=0。复验实测：标题 4/4 单行（含 10 字最长标题）、行距 57/57/58px（基线 ~83px 同量级）、4/4 条目全呈现无截断、零逐字竖排、`.table--wide` nowrap 生效、横向滚动符合修复设计；回归抽查 work/review/sync/dash 四视图骨架一致无劣化，并以 `git show 84ca40c` 证实改动仅触达 styles.css 新增 5 行与 KbOverview 两处 className（grep 证实新类仅该视图使用，零影响面外溢）；新增 non-blocking 观察 N-12（结构树 260px 下操作按钮换行）、N-13（树级措辞与实现待核） |
 | RULE-01 | pass | 四角色逐项越权走查（界面禁用 + 接口层拒绝），矩阵 10×4 逐格断言 | curl 实测 8/8 越权全 403：AI运营改正文/审核/同步重试、知识管理员审核/发布、审核员改矩阵/建用户、系统管理员审核内容；GET 矩阵（只读）200；vitest `RULE-01` 13 项全过 + `权限矩阵修改仅系统管理员且即时生效` |
 | RULE-02 | pass | 发布路径唯一性 + 四眼原则 + 未过审不外泄 | vitest：跳过审核直接发布 → 409「只有审核通过的条目才能发布」；未过审条目 sync_tasks 计数=0 且不在总览；审核员自审 → 403「四眼原则」，另一名审核员通过 → 200；curl：知识管理员发布 → 403 铁律文案 |
 | RULE-03 | pass | 脏文件批量导入（模拟飞书迁移）→ 成功进待审、失败逐条报行号原因、无绕审入库 | vitest `RULE-03`：4 行输入 → succeeded=1/failed=3（行号 [2,3,4]，原因=字段不全/章节不存在/可见性非法）；成功条目 status=pending_review、review_source=import |
@@ -33,8 +33,8 @@
 ## 统计
 
 - 总数：17
-- pending：1（DESIGN-01，待独立视觉验收官结论）
-- pass：16
+- pending：0
+- pass：17
 - fail：0
 
 ## 本轮验证命令与结果汇总
@@ -48,7 +48,7 @@
 | 种子 | `pnpm --filter @kb/server db:seed` | 5 用户 / 3 库 / 13 章节 / 6 条目 / 4 批次 / 3 篇沙箱文章 |
 | 单元+集成 | `pnpm --filter @kb/server test`（vitest） | **69 passed (69)**，2 文件 |
 | E2E | `node e2e/flows.mjs`（Playwright Chromium） | **8/8 通过**（SMOKE-02 + FLOW-01…07） |
-| 视觉 | `node e2e/capture.mjs` + 独立视觉验收官 | 20 张截图对；第 1 轮 review=fail/blocking=1（B-01）→ 已修复并重捕；**第 2 轮复验进行中** |
+| 视觉 | `node e2e/capture.mjs` + 独立视觉验收官（两轮） | 20 张截图对；第 1 轮 review=fail/blocking=1（B-01）→ 修复 → 第 2 轮 **review=pass; blocking=0** |
 | 接口越权 | curl 四角色 × 8 类越权动作 | 8/8 → 403 |
 | 审计不可变 | psql UPDATE/DELETE 尝试 | 均被数据库规则拒绝，行内容不变 |
 | lint | — | 项目未配置 eslint（package.json 有 lint 脚本但未安装依赖），本轮**未执行**，如实记录 |
