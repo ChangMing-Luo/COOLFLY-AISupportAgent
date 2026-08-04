@@ -402,6 +402,30 @@
     .flow-err-inline { display: none; font-size: var(--text-xs); color: var(--danger);
       align-items: center; gap: var(--space-1); }
 
+    /* ── 效果看板（第 5 导航区 · 08-04 第二轮增补 · AC-M-16） ── */
+    .stat-num {
+      font-family: var(--font-mono); font-size: var(--text-3xl); font-weight: 700;
+      letter-spacing: -0.02em; line-height: var(--leading-tight); color: var(--fg);
+    }
+    .scene-bar-track { height: 10px; border-radius: var(--radius-pill); background: var(--surface-warm); overflow: hidden; }
+    .scene-bar-fill { height: 100%; border-radius: var(--radius-pill); background: var(--accent); }
+    .kb-table tbody tr.row-flag { background: color-mix(in oklab, var(--warn), var(--surface) 93%); }
+    .kb-table tbody tr.row-flag:hover { background: color-mix(in oklab, var(--warn), var(--surface) 87%); }
+    .acc-low { color: var(--warn); font-weight: 700; }
+
+    /* 效果看板状态帧（演示开关驱动） */
+    .kb-backfill-note { display: none; }
+    body.demo-kbbackfill .kb-backfill-note { display: flex; }
+    svg .kbstats-backfill { display: none; }
+    body.demo-kbbackfill svg .kbstats-backfill { display: initial; }
+    .g1-pending-el { display: none; }
+    body.demo-g1pending .g1-pending-el { display: inline-flex; }
+    body.demo-g1pending p.g1-pending-el { display: block; }
+    body.demo-g1pending .g1-ready-el { display: none; }
+    .sample-note { display: none; }
+    body.demo-kbsample .sample-note { display: flex; }
+    body.demo-kbsample .kb-table tbody tr.row-sample { background: var(--surface-warm); }
+
     /* ── 演示面板（静态层级阴影） ── */
     .demo-panel {
       position: fixed; right: var(--space-5); bottom: var(--space-5); z-index: 40;
@@ -448,7 +472,7 @@
   <!-- ═══════════ 权限口令态（S-01 · 100% 拦截，无内容泄露） ═══════════ -->
   <div class="lock-overlay" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
     <div class="panel" style="width: 420px; max-width: calc(100vw - 32px); gap: var(--space-4);">
-      <p class="panel__eyebrow">COOLFLY Smart Support · Internal Only</p>
+      <p class="panel__eyebrow">COOLFLY 智能客服 · 仅限内部访问</p>
       <h1 class="panel__title" id="lockTitle" style="font-size: var(--text-xl);">知识库管理台 · 需要口令访问</h1>
       <p style="font-size: var(--text-sm); color: var(--muted);">
         本系统为内部工具，链接不公开。请输入访问口令（建议值 Basic Auth · 终稿前确认）。
@@ -468,13 +492,13 @@
     <!-- ─────────── 左侧导航（DEC-010 四区） ─────────── -->
     <aside class="sidenav" aria-label="管理台分区导航">
       <div style="padding: var(--space-6) var(--space-5) var(--space-5);">
-        <p class="panel__eyebrow">COOLFLY Smart Support</p>
+        <p class="panel__eyebrow">COOLFLY 智能客服</p>
         <p style="font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; letter-spacing: -0.01em; line-height: var(--leading-tight); margin-top: var(--space-1);">
           知识库管理台
         </p>
         <p class="panel__note" style="margin-top: var(--space-1);">唯一权威源 · 内部链接不公开</p>
       </div>
-      <nav class="flex flex-col gap-1" aria-label="四区入口">
+      <nav class="flex flex-col gap-1" aria-label="五区入口">
         <button type="button" class="nav-item" data-view="kb" aria-current="true">
           <i class="ph ph-books" aria-hidden="true"></i>条目库
           <span class="pill pill--count nav-count">128</span>
@@ -490,6 +514,10 @@
         <button type="button" class="nav-item" data-view="tags" aria-current="false">
           <i class="ph ph-tag" aria-hidden="true"></i>标签管理
           <span class="pill pill--count nav-count" title="待确认建议">4</span>
+        </button>
+        <button type="button" class="nav-item" data-view="stats" aria-current="false">
+          <i class="ph ph-chart-bar" aria-hidden="true"></i>效果看板
+          <span class="pill pill--count nav-count" title="标黄待修条目">2</span>
         </button>
       </nav>
       <div class="mt-auto" style="padding: var(--space-5); border-top: 1px solid var(--border-soft);">
@@ -522,8 +550,8 @@
           <button type="button" class="btn btn-secondary btn--sm">
             <i class="ph ph-download-simple" aria-hidden="true"></i>导出周清单
           </button>
-          <a href="./阶段1_效果度量_内部效果看板页.html" class="btn btn-secondary btn--sm" title="互跳评审导航（DEC-013 · 可选）">
-            <i class="ph ph-chart-line" aria-hidden="true"></i>效果看板
+          <a href="./阶段1_效果度量_内部效果看板页.html" class="btn btn-secondary btn--sm" title="互跳业务效果看板 PAGE-F06-01（DEC-013 · 可选）；F06 看会话与业务结果，本页第 5 区效果看板看条目供给侧">
+            <i class="ph ph-chart-line" aria-hidden="true"></i>业务看板
           </a>
         </div>
       </header>
@@ -558,7 +586,7 @@
             <div class="panel col-span-12 xl:col-span-8">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
-                  <p class="panel__eyebrow">Knowledge Entries</p>
+                  <p class="panel__eyebrow">条目库 · 唯一权威源</p>
                   <h2 class="panel__title">条目列表</h2>
                 </div>
                 <span class="pill">按更新时间降序 · 共 128 条</span>
@@ -698,7 +726,7 @@
             <div class="col-span-12 xl:col-span-4 flex flex-col gap-6">
 
               <div class="panel">
-                <p class="panel__eyebrow">Selected Entry</p>
+                <p class="panel__eyebrow">选中条目</p>
                 <h3 class="panel__title" style="font-size: var(--text-base);">Change Wi-Fi after router replacement</h3>
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="pill">草稿</span>
@@ -733,7 +761,7 @@
               <div class="panel">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex flex-col gap-1">
-                    <p class="panel__eyebrow">Publish Gate</p>
+                    <p class="panel__eyebrow">上线前置 · 结果留痕</p>
                     <h3 class="panel__title" style="font-size: var(--text-base);">发布门禁 · 评测集回归</h3>
                   </div>
                   <span class="pill"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>结果留痕</span>
@@ -796,7 +824,7 @@
               <div class="panel">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex flex-col gap-1">
-                    <p class="panel__eyebrow">Revision History</p>
+                    <p class="panel__eyebrow">全程留痕</p>
                     <h3 class="panel__title" style="font-size: var(--text-base);">修订历史</h3>
                   </div>
                   <span class="pill">任一历史版本可查</span>
@@ -831,7 +859,7 @@
             <div class="panel col-span-12 xl:col-span-7">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
-                  <p class="panel__eyebrow">Manual Entry</p>
+                  <p class="panel__eyebrow">逐条录入</p>
                   <h2 class="panel__title">手工录入</h2>
                 </div>
                 <div class="flex items-center gap-3">
@@ -969,7 +997,7 @@
               <div class="ai-card panel" style="background: var(--surface-warm); border-color: var(--border-soft);">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex flex-col gap-1">
-                    <p class="panel__eyebrow">AI Suggestions · 建议态</p>
+                    <p class="panel__eyebrow">AI 整理 · 建议态</p>
                     <h3 class="panel__title" style="font-size: var(--text-base);">AI 整理建议</h3>
                   </div>
                   <span class="pill" style="background: var(--surface);">未处理前不生效</span>
@@ -1017,7 +1045,7 @@
               <div class="panel">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex flex-col gap-1">
-                    <p class="panel__eyebrow">Bulk Import</p>
+                    <p class="panel__eyebrow">文件导入 · 飞书迁移</p>
                     <h3 class="panel__title" style="font-size: var(--text-base);">批量导入</h3>
                   </div>
                   <span class="pill">单文件 ≤500 条（建议值 · 终稿前确认）</span>
@@ -1065,7 +1093,7 @@
               <div class="panel">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex flex-col gap-1">
-                    <p class="panel__eyebrow">To Organize</p>
+                    <p class="panel__eyebrow">整理工作面</p>
                     <h3 class="panel__title" style="font-size: var(--text-base);">「待整理」队列</h3>
                   </div>
                   <span class="pill pill--count">112 条</span>
@@ -1116,7 +1144,7 @@
             <div class="panel col-span-12 xl:col-span-8">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
-                  <p class="panel__eyebrow">AI Draft · 频次第 1</p>
+                  <p class="panel__eyebrow">AI 起草 · 频次第 1</p>
                   <h2 class="panel__title">App says “Device already bound to another account”</h2>
                 </div>
                 <div class="flex flex-col items-end gap-1 flex-none">
@@ -1219,7 +1247,7 @@
             <div class="panel col-span-12 xl:col-span-7">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
-                  <p class="panel__eyebrow">Pending Tag Suggestions</p>
+                  <p class="panel__eyebrow">待确认标签建议</p>
                   <h2 class="panel__title">AI 建议待确认</h2>
                 </div>
                 <span class="pill pill--count">4 项</span>
@@ -1284,7 +1312,7 @@
             <div class="panel col-span-12 xl:col-span-5">
               <div class="flex items-start justify-between gap-3">
                 <div class="flex flex-col gap-1">
-                  <p class="panel__eyebrow">Active Tags</p>
+                  <p class="panel__eyebrow">检索信号 · 人工确认后生效</p>
                   <h2 class="panel__title">已生效标签</h2>
                 </div>
                 <span class="pill">每条目 ≤20 个（建议值 · 终稿前确认）</span>
@@ -1307,6 +1335,158 @@
                 <span class="tag-chip">solar <span style="color: var(--meta);">· 1</span></span>
               </div>
               <p class="panel__note">数字为标签所挂条目数；标签确认与移除均留痕。超上限时拦截并提示，不静默丢弃。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════ 视图⑤ 效果看板（第 5 导航区 · 08-04 第二轮拍板增补 · AC-M-16） ═══════════ -->
+        <section class="view" id="view-stats" aria-label="效果看板">
+          <div class="grid grid-cols-12 gap-6">
+
+            <div class="col-span-12 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
+                <span class="pill"><i class="ph ph-eye" aria-hidden="true"></i>全部只读呈现</span>
+                <span class="pill">口径唯一落点：PRD §8.2「知识条目效果」行 · 周粒度</span>
+                <span class="pill">零新增埋点 · 与业务看板（F06）同源聚合，呈报位置区隔</span>
+              </div>
+              <span class="panel__note">条目准确率为消息级近似归因（一次会话可引用多条目），如实标注</span>
+            </div>
+
+            <!-- 状态帧：数据回补中（与 F06 看板同口径，演示开关驱动） -->
+            <div class="kb-backfill-note notice notice--warn col-span-12" role="status">
+              <i class="ph ph-clock-clockwise" aria-hidden="true"></i>
+              <span><strong>数据回补中</strong> —— 最近一周埋点上报延迟，延迟数据已在趋势图中标注；不静默缺数（与业务看板同口径）。</span>
+            </div>
+
+            <!-- 指标卡 1 · 场景覆盖 -->
+            <div class="panel col-span-12 md:col-span-6 xl:col-span-3">
+              <p class="panel__eyebrow">指标卡 · 场景覆盖</p>
+              <h2 class="panel__title" style="font-size: var(--text-base);">场景覆盖</h2>
+              <div class="flex items-baseline gap-2">
+                <span class="stat-num">5<span style="font-size: var(--text-lg); color: var(--muted);"> / 5</span></span>
+                <span class="panel__note">覆盖场景数 · 已上线 96 条</span>
+              </div>
+              <span class="pill g1-ready-el" style="align-self: flex-start;"><i class="ph ph-check" aria-hidden="true"></i>对照 G1 咨询分布场景集（示例：已回填）</span>
+              <span class="pill pill--warn g1-pending-el" style="align-self: flex-start;"><i class="ph ph-hourglass" aria-hidden="true"></i>场景集待 G1 回填</span>
+              <div class="flex flex-col gap-2" style="padding-top: var(--space-2);">
+                <div class="flex items-center gap-3"><span style="flex: none; width: 2.5em; font-size: var(--text-xs); color: var(--meta);">联网</span><div class="scene-bar-track flex-1"><div class="scene-bar-fill" style="width: 100%;"></div></div><span class="mono" style="flex: none; width: 2em; text-align: right; font-size: var(--text-xs); color: var(--fg-2);">28</span></div>
+                <div class="flex items-center gap-3"><span style="flex: none; width: 2.5em; font-size: var(--text-xs); color: var(--meta);">安装</span><div class="scene-bar-track flex-1"><div class="scene-bar-fill" style="width: 79%;"></div></div><span class="mono" style="flex: none; width: 2em; text-align: right; font-size: var(--text-xs); color: var(--fg-2);">22</span></div>
+                <div class="flex items-center gap-3"><span style="flex: none; width: 2.5em; font-size: var(--text-xs); color: var(--meta);">配对</span><div class="scene-bar-track flex-1"><div class="scene-bar-fill" style="width: 64%;"></div></div><span class="mono" style="flex: none; width: 2em; text-align: right; font-size: var(--text-xs); color: var(--fg-2);">18</span></div>
+                <div class="flex items-center gap-3"><span style="flex: none; width: 2.5em; font-size: var(--text-xs); color: var(--meta);">其他</span><div class="scene-bar-track flex-1"><div class="scene-bar-fill" style="width: 61%;"></div></div><span class="mono" style="flex: none; width: 2em; text-align: right; font-size: var(--text-xs); color: var(--fg-2);">17</span></div>
+                <div class="flex items-center gap-3"><span style="flex: none; width: 2.5em; font-size: var(--text-xs); color: var(--meta);">会员</span><div class="scene-bar-track flex-1"><div class="scene-bar-fill" style="width: 39%;"></div></div><span class="mono" style="flex: none; width: 2em; text-align: right; font-size: var(--text-xs); color: var(--fg-2);">11</span></div>
+              </div>
+              <p class="panel__note g1-pending-el">G1 前降级：按现有场景分类（安装/联网/配对/会员/其他）展示分布，不编造场景集。</p>
+            </div>
+
+            <!-- 指标卡 2 · 使用频率 -->
+            <div class="panel col-span-12 md:col-span-6 xl:col-span-3">
+              <p class="panel__eyebrow">指标卡 · 使用频率</p>
+              <h2 class="panel__title" style="font-size: var(--text-base);">使用频率</h2>
+              <div class="flex items-baseline gap-2">
+                <span class="stat-num">412</span>
+                <span class="panel__note">本周检索命中次数</span>
+              </div>
+              <svg id="kbSparkHits" class="w-full" role="img" aria-label="条目检索命中次数周趋势"></svg>
+              <p class="panel__note">条目被检索命中次数 · 周趋势。</p>
+            </div>
+
+            <!-- 指标卡 3 · 引用采纳（与命中分列，未采纳差值可见） -->
+            <div class="panel col-span-12 md:col-span-6 xl:col-span-3">
+              <p class="panel__eyebrow">指标卡 · 引用采纳</p>
+              <h2 class="panel__title" style="font-size: var(--text-base);">引用采纳</h2>
+              <div class="flex items-baseline gap-2">
+                <span class="stat-num">286</span>
+                <span class="panel__note">本周实际引用进回答</span>
+              </div>
+              <svg id="kbCompare" class="w-full" role="img" aria-label="检索命中与实际引用周趋势对比"></svg>
+              <div class="flex flex-wrap items-center gap-3" style="font-size: var(--text-xs); color: var(--meta);">
+                <span class="flex items-center gap-1"><span style="display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--muted);"></span>命中 412</span>
+                <span class="flex items-center gap-1"><span style="display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--accent);"></span>引用 286</span>
+              </div>
+              <p class="panel__note">与命中分列——命中未被采纳的差值可见（本周 126 次）。</p>
+            </div>
+
+            <!-- 指标卡 4 · 知识库准确率（双口径注记） -->
+            <div class="panel col-span-12 md:col-span-6 xl:col-span-3">
+              <p class="panel__eyebrow">指标卡 · 知识库准确率</p>
+              <h2 class="panel__title" style="font-size: var(--text-base);">知识库准确率</h2>
+              <div class="flex items-baseline gap-2">
+                <span class="stat-num">78%</span>
+                <span class="panel__note">整体 · 宽口径（严口径 71%）</span>
+              </div>
+              <svg id="kbSparkAcc" class="w-full" role="img" aria-label="知识库整体条目准确率周趋势"></svg>
+              <p class="panel__note">引用后未点踩且所在会话判解决的比例；双口径随解决率宽/严口径；消息级近似归因，如实标注。</p>
+            </div>
+
+            <!-- 条目效果列表（准确率升序 · 最差浮顶 · AC-M-16/AC-E-15） -->
+            <div class="panel col-span-12">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex flex-col gap-1">
+                  <p class="panel__eyebrow">条目供给侧效果</p>
+                  <h2 class="panel__title">条目效果列表</h2>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <span class="pill pill--warn"><i class="ph ph-warning" aria-hidden="true"></i>标黄线：准确率 &lt; 60%（建议值 · 终稿前确认）</span>
+                  <div class="seg seg--soft" role="group" aria-label="排序切换" id="segKbSort">
+                    <button type="button" data-sort="acc" aria-pressed="true">准确率升序</button>
+                    <button type="button" data-sort="hits" aria-pressed="false">命中数降序</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 状态帧：样本积累中说明（AC-E-15，演示开关高亮） -->
+              <div class="sample-note notice notice--info" role="status">
+                <i class="ph ph-hourglass-medium" aria-hidden="true"></i>
+                <span><strong>样本积累中</strong> —— 引用数低于样本量下限（建议值 10 次 · 终稿前确认）的条目不计算、不显示准确率数值，避免误导；命中/引用/点踩/「试了没用」照常展示（下表末行）。</span>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="kb-table" id="kbStatsTable" aria-label="条目效果列表">
+                  <thead>
+                    <tr>
+                      <th>条目</th><th>命中</th><th>引用</th><th>点踩</th><th>「试了没用」</th><th>条目准确率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="row-flag" data-acc="41" data-hits="58" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Solar panel not charging the battery</span> <span class="tag-chip">语言：EN</span> <span class="pill pill--warn">优先修订</span></td>
+                      <td class="mono">58</td><td class="mono">41</td><td class="mono">9</td><td class="mono">6</td>
+                      <td class="mono acc-low">41%</td>
+                    </tr>
+                    <tr class="row-flag" data-acc="53" data-hits="44" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Live view is black at night</span> <span class="tag-chip">语言：EN</span> <span class="pill pill--warn">优先修订</span></td>
+                      <td class="mono">44</td><td class="mono">30</td><td class="mono">6</td><td class="mono">4</td>
+                      <td class="mono acc-low">53%</td>
+                    </tr>
+                    <tr data-acc="66" data-hits="96" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Feeder shows offline after firmware update</span> <span class="tag-chip">语言：EN</span></td>
+                      <td class="mono">96</td><td class="mono">71</td><td class="mono">8</td><td class="mono">3</td>
+                      <td class="mono">66%</td>
+                    </tr>
+                    <tr data-acc="81" data-hits="132" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">How to pair on 2.4GHz Wi-Fi</span> <span class="tag-chip">语言：EN</span></td>
+                      <td class="mono">132</td><td class="mono">104</td><td class="mono">6</td><td class="mono">2</td>
+                      <td class="mono">81%</td>
+                    </tr>
+                    <tr data-acc="88" data-hits="61" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Membership billing cycle and renewal date</span> <span class="tag-chip">语言：EN</span></td>
+                      <td class="mono">61</td><td class="mono">48</td><td class="mono">2</td><td class="mono">1</td>
+                      <td class="mono">88%</td>
+                    </tr>
+                    <tr data-acc="91" data-hits="39" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Mount the feeder: tree strap vs pole kit</span> <span class="tag-chip">语言：EN</span></td>
+                      <td class="mono">39</td><td class="mono">33</td><td class="mono">1</td><td class="mono">0</td>
+                      <td class="mono">91%</td>
+                    </tr>
+                    <tr class="row-sample" data-acc="999" data-hits="12" title="点击跳转条目详情（既有编辑器与修订历史）">
+                      <td><span class="kb-title">Share device access with family members</span> <span class="tag-chip">语言：EN</span></td>
+                      <td class="mono">12</td><td class="mono">6</td><td class="mono">0</td><td class="mono">0</td>
+                      <td><span class="pill">样本积累中</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="panel__note">默认按条目准确率升序——最差条目浮顶，直接指向该优先修订哪条；标黄条目即 F05 修订候选。点行跳转条目详情（既有编辑器与修订历史，不新增编辑入口）。「试了没用」单列，不并入普通点踩。条目内容为英文（界面语言与内容语言分离）。</p>
             </div>
           </div>
         </section>
@@ -1334,14 +1514,17 @@
     <label><input type="checkbox" data-demo="demo-importrun">批量导入 · 进行中</label>
     <label><input type="checkbox" data-demo="demo-conflict">并发编辑冲突提示（U-05）</label>
     <label><input type="checkbox" data-demo="demo-flowerr">排障校验不过 · 标出问题节点（F-09）</label>
+    <label><input type="checkbox" data-demo="demo-kbbackfill">效果看板 · 数据回补中</label>
+    <label><input type="checkbox" data-demo="demo-g1pending">效果看板 · 场景集待 G1 回填</label>
+    <label><input type="checkbox" data-demo="demo-kbsample">效果看板 · 样本积累中（AC-E-15）</label>
     <p class="panel__note divider-soft" style="padding-top: var(--space-2);">
-      默认帧：条目库常规态、导入部分失败逐条报告、审核队列频次降序、发布门禁回归通过留痕。
+      默认帧：条目库常规态、导入部分失败逐条报告、审核队列频次降序、发布门禁回归通过留痕、效果看板准确率升序（标黄 2 条 + 样本积累中 1 条）。
     </p>
   </aside>
 
   <script>
-    // ───────── 视图切换（左侧四区导航 DEC-010） ─────────
-    const VIEW_TITLES = { kb: "条目库", intake: "录入与导入", review: "审核队列", tags: "标签管理" };
+    // ───────── 视图切换（左侧五区导航 DEC-010） ─────────
+    const VIEW_TITLES = { kb: "条目库", intake: "录入与导入", review: "审核队列", tags: "标签管理", stats: "效果看板" };
     function switchView(key) {
       document.querySelectorAll(".nav-item[data-view]").forEach(btn =>
         btn.setAttribute("aria-current", String(btn.dataset.view === key)));
@@ -1377,6 +1560,73 @@
         document.body.classList.toggle(cb.dataset.demo, cb.checked);
       });
     });
+
+    // ───────── 效果看板（第 5 导航区 · AC-M-16）图表 · 内联 SVG 手绘，复用看板页手法 ─────────
+    const KB_WEEKS = ["W27", "W28", "W29", "W30", "W31", "W32"];
+    const KB_HITS  = [356, 402, 371, 428, 445, 412];   // 检索命中（周）
+    const KB_CITES = [231, 268, 240, 289, 310, 286];   // 实际引用进回答（周，与命中分列）
+    const KB_ACC   = [71, 73, 74, 76, 77, 78];         // 整体条目准确率 %（宽口径）
+
+    function kbSpark(el, data, o) {
+      o = o || {};
+      const W = 240, H = 64, P = 8;
+      const mn = Math.min(...data), mx = Math.max(...data), span = (mx - mn) || 1;
+      const x = i => P + i * (W - 2 * P) / (data.length - 1);
+      const y = v => P + (H - 2 * P) - (v - mn) / span * (H - 2 * P);
+      let d = "", s = "";
+      data.forEach((v, i) => { d += (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " "; });
+      s += `<path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>`;
+      const li = data.length - 1;
+      s += `<circle cx="${x(li)}" cy="${y(data[li])}" r="3.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"><title>${KB_WEEKS[li]} · ${data[li]}${o.unit || ""}</title></circle>`;
+      s += `<g class="kbstats-backfill"><rect x="${x(li) - 8}" y="0" width="16" height="${H}" fill="var(--warn)" fill-opacity="0.10"></rect><text x="${x(li) - 2}" y="12" text-anchor="end" font-size="11" fill="var(--warn)">回补中</text></g>`;
+      el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      el.innerHTML = s;
+    }
+
+    function kbCompare(el) {
+      const W = 340, H = 130, L = 36, R = 12, T = 10, B = 20, yMin = 200, yMax = 480;
+      const iw = W - L - R, ih = H - T - B, n = KB_WEEKS.length;
+      const x = i => L + i * (iw / (n - 1));
+      const y = v => T + ih - (v - yMin) / (yMax - yMin) * ih;
+      let s = "";
+      [200, 340, 480].forEach(v => {
+        s += `<line x1="${L}" x2="${L + iw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border-soft)" stroke-width="1"></line>`;
+        s += `<text class="num" x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--meta)">${v}</text>`;
+      });
+      KB_WEEKS.forEach((w, i) => { s += `<text x="${x(i)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--meta)">${w}</text>`; });
+      [[KB_HITS, "var(--muted)", "命中"], [KB_CITES, "var(--accent)", "引用"]].forEach(([data, color, name]) => {
+        let d = "";
+        data.forEach((v, i) => { d += (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " "; });
+        s += `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>`;
+        data.forEach((v, i) => { s += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="${color}" stroke="var(--surface)" stroke-width="1.5"><title>${KB_WEEKS[i]} · ${name} ${v} 次</title></circle>`; });
+      });
+      const li = n - 1;
+      s += `<line x1="${x(li)}" x2="${x(li)}" y1="${y(KB_HITS[li])}" y2="${y(KB_CITES[li])}" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="4 3"></line>`;
+      s += `<text x="${x(li) - 6}" y="${((y(KB_HITS[li]) + y(KB_CITES[li])) / 2 + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--warn)">未采纳 126</text>`;
+      s += `<g class="kbstats-backfill"><rect x="${x(li) - 10}" y="${T}" width="20" height="${ih}" fill="var(--warn)" fill-opacity="0.10"></rect></g>`;
+      el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      el.innerHTML = s;
+    }
+
+    kbSpark(document.getElementById("kbSparkHits"), KB_HITS, { unit: " 次" });
+    kbSpark(document.getElementById("kbSparkAcc"), KB_ACC, { unit: "%" });
+    kbCompare(document.getElementById("kbCompare"));
+
+    // 条目效果列表：排序切换（准确率升序默认 · 最差浮顶；样本积累中恒沉底）
+    const segKbSort = document.getElementById("segKbSort");
+    segKbSort.addEventListener("click", e => {
+      const btn = e.target.closest("button"); if (!btn) return;
+      segKbSort.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+      const tb = document.querySelector("#kbStatsTable tbody");
+      [...tb.querySelectorAll("tr")]
+        .sort((a, b) => btn.dataset.sort === "acc"
+          ? (+a.dataset.acc) - (+b.dataset.acc)
+          : (+b.dataset.hits) - (+a.dataset.hits))
+        .forEach(r => tb.appendChild(r));
+    });
+    // 点行跳转条目详情（原型内跳转条目库既有编辑器与修订历史，不新增编辑入口）
+    document.querySelectorAll("#kbStatsTable tbody tr").forEach(tr =>
+      tr.addEventListener("click", () => switchView("kb")));
 
     // 口令页「进入管理台」：演示态下解除拦截（真实实现为 Basic Auth 校验）
     document.getElementById("lockEnter").addEventListener("click", () => {
