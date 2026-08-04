@@ -4,12 +4,15 @@
 - 约束：使用营队工具链（prd-master → design-master → tdd-master → git-master）
 
 ## 当前状态
-- ✅ 已完成：①prd-master 全流程（PRD详细版 1424 行+requirements 116 稳定对象+summary/dev+PPT 11 页，5 项硬校验全过）；②design-master 全流程（设计决策蓝图确认→页面清单 4 MVP+6 planned→DESIGN.md 497 行+tokens.css→4 份页面文档+4 份高保真 HTML→串联死链 0→showcase→技术方案 451 行版本实测→追溯矩阵 96 covered/6 planned 校验一次通过）。全部产物已提交推送
-- ▶️ 进行中：无（设计链路收官，待进入 tdd-master）
+- ✅ 已完成：F09 知识库管理台全链路增量（08-04）：PRD 1520 行 4 项校验过（82%）→requirements revision 2（132 稳定对象✅）→页面清单 rev2（5 MVP 施工图）→F09 页面文档 505 行+HTML 1389 行（5 视图 13 态）→技术方案 v1.1 483 行（AI 提炼管道/发布门禁，零新增依赖）→衍生 summary/dev/PPT 同步→追溯矩阵 283 行（109 covered，重校验✅）+change-impact。此前：①prd-master 全流程（PRD详细版 1424 行+requirements 116 稳定对象+summary/dev+PPT 11 页，5 项硬校验全过）；②design-master 全流程（设计决策蓝图确认→页面清单 4 MVP+6 planned→DESIGN.md 497 行+tokens.css→4 份页面文档+4 份高保真 HTML→串联死链 0→showcase→技术方案 451 行版本实测→追溯矩阵 96 covered/6 planned 校验一次通过）。全部产物已提交推送
+- ▶️ 进行中：无（F09 增量收官，待进入 tdd-master）
 - ⏸️ 待办：下游=tdd-master 消费 pages/*.md 出《TDD验收契约》；用户侧=G1-G4 前置门槛（≤2 周硬窗口）+ 拍板 2 名单后补 + 提供现有 App 品牌素材（校准 tokens 色值）
 - ❓ 待确认：拍板 1（重建vs升级）、拍板 3（上线时间表）——待 G1/G2 证据后拍；两条 Controller 补写规则待企业家追认；技术选型（Claude/Fastify/Drizzle 等）待技术负责人终确认
 
 ## 决策记录（实时维护）
+- [08-04-2026 09:26:12] 拍板：新增 F09 知识库管理台（MVP 范围变更）｜背景：用户确认"我需要一个知识库管理台"；三个子决定按 AI 推荐默认执行（用户未反对）｜结论：①F09 进 MVP 但不卡六项及格线验收（同 F05 待遇）；②管理台=知识库唯一权威源，飞书 120+ 篇一次性导入初始数据、不做双向同步；③会话自动提炼（AI 聚类起草+人审发布）进第一版，无人审不生效铁律保留；多渠道采集（应用商店/邮件）仍留阶段二。执行全链路增量：PRD F09→requirements revision 2→蓝图/清单→管理台页面文档+HTML→技术方案→追溯矩阵→change-impact｜来源：用户（子决定=AI 默认待否决）
+- [08-04-2026 09:53:22] F09 三功能+人审方案用户明确确认｜背景：用户补充明确管理台三功能（人工录入/会话自动提炼/自动整理+智能回复精准调用），并确认保留"AI 起草+人工审核发布"方案｜结论：与执行中的 PRD 增量范围完全一致，无调整；子决定③（AI 提炼进第一版+人审）由"AI 默认"升级为用户明确确认｜来源：用户
+- [08-04-2026 09:26:12] 用户提出新需求：知识库管理系统页面（待拍板范围）｜背景：看完设计稿后提出"缺了核心=知识库"｜结论：要一个系统页面支持①人工录入（客服/产品文档/售后策略）②系统自动从客户会话提炼知识点案例③知识被会话页更精准调用④系统自动整理信息、生成问题标签。AI 判断：=把阶段二"AI 生成型知识库审核台"提前并扩展为完整知识库管理台，属 MVP 范围变更，需回 PRD 增量同步后再设计；范围/知识源权威/时机三问待用户拍板｜来源：用户
 - [08-04-2026 00:12:48] 品牌素材到位·按截图配色校准设计系统｜背景：用户提供现有 App 客服页截图（Device Support 页），要求"按照这个颜色结构进行设计"｜结论：tokens 结构不变、色值校准——页面底=浅冰青、开场区=粉紫→淡青柔和渐变+机器鸟吉祥物位、白色大圆角卡+列表行、强调色=亮青蓝（交互文字调深一档过 WCAG 4.5:1）、近黑/灰双层文字；同步传播到 tokens.css/DESIGN.md/4 页 HTML/showcase 的 :root 与色板标注；自然绿占位废止｜来源：用户
 - [08-04-2026 00:06:57] design-master 阶段II/III 收官｜背景：8 步静默产出全部完成｜结论：交付=页面清单（4 MVP+6 planned）/DESIGN.md+tokens.css（自然绿占位待品牌素材校准，对比度实算全过）/4 份页面文档（对话页 19 态 527 行等）/4 份高保真 HTML（文案逐字 PRD 定稿、零硬编码色）/串联 24 条接线死链 0/design-system-showcase（11 Section）/技术方案 451 行（Fastify+Drizzle+pgvector+Vercel AI SDK+Claude，版本全实测；选A主线+选B适配面）/设计追溯矩阵 247 行（96 covered+6 planned，check_traceability 一次通过）。DEC 撞号修复：看板页 MD 局部 DEC-001/002 改号 DEC-003/004 对齐矩阵注册。预览：.claude/launch.json pages-preview（8935 端口）｜来源：AI
 - [08-04-2026 00:04:13] 阶段II步骤5：MVP页面串联+死链检测完成｜背景：4份MVP HTML彼此孤立，按页面串联器规范只接线不加件｜结论：注入24条onclick（转人工面板12条：Send&connect×5延迟跳转+Not now×6+Continue with the AI assistant×1→对话页；集成点规格12条：Support×2/Get help×4/开场确认Yes×3/不同问题×3→对话页）；对话页既有14条→面板链接复核全部有效，未改动；看板页按蓝图保持无站内导航（规范禁止添加新元素，故不注入评审导航条）；对话页6处留`#`不注假链接（Refund & return policy=宿主退货政策页、3条guide-link=排障文章、Show quick topics/End conversation=页内功能，均无本轮生成的目标页面）；死链检测0断链0自引用；浏览器抽查3条跳转链路全通。另建.claude/launch.json（pages-preview，python3 http.server 8935 服务 output/pages）供预览验证｜来源：AI
