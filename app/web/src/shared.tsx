@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ENTRY_STATUS_LABELS,
   EN_STATUS_LABELS,
@@ -144,6 +144,11 @@ export function ConfirmModal({
   );
 }
 
+/**
+ * 数据加载 hook：以 deps 序列化值 + tick 作为唯一依赖键。
+ * loader 每次渲染都是新函数引用，故用 ref 持有最新实现——
+ * 依赖数组保持静态长度与完整依赖，无需关闭 lint 规则。
+ */
 export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): {
   data: T | null;
   loading: boolean;
@@ -154,11 +159,15 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const loaderRef = useRef(loader);
+  loaderRef.current = loader;
+  const depsKey = JSON.stringify(deps);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    loader()
+    loaderRef
+      .current()
       .then((d) => {
         if (alive) {
           setData(d);
@@ -170,8 +179,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick]);
+  }, [depsKey, tick]);
 
   return { data, loading, error, reload: () => setTick((t) => t + 1) };
 }
