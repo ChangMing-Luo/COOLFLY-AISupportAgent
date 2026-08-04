@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { contentHash } from '../core/content.js';
 
 /**
@@ -53,9 +55,14 @@ export class ZendeskApiError extends Error {
   }
 }
 
-/** 沙箱：进程内持久化的 Guide/Support 契约实现 */
+/**
+ * 沙箱：Guide/Support 契约实现。
+ * 状态落盘（SANDBOX_STATE_FILE）——外部系统的数据不随本服务进程消失，
+ * 否则 drift 比对与跨进程联调无法成立。
+ */
 class SandboxZendesk implements ZendeskClient {
   readonly mode = 'sandbox' as const;
+  private stateFile = process.env.ZENDESK_SANDBOX_FILE ?? join(process.cwd(), '.sandbox-zendesk.json');
   private articles = new Map<string, ZendeskArticle>();
   private sections = new Map<string, string>([
     ['Sec 5101', '退款与退货'],
@@ -68,6 +75,24 @@ class SandboxZendesk implements ZendeskClient {
   ]);
   /** 注入型故障：供 RULE-06 构造同步失败与 429 限流 */
   failNext = new Map<string, { status: number; retryAfterSec?: number; times: number }>();
+
+  constructor() {
+    this.load();
+  }
+
+  private load(): void {
+    if (!existsSync(this.stateFile)) return;
+    try {
+      const raw = JSON.parse(readFileSync(this.stateFile, 'utf8')) as Record<string, ZendeskArticle>;
+      this.articles = new Map(Object.entries(raw));
+    } catch {
+      this.articles = new Map();
+    }
+  }
+
+  private persist(): void {
+    writeFileSync(this.stateFile, JSON.stringify(Object.fromEntries(this.articles), null, 2), 'utf8');
+  }
 
   async upsertArticle(input: PushInput): Promise<ZendeskArticle> {
     this.maybeFail(input.entryCode);
@@ -97,15 +122,20 @@ class SandboxZendesk implements ZendeskClient {
       updatedBy: 'COOLFLY 知识运营中台',
     };
     this.articles.set(id, article);
+    this.persist();
     return article;
   }
 
   async archiveArticle(articleRef: string): Promise<void> {
     const a = this.articles.get(articleRef);
-    if (a) this.articles.set(articleRef, { ...a, draft: true, updatedAt: new Date().toISOString() });
+    if (a) {
+      this.articles.set(articleRef, { ...a, draft: true, updatedAt: new Date().toISOString() });
+      this.persist();
+    }
   }
 
   async getArticle(articleRef: string): Promise<ZendeskArticle | null> {
+    this.load();
     return this.articles.get(articleRef) ?? null;
   }
 
@@ -130,6 +160,7 @@ class SandboxZendesk implements ZendeskClient {
 
   /** 模拟 Zendesk 端被直接改写（drift 源） */
   simulateRemoteEdit(articleRef: string, newBodyHtml: string, editor: string): void {
+    this.load();
     const a = this.articles.get(articleRef);
     if (!a) return;
     this.articles.set(articleRef, {
@@ -138,6 +169,7 @@ class SandboxZendesk implements ZendeskClient {
       updatedAt: new Date().toISOString(),
       updatedBy: editor,
     });
+    this.persist();
   }
 
   private maybeFail(key: string): void {

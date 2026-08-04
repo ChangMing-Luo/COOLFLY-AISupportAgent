@@ -45,6 +45,7 @@ interface EntryDbRow {
   submitter_id: string | null;
   reviewer_id: string | null;
   reject_reason: string | null;
+  owner_id: string | null;
   review_cycle_days: number;
   review_due_at: Date | null;
   current_version: number;
@@ -140,13 +141,16 @@ export async function listEntries(filter: {
   return rows.map(toEntryRow);
 }
 
-export async function getEntry(id: string): Promise<(EntryRow & { body: EntryBody; rejectReason: string | null; blockedReason: string | null; submitterId: string | null; reviewSource: string }) | null> {
+export async function getEntry(id: string): Promise<(EntryRow & { body: EntryBody; deviceModels: string[]; ownerId: string | null; rejectReason: string | null; blockedReason: string | null; submitterId: string | null; reviewSource: string }) | null> {
   const { rows } = await query<EntryDbRow>(`${ENTRY_SELECT} WHERE e.id = $1 OR e.code = $1`, [id]);
   const r = rows[0];
   if (!r) return null;
   return {
     ...toEntryRow(r),
     body: r.body,
+    // 适用型号与负责人不在列表行里，但条目工作台保存时需原样回传，否则每次保存都会被清空
+    deviceModels: r.device_models ?? [],
+    ownerId: r.owner_id,
     rejectReason: r.reject_reason,
     blockedReason: r.blocked_reason,
     submitterId: r.submitter_id,
@@ -193,8 +197,8 @@ export async function saveEntry(
         `UPDATE entries SET title=$2, library_id=$3, chapter_id=$4, entry_type=$5, visibility=$6,
            scene_l1=$7, scene_l2=$8, labels=$9::jsonb, device_models=$10::jsonb, body=$11::jsonb,
            status=$12, en_status = CASE WHEN en_status IN ('none','translating') THEN en_status ELSE 'stale' END,
-           sync_status = CASE WHEN sync_status='synced' THEN 'blocked' ELSE sync_status END,
-           blocked_reason = CASE WHEN sync_status='synced' THEN $13 ELSE blocked_reason END,
+           sync_status = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN 'blocked' ELSE sync_status END,
+           blocked_reason = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN $13 ELSE blocked_reason END,
            vector_status='stale', review_cycle_days=$14, owner_id=$15,
            lock_version = lock_version + 1, updated_at = now()
          WHERE id=$1`,
