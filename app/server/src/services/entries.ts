@@ -141,15 +141,16 @@ export async function listEntries(filter: {
   return rows.map(toEntryRow);
 }
 
-export async function getEntry(id: string): Promise<(EntryRow & { body: EntryBody; deviceModels: string[]; ownerId: string | null; rejectReason: string | null; blockedReason: string | null; submitterId: string | null; reviewSource: string }) | null> {
+export async function getEntry(id: string): Promise<(EntryRow & { body: EntryBody; deviceModels: string[]; reviewCycleDays: number; ownerId: string | null; rejectReason: string | null; blockedReason: string | null; submitterId: string | null; reviewSource: string }) | null> {
   const { rows } = await query<EntryDbRow>(`${ENTRY_SELECT} WHERE e.id = $1 OR e.code = $1`, [id]);
   const r = rows[0];
   if (!r) return null;
   return {
     ...toEntryRow(r),
     body: r.body,
-    // 适用型号与负责人不在列表行里，但条目工作台保存时需原样回传，否则每次保存都会被清空
+    // 适用型号 / 负责人 / 复核周期不在列表行里，但条目工作台保存时需原样回传，否则每次保存都会被清空或重置
     deviceModels: r.device_models ?? [],
+    reviewCycleDays: r.review_cycle_days,
     ownerId: r.owner_id,
     rejectReason: r.reject_reason,
     blockedReason: r.blocked_reason,
