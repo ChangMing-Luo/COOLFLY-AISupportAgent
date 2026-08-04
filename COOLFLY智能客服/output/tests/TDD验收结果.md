@@ -48,7 +48,7 @@
 | 种子 | `pnpm --filter @kb/server db:seed` | 5 用户 / 3 库 / 13 章节 / 6 条目 / 4 批次 / 3 篇沙箱文章 |
 | 单元+集成 | `pnpm --filter @kb/server test`（vitest） | **69 passed (69)**，2 文件 |
 | E2E | `node e2e/flows.mjs`（Playwright Chromium） | **8/8 通过**（SMOKE-02 + FLOW-01…07） |
-| 视觉 | `node e2e/capture.mjs` + 独立视觉验收官 | 20 张截图对；review=pass；blocking=0 |
+| 视觉 | `node e2e/capture.mjs` + 独立视觉验收官 | 20 张截图对；第 1 轮 review=fail/blocking=1（B-01）→ 已修复并重捕；**第 2 轮复验进行中** |
 | 接口越权 | curl 四角色 × 8 类越权动作 | 8/8 → 403 |
 | 审计不可变 | psql UPDATE/DELETE 尝试 | 均被数据库规则拒绝，行内容不变 |
 | lint | — | 项目未配置 eslint（package.json 有 lint 脚本但未安装依赖），本轮**未执行**，如实记录 |
