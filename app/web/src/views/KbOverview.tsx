@@ -181,7 +181,7 @@ export function KbOverviewView() {
   }
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(300px, 3fr) minmax(560px, 7fr)', alignItems: 'start' }}>
+    <div className="grid" style={{ gridTemplateColumns: 'minmax(240px, 260px) minmax(0, 1fr)', alignItems: 'start' }}>
       <div>
         <div className="card">
           <h2 className="card__title">知识库（多库并行）</h2>
@@ -364,8 +364,8 @@ export function KbOverviewView() {
         {entries.loading && <div className="empty">加载中…</div>}
         {!entries.loading && rows.length === 0 && <div className="empty">没有符合筛选条件的条目——放宽筛选或换个知识库</div>}
         {!entries.loading && rows.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table>
+          <div className="table-scroll">
+            <table className="table--wide">
               <thead>
                 <tr>
                   <th>标识</th>

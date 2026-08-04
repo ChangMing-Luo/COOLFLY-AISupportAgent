@@ -96,6 +96,11 @@ a { color: var(--accent); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 td { padding: 9px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+/* 宽表（如条目列表 13 列）：撑到最小宽度并由外层容器横向滚动，避免中文逐字竖排 */
+.table-scroll { overflow-x: auto; }
+.table--wide { min-width: 1180px; }
+.table--wide th, .table--wide td { white-space: nowrap; }
+.table--wide td.cell-wrap { white-space: normal; max-width: 240px; }
 tr.row--click { cursor: pointer; }
 tr.row--click:hover td { background: var(--surface-2); }
 tr.row--alert td { background: var(--bad-bg); }
