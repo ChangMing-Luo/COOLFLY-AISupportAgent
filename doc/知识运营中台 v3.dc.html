@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta charset="utf-8">
+<title>COOLFLY 知识运营中台 v3 · 企业级知识运营平台原型</title>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#EAF6F8;color:#13252B;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:15px;line-height:1.55}
+  a{color:#0D7594;text-decoration:none}
+  a:hover{color:#0A5F79;text-decoration:underline}
+  @keyframes settle{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+  .doc h2{font-size:17px;font-weight:700;margin:18px 0 6px;line-height:1.3}
+  .doc h3{font-size:15px;font-weight:700;margin:14px 0 4px}
+  .doc p{margin:0 0 10px}
+  .doc ul,.doc ol{margin:0 0 10px;padding-left:22px}
+  .doc li{margin:2px 0}
+  .doc table{border-collapse:collapse;width:100%;margin:0 0 12px;font-size:13px}
+  .doc th,.doc td{border:1px solid #CBE2E9;padding:6px 8px;text-align:left}
+  .doc th{background:#E0F1F6;font-weight:600}
+  .doc blockquote{margin:0 0 12px;padding:8px 12px;border-left:3px solid #0D7594;background:#E0F1F6;border-radius:0 8px 8px 0;color:#31474E}
+  .doc code{font-family:ui-monospace,Menlo,monospace;background:#E0F1F6;border-radius:6px;padding:1px 5px;font-size:13px}
+  .doc figure{margin:0 0 12px}
+  .doc figcaption{font-size:13px;color:#5A737B;margin-top:4px}
+  .doc:focus{outline:none}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;align-items:stretch">
+
+  <aside style="width:248px;flex:none;background:#fff;border-right:1px solid #CBE2E9;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto">
+    <div style="padding:16px;border-bottom:1px solid #DFEEF3;display:flex;flex-direction:column;gap:4px">
+      <span style="font-size:13px;font-weight:700;letter-spacing:.08em;color:#0D7594">COOLFLY</span>
+      <span style="font-size:15px;font-weight:700;line-height:1.25">知识运营中台</span>
+      <span style="font-size:13px;color:#5A737B">运行时 = Zendesk · 本台 = 唯一权威源</span>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;padding:8px 0" aria-label="主导航">
+      <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:2px;padding:6px 0">
+          <span style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#5A737B;padding:0 16px 4px">{{ g.label }}</span>
+          <sc-for list="{{ g.items }}" as="n" hint-placeholder-count="3">
+            <button type="button" onClick="{{ n.go }}" aria-current="{{ n.cur }}"
+              style="display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;margin:0 10px;border-radius:10px;font-size:15px;font-weight:600;border:none;cursor:pointer;text-align:left;width:calc(100% - 20px);background:{{ n.bg }};color:{{ n.fg }};opacity:{{ n.op }}"
+              style-hover="background:#E0F1F6;color:#0D7594">
+              <i class="ph {{ n.icon }}" aria-hidden="true" style="font-size:17px"></i>
+              <span style="flex:1;min-width:0">{{ n.label }}</span>
+              <sc-if value="{{ n.hasCount }}">
+                <span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;font-size:13px;padding:1px 7px;border-radius:9999px;border:1px solid #CBE2E9;background:#fff;color:{{ n.countFg }}">{{ n.count }}</span>
+              </sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="margin-top:auto;padding:14px 16px;border-top:1px solid #DFEEF3;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:13px;font-weight:700;letter-spacing:.04em;color:#5A737B">当前登录身份（演示切换）</span>
+      <sc-for list="{{ roleOpts }}" as="r" hint-placeholder-count="4">
+        <button type="button" onClick="{{ r.go }}" aria-pressed="{{ r.on }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px;padding:0 10px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid {{ r.bd }};background:{{ r.bg }};color:{{ r.fg }};cursor:pointer;text-align:left">
+          <span>{{ r.label }}</span>
+          <i class="ph {{ r.icon }}" aria-hidden="true"></i>
+        </button>
+      </sc-for>
+    </div>
+  </aside>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <header style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 24px;border-bottom:1px solid #CBE2E9;background:#fff;position:sticky;top:0;z-index:30">
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+        <span style="font-size:13px;color:#5A737B">{{ crumb }}</span>
+        <h1 style="font-size:20px;font-weight:700;letter-spacing:-.01em;line-height:1.25;margin:0">{{ title }}</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:9999px;border:1px solid #BCDDE8;background:#E4F1F6;font-size:13px;color:#0D7594;font-weight:600"><i class="ph ph-user-circle" aria-hidden="true"></i>{{ roleName }} · {{ userName }}</span>
+        <button type="button" onClick="{{ goReview }}" style="display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-stamp" aria-hidden="true"></i>待审 <span style="font-family:ui-monospace,Menlo,monospace;color:#B2453A;font-weight:700">{{ pending }}</span></button>
+        <button type="button" onClick="{{ goSync }}" style="display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>同步失败 <span style="font-family:ui-monospace,Menlo,monospace;color:#B2453A;font-weight:700">{{ syncFailCount }}</span></button>
+      </div>
+    </header>
+
+    <main style="flex:1;padding:20px 24px 32px;display:flex;flex-direction:column;gap:16px;min-width:1240px">
+
+      <sc-if value="{{ isWork }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">
+            <sc-for list="{{ workStats }}" as="w" hint-placeholder-count="4">
+              <button type="button" onClick="{{ w.go }}" style="text-align:left;background:#fff;border:1px solid {{ w.bd }};border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px;cursor:pointer" style-hover="border-color:#0D7594">
+                <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">{{ w.k }}</span>
+                <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:20px;font-weight:700;color:{{ w.fg }}">{{ w.v }}</span>
+                <span style="font-size:13px;color:#5A737B">{{ w.note }}</span>
+              </button>
+            </sc-for>
+          </div>
+
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+              <div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid #CBE2E9;border-radius:12px;padding:2px">
+                <sc-for list="{{ workTabs }}" as="t" hint-placeholder-count="4">
+                  <button type="button" onClick="{{ t.go }}" aria-pressed="{{ t.on }}" style="min-height:30px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <span style="font-size:13px;color:#5A737B">{{ workHint }}</span>
+                <button type="button" onClick="{{ newDraft }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid transparent;background:{{ createBg }};color:{{ createFg }};font-size:13px;font-weight:600;cursor:{{ createCur }}"><i class="ph ph-plus" aria-hidden="true"></i> 新建知识条目</button>
+              </div>
+            </div>
+
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">条目</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">所属结构</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">中文 / 英文</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">最近操作</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">下一步</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ workRows }}" as="wr" hint-placeholder-count="5">
+                    <tr>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ wr.title }}</span><br><span style="color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ wr.id }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ wr.path }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ wr.stBd }};background:{{ wr.stBg }};color:{{ wr.stFg }};white-space:nowrap">{{ wr.status }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ wr.lang }}</td>
+                      <td style="padding:10px 12px;font-size:13px;color:#5A737B;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ wr.last }}</td>
+                      <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                        <button type="button" onClick="{{ wr.go }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="border-color:#0D7594;color:#0D7594">{{ wr.next }}</button>
+                      </td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <sc-if value="{{ workEmpty }}">
+              <div style="padding:32px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center">
+                <i class="ph ph-tray" style="font-size:26px;color:#4E6870" aria-hidden="true"></i>
+                <span style="font-size:15px;font-weight:600">这个分组暂无条目</span>
+                <span style="font-size:13px;color:#5A737B">{{ workEmptyNote }}</span>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">你的角色能做什么（RBAC 生效范围）</span>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <sc-for list="{{ permChips }}" as="p" hint-placeholder-count="8">
+                <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;font-size:13px;border:1px solid {{ p.bd }};background:{{ p.bg }};color:{{ p.fg }}"><i class="ph {{ p.icon }}" aria-hidden="true"></i>{{ p.label }}</span>
+              </sc-for>
+            </div>
+            <span style="font-size:13px;color:#5A737B">{{ roleNote }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isKb }}">
+        <div style="display:grid;grid-template-columns:minmax(300px,3fr) minmax(560px,7fr);gap:16px;align-items:start;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+              <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">知识库（多库并行）</span>
+              <sc-for list="{{ libs }}" as="l" hint-placeholder-count="3">
+                <button type="button" onClick="{{ l.go }}" aria-pressed="{{ l.on }}" style="display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid {{ l.bd }};background:{{ l.bg }};cursor:pointer;text-align:left">
+                  <span style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%">
+                    <span style="font-size:15px;font-weight:700;color:{{ l.fg }}">{{ l.name }}</span>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#5A737B">{{ l.n }}</span>
+                  </span>
+                  <span style="font-size:13px;color:#5A737B">{{ l.note }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">目录 → 章节 → 条目</p>
+                  <h2 style="font-size:15px;font-weight:700;margin:0">结构树</h2>
+                </div>
+                <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">仅已发布</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <button type="button" style="min-height:30px;padding:0 10px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-folder-plus" aria-hidden="true"></i> 新建目录</button>
+                <button type="button" style="min-height:30px;padding:0 10px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-plus" aria-hidden="true"></i> 新建章节</button>
+                <button type="button" style="min-height:30px;padding:0 10px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-arrows-out-line-vertical" aria-hidden="true"></i> 调整层级</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <sc-for list="{{ tree }}" as="c" hint-placeholder-count="3">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <button type="button" onClick="{{ c.toggle }}" style="display:flex;align-items:center;gap:8px;min-height:32px;padding:0 8px;border-radius:8px;font-size:15px;font-weight:600;color:#13252B;background:transparent;border:none;cursor:pointer;width:100%;text-align:left" style-hover="background:#E0F1F6">
+                      <i class="ph {{ c.caret }}" aria-hidden="true" style="font-size:13px;color:#5A737B"></i>
+                      <i class="ph ph-folder" aria-hidden="true" style="font-size:15px;color:#0D7594"></i>
+                      <span style="flex:1;min-width:0">{{ c.name }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#5A737B">{{ c.n }}</span>
+                    </button>
+                    <div style="display:flex;flex-direction:column;gap:2px;padding-left:18px">
+                      <sc-for list="{{ c.subs }}" as="s" hint-placeholder-count="2">
+                        <div style="display:flex;flex-direction:column;gap:2px">
+                          <button type="button" onClick="{{ s.toggle }}" style="display:flex;align-items:center;gap:8px;min-height:28px;padding:0 8px;border-radius:8px;font-size:13px;font-weight:600;color:#31474E;background:transparent;border:none;cursor:pointer;width:100%;text-align:left" style-hover="background:#E0F1F6">
+                            <i class="ph {{ s.caret }}" aria-hidden="true" style="font-size:13px;color:#5A737B"></i>
+                            <span style="flex:1;min-width:0">{{ s.name }}</span>
+                            <span style="font-size:13px;color:#5A737B">{{ s.zd }}</span>
+                          </button>
+                          <div style="display:flex;flex-direction:column;gap:2px;padding-left:18px">
+                            <sc-for list="{{ s.items }}" as="it" hint-placeholder-count="2">
+                              <button type="button" onClick="{{ it.open }}" style="display:flex;align-items:center;gap:6px;min-height:26px;padding:0 8px;border-radius:8px;font-size:13px;background:{{ it.bg }};color:{{ it.fg }};border:none;cursor:pointer;width:100%;text-align:left" style-hover="background:#E0F1F6">
+                                <i class="ph ph-file-text" aria-hidden="true" style="font-size:13px;color:#5A737B;flex:none"></i>
+                                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.title }}</span>
+                              </button>
+                            </sc-for>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="font-size:13px;color:#5A737B;margin:0">映射 Zendesk：知识库 → Help Center brand、目录 → Category、章节 → Section、条目 → Article、条目内锚点 → 文章内 anchor。</p>
+            </div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">{{ libName }} · 共 {{ libCount }} 条</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">条目列表</h2>
+              </div>
+              <button type="button" onClick="{{ newDraft }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid transparent;background:{{ createBg }};color:{{ createFg }};font-size:13px;font-weight:600;cursor:{{ createCur }}"><i class="ph ph-plus" aria-hidden="true"></i> 新建条目</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">
+              <input type="search" placeholder="搜索标题 / 正文 / 标签…" style="grid-column:1 / -1;min-height:36px;padding:8px 12px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:15px;background:#fff;color:#13252B" style-focus="border-color:#0D7594;outline:none">
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>问题场景（一级）：全部</option><option>售后与退款</option><option>安装与配网</option><option>设备使用</option><option>会员与账户</option><option>订单与物流</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>问题场景（二级）：全部</option><option>退款时限</option><option>退货运费</option><option>保修换新</option><option>Wi-Fi 配对</option><option>太阳能供电</option><option>会员计费</option><option>地址修改</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>标签：全部</option><option>退款</option><option>退货</option><option>运费</option><option>保修</option><option>会员</option><option>太阳能</option><option>改地址</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>状态：全部</option><option>草稿</option><option>待审核</option><option>已发布</option><option>已驳回</option><option>已下线</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>向量状态：全部</option><option>已向量化</option><option>待重建</option><option>向量化中</option><option>向量失败</option><option>未向量化</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>英文状态：全部</option><option>未生成</option><option>待重新翻译</option><option>已确认</option><option>已同步</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>可见性：全部</option><option>对外公开</option><option>仅客服内部</option></select>
+              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>复核：全部</option><option>已到期</option><option>30 天内到期</option></select>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">条目 / 场景 · 标签</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">当前版本</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">向量</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">英文</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">同步</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">解决率</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">更新</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ entryRows }}" as="e" hint-placeholder-count="6">
+                    <tr onClick="{{ e.open }}" style="cursor:pointer;background:{{ e.rowBg }}" style-hover="background:#E0F1F6">
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ e.title }}</span><br><span style="color:#5A737B">{{ e.scene }}</span><br><span style="color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ e.tags }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:#31474E">{{ e.ver }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.stBd }};background:{{ e.stBg }};color:{{ e.stFg }};white-space:nowrap">{{ e.status }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.vBd }};background:{{ e.vBg }};color:{{ e.vFg }};white-space:nowrap">{{ e.vec }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.enBd }};background:{{ e.enBg }};color:{{ e.enFg }};white-space:nowrap">{{ e.en }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;color:{{ e.syFg }}">{{ e.sync }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:{{ e.rateFg }};font-weight:{{ e.rateW }}">{{ e.rate }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:#5A737B">{{ e.updated }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <p style="font-size:13px;color:#5A737B;margin:0">点任意行进入条目工作台（编辑 / 双语 / 版本 / 效果 / 日志 五个工作面）。列表只呈现最新状态，历史全部落在版本与日志里。</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isEntry }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <button type="button" onClick="{{ goKb }}" style="min-height:28px;padding:0 8px;border-radius:8px;border:1px solid #CBE2E9;background:#fff;color:#31474E;font-size:13px;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-arrow-left" aria-hidden="true"></i> 返回列表</button>
+                  <span style="font-size:13px;color:#5A737B">{{ cur.path }}</span>
+                </div>
+                <h2 style="font-size:20px;font-weight:700;margin:0">{{ cur.title }}</h2>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ cur.id }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">{{ cur.type }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">{{ cur.vis }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">{{ cur.scene1 }} · {{ cur.scene2 }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ cur.tags }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid {{ vecBd }};background:{{ vecBg }};font-size:13px;color:{{ vecFg }};font-weight:600">向量 {{ vecStatus }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">当前发布版本 {{ liveVer }}</span>
+                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid {{ dueBd }};background:{{ dueBg }};font-size:13px;color:{{ dueFg }}">{{ cur.due }}</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+                  <sc-for list="{{ entryActions }}" as="a" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ a.go }}" disabled="{{ a.disabled }}" title="{{ a.title }}" style="display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:10px;border:1.5px solid {{ a.bd }};background:{{ a.bg }};color:{{ a.fg }};font-size:15px;font-weight:600;cursor:{{ a.cursor }}">
+                      <i class="ph {{ a.icon }}" aria-hidden="true"></i>{{ a.label }}
+                    </button>
+                  </sc-for>
+                </div>
+                <span style="font-size:13px;color:{{ gateFg }};max-width:420px;text-align:right">{{ gateMsg }}</span>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-top:1px solid #DFEEF3;padding-top:12px">
+              <sc-for list="{{ flow }}" as="f" hint-placeholder-count="6">
+                <span style="display:inline-flex;align-items:center;gap:6px">
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:9999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-size:13px;font-weight:600"><i class="ph {{ f.icon }}" aria-hidden="true"></i>{{ f.label }}</span>
+                  <sc-if value="{{ f.arrow }}"><i class="ph ph-caret-right" aria-hidden="true" style="color:#CBE2E9"></i></sc-if>
+                </span>
+              </sc-for>
+              <span style="margin-left:auto;font-size:13px;color:#5A737B">{{ statusMeta }}</span>
+            </div>
+          </div>
+
+          <div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid #CBE2E9;border-radius:12px;padding:2px;align-self:flex-start">
+            <sc-for list="{{ entryTabs }}" as="t" hint-placeholder-count="5">
+              <button type="button" onClick="{{ t.go }}" aria-pressed="{{ t.on }}" style="min-height:32px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ tabBody }}">
+            <div style="display:grid;grid-template-columns:minmax(560px,7fr) minmax(320px,4fr);gap:16px;align-items:start">
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:0;display:flex;flex-direction:column;overflow:hidden">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #DFEEF3;background:#fff">
+                  <div style="display:inline-flex;gap:2px;background:#F1F8FA;border:1.5px solid #CBE2E9;border-radius:10px;padding:2px">
+                    <sc-for list="{{ langSeg }}" as="lg" hint-placeholder-count="2">
+                      <button type="button" onClick="{{ lg.go }}" aria-pressed="{{ lg.on }}" style="min-height:30px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ lg.bg }};color:{{ lg.fg }}">{{ lg.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                    <span style="padding:2px 10px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ enBd }};background:{{ enBg }};color:{{ enFg }}">英文：{{ enStatus }}</span>
+                    <sc-for list="{{ enActions }}" as="ea" hint-placeholder-count="3">
+                      <button type="button" onClick="{{ ea.go }}" disabled="{{ ea.disabled }}" title="{{ ea.title }}" style="display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:10px;border:1.5px solid {{ ea.bd }};background:{{ ea.bg }};color:{{ ea.fg }};font-size:13px;font-weight:600;cursor:{{ ea.cursor }}"><i class="ph {{ ea.icon }}" aria-hidden="true"></i>{{ ea.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 12px;border-bottom:1px solid #DFEEF3;background:#F7FCFD;position:sticky;top:0;z-index:5">
+                  <sc-for list="{{ toolbar }}" as="b" hint-placeholder-count="14">
+                    <button type="button" onClick="{{ b.go }}" title="{{ b.title }}" style="min-width:30px;min-height:30px;padding:0 7px;border-radius:8px;border:1px solid #DFEEF3;background:#fff;color:#31474E;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px" style-hover="border-color:#0D7594;color:#0D7594">
+                      <sc-if value="{{ b.isIcon }}"><i class="ph {{ b.icon }}" aria-hidden="true"></i></sc-if>
+                      <sc-if value="{{ b.isText }}"><span>{{ b.text }}</span></sc-if>
+                    </button>
+                  </sc-for>
+                  <span style="margin-left:auto;font-size:13px;color:{{ dirtyFg }};font-weight:600">{{ dirtyLabel }}</span>
+                </div>
+                <sc-if value="{{ isZh }}" hint-placeholder-val="{{ true }}">
+                <div class="doc" contentEditable="{{ canEdit }}" suppressContentEditableWarning="{{ true }}" onInput="{{ onDocInput }}"
+                     style="padding:20px 24px;min-height:520px;max-height:680px;overflow-y:auto;font-size:15px;line-height:1.7;color:#13252B;background:#fff">
+                  <h2>适用范围</h2>
+                  <p>本政策适用于 COOLFLY 官网商城与亚马逊自营店铺购买的智能喂鸟器整机及配件。第三方渠道购买请按渠道政策处理，客服不得口头承诺整机退款。</p>
+                  <h2>退款时限</h2>
+                  <ul>
+                    <li><strong>质量问题</strong>：签收后 <code>30 天</code> 内可申请全额退款，运费由公司承担。</li>
+                    <li><strong>非质量问题（7 天无理由）</strong>：签收后 <code>7 天</code> 内可退，退回运费由用户承担。</li>
+                    <li>会员服务：按自然月退订，已使用月份不退。</li>
+                  </ul>
+                  <table>
+                    <thead><tr><th>渠道</th><th>受理时限</th><th>运费承担</th><th>到账周期</th></tr></thead>
+                    <tbody>
+                      <tr><td>官网商城</td><td>7 天 / 质量问题 30 天</td><td>质量问题公司承担</td><td>3-5 个工作日</td></tr>
+                      <tr><td>亚马逊自营</td><td>随平台政策</td><td>平台规则优先</td><td>平台结算</td></tr>
+                      <tr><td>第三方经销</td><td>不受理</td><td>—</td><td>—</td></tr>
+                    </tbody>
+                  </table>
+                  <h2>办理流程</h2>
+                  <ol>
+                    <li>客服在工单中确认订单号与购买渠道。</li>
+                    <li>质量问题需用户提供故障视频，随工单附件上传。</li>
+                    <li>审核通过后发起退款，并在工单中回填退款单号。</li>
+                  </ol>
+                  <figure>
+                    <div style="width:100%;height:150px;border-radius:12px;border:1px dashed #CBE2E9;background:repeating-linear-gradient(45deg,#F2F9FB,#F2F9FB 10px,#E6F3F7 10px,#E6F3F7 20px);display:flex;align-items:center;justify-content:center;color:#4E6870;font-family:ui-monospace,Menlo,monospace;font-size:13px">退款申请入口截图（待替换真实素材）</div>
+                    <figcaption>图 1：App「我的订单 → 申请退款」入口位置。图片说明会一并同步到 Zendesk 文章。</figcaption>
+                  </figure>
+                  <h2>内部口径（不对外）</h2>
+                  <blockquote>超过时限但用户情绪激烈的个案，可走主管审批的例外通道，额度上限 $80。此段标记为「仅内部」，同步时不会推送到对外帮助中心文章。</blockquote>
+                  <p style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #DFEEF3;border-radius:10px;background:#F7FCFD;font-size:13px;color:#31474E"><i class="ph ph-paperclip" aria-hidden="true"></i>附件：退款审批单模板 v3.xlsx · 42 KB</p>
+                </div>
+                </sc-if>
+                <sc-if value="{{ isEn }}">
+                <div class="doc" contentEditable="{{ canEdit }}" suppressContentEditableWarning="{{ true }}" onInput="{{ onDocInput }}"
+                     style="padding:20px 24px;min-height:520px;max-height:680px;overflow-y:auto;font-size:15px;line-height:1.7;color:#13252B;background:#fff">
+                  <h2>Scope</h2>
+                  <p>This policy applies to complete units and accessories purchased from the COOLFLY official store and the Amazon first-party store. Purchases from third-party resellers follow the reseller’s own policy.</p>
+                  <h2>Refund window</h2>
+                  <ul>
+                    <li><strong>Quality issues</strong>: full refund within <code>30 days</code> of delivery; return shipping is covered by COOLFLY.</li>
+                    <li><strong>Change of mind</strong>: returns accepted within <code>5 days</code> of delivery; return shipping is paid by the customer.</li>
+                    <li>Membership: cancel by calendar month; months already used are not refunded.</li>
+                  </ul>
+                  <table>
+                    <thead><tr><th>Channel</th><th>Window</th><th>Shipping</th><th>Payout</th></tr></thead>
+                    <tbody>
+                      <tr><td>Official store</td><td>5 days / 30 days for quality issues</td><td>COOLFLY pays for quality issues</td><td>3-5 business days</td></tr>
+                      <tr><td>Amazon first-party</td><td>Follows Amazon policy</td><td>Platform rules apply</td><td>Platform settlement</td></tr>
+                      <tr><td>Third-party reseller</td><td>Not accepted</td><td>—</td><td>—</td></tr>
+                    </tbody>
+                  </table>
+                  <h2>How to request a refund</h2>
+                  <ol>
+                    <li>Confirm the order number and purchase channel in the ticket.</li>
+                    <li>For quality issues, ask the customer to attach a short video of the fault.</li>
+                    <li>After approval, issue the refund and record the refund ID in the ticket.</li>
+                  </ol>
+                  <p style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #E8D9BA;border-radius:10px;background:#FBF6EC;font-size:13px;color:#8A5F1A"><i class="ph ph-eye-slash" aria-hidden="true"></i>内部段落（例外通道 / 审批额度）不进入英文版本，也不会同步到对外帮助中心。</p>
+                </div>
+                </sc-if>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                    <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">向量化状态</span>
+                    <span style="padding:2px 10px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ vecBd }};background:{{ vecBg }};color:{{ vecFg }}">{{ vecStatus }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:5px">
+                    <sc-for list="{{ vecRows }}" as="vr" hint-placeholder-count="6">
+                      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:13px">
+                        <span style="color:#5A737B;flex:none">{{ vr.k }}</span>
+                        <span style="color:#13252B;text-align:right;font-family:ui-monospace,Menlo,monospace">{{ vr.v }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <button type="button" onClick="{{ rebuildVec }}" disabled="{{ vecBtnDis }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 12px;border-radius:10px;border:1.5px solid {{ vecBtnBd }};background:{{ vecBtnBg }};color:{{ vecBtnFg }};font-size:13px;font-weight:600;cursor:{{ vecBtnCur }}"><i class="ph ph-cube" aria-hidden="true"></i>{{ vecBtnLabel }}</button>
+                  <p style="font-size:13px;color:#5A737B;margin:0">{{ vecNote }}</p>
+                </div>
+
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">条目字段</span>
+                  <sc-for list="{{ fields }}" as="f" hint-placeholder-count="8">
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <label style="font-size:13px;font-weight:600;color:#31474E">{{ f.k }}</label>
+                      <sc-if value="{{ f.isSelect }}">
+                        <select disabled="{{ f.locked }}" style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:{{ f.bg }};color:#13252B">
+                          <sc-for list="{{ f.options }}" as="op" hint-placeholder-count="2"><option>{{ op.v }}</option></sc-for>
+                        </select>
+                      </sc-if>
+                      <sc-if value="{{ f.isText }}">
+                        <input type="text" value="{{ f.v }}" disabled="{{ f.locked }}" style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:{{ f.bg }};color:#13252B">
+                      </sc-if>
+                      <sc-if value="{{ f.hasHint }}"><span style="font-size:13px;color:#5A737B">{{ f.hint }}</span></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabVer }}">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">效果指标绑定到版本 · 勾选两个版本比对</p>
+                    <h3 style="font-size:20px;font-weight:700;margin:0">版本列表</h3>
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <span style="font-size:13px;color:#5A737B">已选：{{ diffLabel }}</span>
+                    <button type="button" onClick="{{ openDiff }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-git-diff" aria-hidden="true"></i> 内容 Diff 对比</button>
+                  </div>
+                </div>
+                <div style="overflow-x:auto">
+                  <table style="width:100%;border-collapse:collapse">
+                    <thead><tr>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">比对</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">版本 / 摘要</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">生效 → 结束</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">创建人</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">调用</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">命中率</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">解决率</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">采纳率</th>
+                      <th style="text-align:left;padding:8px 10px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
+                    </tr></thead>
+                    <tbody>
+                      <sc-for list="{{ versions }}" as="v" hint-placeholder-count="4">
+                        <tr style="background:{{ v.rowBg }}">
+                          <td style="padding:10px;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                            <button type="button" onClick="{{ v.pick }}" style="width:20px;height:20px;border-radius:6px;border:1.5px solid {{ v.pickBd }};background:{{ v.pickBg }};cursor:pointer;color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center">{{ v.pickMark }}</button>
+                          </td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#13252B">{{ v.v }}</span><br><span style="color:#31474E">{{ v.label }}</span></td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ v.bd }};background:{{ v.bg }};color:{{ v.fg }};white-space:nowrap">{{ v.status }}</span></td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:#31474E">{{ v.span }}</td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;color:#31474E">{{ v.by }}</td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace">{{ v.calls }}</td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace">{{ v.hit }}</td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;font-weight:700;color:{{ v.solveFg }}">{{ v.solve }}</td>
+                          <td style="padding:10px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace">{{ v.adopt }}</td>
+                          <td style="padding:10px;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                            <sc-if value="{{ v.canRollback }}">
+                              <button type="button" onClick="{{ v.rollback }}" disabled="{{ v.rbDisabled }}" title="{{ v.rbTitle }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid {{ v.rbBd }};background:{{ v.rbBg }};color:{{ v.rbFg }};font-size:13px;font-weight:600;cursor:{{ v.rbCursor }};white-space:nowrap">回滚到此版本</button>
+                            </sc-if>
+                          </td>
+                        </tr>
+                      </sc-for>
+                    </tbody>
+                  </table>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:12px;background:{{ verdictBg }};border:1px solid {{ verdictBd }}">
+                  <i class="ph ph-chart-line-down" aria-hidden="true" style="color:{{ verdictFg }};margin-top:2px"></i>
+                  <span style="font-size:13px;color:{{ verdictFg }}">{{ verdictMsg }}</span>
+                </div>
+              </div>
+
+              <sc-if value="{{ showDiff }}">
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+                    <h3 style="font-size:15px;font-weight:700;margin:0">内容 Diff · {{ diffLabel }}</h3>
+                    <div style="display:flex;gap:10px;font-size:13px;color:#5A737B">
+                      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#F8EEEC;border:1px solid #E6C9C4"></span>删除</span>
+                      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#EAF4F0;border:1px solid #BFDDD2"></span>新增</span>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span style="font-size:13px;font-weight:700;color:#31474E">{{ diffLeftName }}</span>
+                      <sc-for list="{{ diffLeft }}" as="d" hint-placeholder-count="6">
+                        <div style="padding:6px 10px;border-radius:8px;font-size:13px;font-family:ui-monospace,Menlo,monospace;line-height:1.6;background:{{ d.bg }};border:1px solid {{ d.bd }};color:#13252B">{{ d.t }}</div>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <span style="font-size:13px;font-weight:700;color:#31474E">{{ diffRightName }}</span>
+                      <sc-for list="{{ diffRight }}" as="d" hint-placeholder-count="6">
+                        <div style="padding:6px 10px;border-radius:8px;font-size:13px;font-family:ui-monospace,Menlo,monospace;line-height:1.6;background:{{ d.bg }};border:1px solid {{ d.bd }};color:#13252B">{{ d.t }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabMetric }}">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">
+                <sc-for list="{{ entryMetrics }}" as="m" hint-placeholder-count="4">
+                  <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">{{ m.k }}</span>
+                    <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:20px;font-weight:700;color:{{ m.fg }}">{{ m.v }}</span>
+                    <span style="font-size:13px;color:#5A737B">{{ m.note }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">按版本切片 · 解决率随版本变化</p>
+                  <h3 style="font-size:15px;font-weight:700;margin:0">版本效果趋势</h3>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:16px;height:150px;padding:8px 0">
+                  <sc-for list="{{ verBars }}" as="b" hint-placeholder-count="3">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end">
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:{{ b.fg }}">{{ b.solve }}</span>
+                      <div style="width:100%;max-width:120px;border-radius:8px 8px 0 0;background:{{ b.color }};height:{{ b.h }}"></div>
+                      <span style="font-size:13px;color:#31474E;font-family:ui-monospace,Menlo,monospace">{{ b.v }}</span>
+                      <span style="font-size:13px;color:#5A737B">{{ b.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:12px;background:#FBF6EC;border:1px solid #E8D9BA">
+                  <i class="ph ph-lightbulb" aria-hidden="true" style="color:#8A5F1A;margin-top:2px"></i>
+                  <span style="font-size:13px;color:#31474E">效果评估结论：v2 把退款时限从 7 天改为 5 天后，命中率基本持平（95% → 90%）但解决率骤降 20pp、采纳率降 27pp——说明 AI 找得到这条，但答案让用户不接受。处置建议：回滚 v1，另开 v3 只改「时限口径 + 例外通道」并单独观察两周。</span>
+                </div>
+              </div>
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">反馈明细（来自 Zendesk 回流）</span>
+                <sc-for list="{{ entryFeedback }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:12px;border:1px solid #DFEEF3">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1">
+                      <span style="font-size:13px;font-weight:600;color:#13252B">{{ f.src }} · {{ f.ver }}</span>
+                      <span style="font-size:13px;color:#31474E">{{ f.text }}</span>
+                    </div>
+                    <span style="font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ f.n }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabLog }}">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">本条目全量留痕 · 与全局操作日志同源</p>
+                <h3 style="font-size:15px;font-weight:700;margin:0">条目日志</h3>
+              </div>
+              <sc-for list="{{ entryLogs }}" as="g" hint-placeholder-count="5">
+                <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #DFEEF3">
+                  <span style="flex:none;width:120px;font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ g.t }}</span>
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:13px;color:#13252B"><strong>{{ g.who }}</strong> · {{ g.action }}</span>
+                    <sc-if value="{{ g.hasDiff }}">
+                      <span style="font-size:13px;color:#31474E">字段「{{ g.field }}」：<span style="font-family:ui-monospace,Menlo,monospace;background:#F8EEEC;border-radius:6px;padding:0 5px">{{ g.before }}</span> → <span style="font-family:ui-monospace,Menlo,monospace;background:#EAF4F0;border-radius:6px;padding:0 5px">{{ g.after }}</span></span>
+                    </sc-if>
+                    <sc-if value="{{ g.hasNote }}"><span style="font-size:13px;color:#5A737B">{{ g.note }}</span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMine }}">
+        <div style="display:grid;grid-template-columns:minmax(380px,5fr) minmax(520px,7fr);gap:16px;align-items:start;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">每日 06:00 增量拉取 Zendesk 邮件工单 + 在线聊天 · 会话脱敏后入库</p>
+              <h2 style="font-size:20px;font-weight:700;margin:0">抓取批次</h2>
+            </div>
+            <sc-for list="{{ batches }}" as="b" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #DFEEF3">
+                <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                  <span style="font-size:15px;font-weight:700;line-height:1.35">{{ b.head }}</span>
+                  <span style="font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ b.meta }}</span>
+                </div>
+                <span style="flex:none;padding:2px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ b.bd }};background:{{ b.bg }};color:{{ b.fg }};white-space:nowrap">{{ b.state }}</span>
+              </div>
+            </sc-for>
+            <p style="font-size:13px;color:#5A737B;margin:0">空批次与失败批次如实标注；AI 起草不可用时人工录入与审核照常。挖掘产出分「新增 / 修订 / 合并」三类，全部经审核队列。</p>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">沉淀判断三重准入：①频次达阈值 ②语义查重 ③缺口判定</p>
+                  <h2 style="font-size:20px;font-weight:700;margin:0">08-04 候选清单</h2>
+                </div>
+              </div>
+              <sc-for list="{{ candidates }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;border:1px solid #DFEEF3">
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <span style="padding:2px 8px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ c.typeBd }};background:{{ c.typeBg }};color:{{ c.typeFg }}">{{ c.type }}</span>
+                      <span style="font-size:15px;font-weight:700;line-height:1.35">{{ c.title }}</span>
+                    </div>
+                    <span style="font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ c.src }}</span>
+                  </div>
+                  <p style="font-size:13px;color:#31474E;margin:0;text-wrap:pretty">{{ c.summary }}</p>
+                  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+                    <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">① 频次</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700">{{ c.freq }}</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">② 查重</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;color:{{ c.dupFg }}">{{ c.dup }}</span></div>
+                    <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">③ 缺口判定</span><span style="font-size:13px;font-weight:700;color:{{ c.gapFg }}">{{ c.gap }}</span></div>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                    <button type="button" onClick="{{ c.act }}" disabled="{{ c.disabled }}" title="{{ c.title }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid {{ c.btnBd }};background:{{ c.btnBg }};color:{{ c.btnFg }};font-size:13px;font-weight:600;cursor:{{ c.btnCur }}">{{ c.actLabel }}</button>
+                    <button type="button" onClick="{{ c.drop }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594">丢弃</button>
+                    <span style="font-size:13px;color:#5A737B">{{ c.note }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isReview }}">
+        <div style="display:grid;grid-template-columns:minmax(380px,5fr) minmax(520px,7fr);gap:16px;align-items:start;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">四条来源统一入口 · 无绕过路径</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">待审 {{ pending }} 条</h2>
+              </div>
+            </div>
+            <sc-for list="{{ queue }}" as="q" hint-placeholder-count="4">
+              <button type="button" onClick="{{ q.open }}" style="display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;border:1px solid {{ q.bd }};background:{{ q.bg }};cursor:pointer;text-align:left;width:100%" style-hover="border-color:#0D7594">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%">
+                  <span style="padding:1px 8px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ q.srcBd }};background:{{ q.srcBg }};color:{{ q.srcFg }}">{{ q.src }}</span>
+                  <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#5A737B">{{ q.ver }}</span>
+                </div>
+                <span style="font-size:15px;font-weight:600;line-height:1.35;color:#13252B">{{ q.title }}</span>
+                <span style="font-size:13px;color:#5A737B">{{ q.submitter }} · {{ q.at }}</span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ queueEmpty }}">
+              <div style="padding:24px;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center">
+                <i class="ph ph-check-circle" style="font-size:24px;color:#177A57" aria-hidden="true"></i>
+                <span style="font-size:15px;font-weight:600">队列已清空</span>
+                <span style="font-size:13px;color:#5A737B">通过的条目已进入同步队列。</span>
+              </div>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{ hasRev }}">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">{{ rev.src }} · {{ rev.meta }}</p>
+                    <h2 style="font-size:20px;font-weight:700;margin:0;line-height:1.3">{{ rev.title }}</h2>
+                    <span style="font-size:13px;color:#5A737B">提交人 {{ rev.submitter }} · {{ rev.at }} · 目标版本 {{ rev.ver }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                      <button type="button" onClick="{{ rev.pass }}" disabled="{{ rev.disabled }}" title="{{ rev.title2 }}" style="min-height:36px;padding:0 16px;border-radius:10px;border:1.5px solid {{ rev.okBd }};background:{{ rev.okBg }};color:{{ rev.okFg }};font-size:15px;font-weight:600;cursor:{{ rev.okCur }}"><i class="ph ph-check" aria-hidden="true"></i> 通过并进发布</button>
+                      <button type="button" onClick="{{ rev.reject }}" disabled="{{ rev.disabled }}" title="{{ rev.title2 }}" style="min-height:36px;padding:0 16px;border-radius:10px;border:1.5px solid {{ rev.noBd }};background:{{ rev.noBg }};color:{{ rev.noFg }};font-size:15px;font-weight:600;cursor:{{ rev.okCur }}">驳回</button>
+                    </div>
+                    <span style="font-size:13px;color:{{ rev.gateFg }};max-width:360px;text-align:right">{{ rev.gate }}</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:#F7FCFD;border:1px solid #DFEEF3">
+                  <span style="font-size:13px;font-weight:600;color:#31474E">提交内容</span>
+                  <p style="font-size:15px;color:#13252B;margin:0;line-height:1.6;white-space:pre-line">{{ rev.body }}</p>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:13px;font-weight:600;color:#31474E">修改记录（字段级）</span>
+                  <sc-for list="{{ rev.changes }}" as="c" hint-placeholder-count="2">
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid #DFEEF3;font-size:13px">
+                      <span style="font-weight:600;color:#13252B">{{ c.f }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;background:#F8EEEC;border-radius:6px;padding:0 6px">{{ c.b }}</span>
+                      <i class="ph ph-arrow-right" aria-hidden="true" style="color:#5A737B"></i>
+                      <span style="font-family:ui-monospace,Menlo,monospace;background:#EAF4F0;border-radius:6px;padding:0 6px">{{ c.a }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">发布门禁（通过后自动执行）</span>
+                  <sc-for list="{{ gateRows }}" as="g" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid {{ g.bd }};background:{{ g.bg }}">
+                      <i class="ph {{ g.icon }}" aria-hidden="true" style="color:{{ g.fg }};margin-top:2px"></i>
+                      <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                        <span style="font-size:13px;font-weight:600;color:{{ g.fg }}">{{ g.k }}</span>
+                        <span style="font-size:13px;color:#31474E">{{ g.v }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">审核历史（同一条目历次意见）</span>
+                  <sc-for list="{{ reviewHistory }}" as="h" hint-placeholder-count="3">
+                    <div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;border:1px solid #DFEEF3">
+                      <span style="font-size:13px;font-weight:600;color:#13252B">{{ h.who }} · {{ h.act }}</span>
+                      <span style="font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ h.t }}</span>
+                      <span style="font-size:13px;color:#31474E">{{ h.note }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSync }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="display:flex;align-items:flex-start;gap:8px;padding:12px 16px;border-radius:12px;background:#F8EEEC;border:1px solid #E6C9C4">
+            <i class="ph ph-warning-circle" aria-hidden="true" style="color:#B2453A;margin-top:2px"></i>
+            <div style="display:flex;flex-direction:column;gap:8px;min-width:0;width:100%">
+              <span style="font-size:15px;font-weight:700;color:#B2453A">检测到 2 篇文章在 Zendesk 端被直接修改（内容漂移）</span>
+              <sc-for list="{{ driftRows }}" as="d" hint-placeholder-count="2">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;background:#fff;border:1px solid #E6C9C4">
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:13px;font-weight:600;color:#13252B">{{ d.title }}</span>
+                    <span style="font-size:13px;color:#5A737B">{{ d.who }} · {{ d.diff }}</span>
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button type="button" onClick="{{ d.force }}" disabled="{{ d.disabled }}" title="{{ d.title2 }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid {{ d.fBd }};background:{{ d.fBg }};color:{{ d.fFg }};font-size:13px;font-weight:600;cursor:{{ d.cur }}">以本台内容覆盖</button>
+                    <button type="button" onClick="{{ d.pull }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594">拉回进审核队列</button>
+                  </div>
+                </div>
+              </sc-for>
+              <span style="font-size:13px;color:#31474E">治理 = Guide 编辑权限收权（流程）+ 漂移检测（技术兜底）+ 覆盖策略。覆盖动作仅审核员可执行。</span>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px">
+            <sc-for list="{{ syncStats }}" as="s" hint-placeholder-count="4">
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">{{ s.k }}</span>
+                <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:20px;font-weight:700;color:{{ s.fg }}">{{ s.v }}</span>
+                <span style="font-size:13px;color:#5A737B">{{ s.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:minmax(520px,7fr) minmax(380px,5fr);gap:16px;align-items:start">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">单向权威同步 · 本台 → Zendesk · 分钟级生效</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">同步队列</h2>
+              </div>
+              <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">条目</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">动作</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">语言</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">落点</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ syncRows }}" as="r" hint-placeholder-count="5">
+                      <tr>
+                        <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ r.title }}</span><br><span style="color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ r.id }}</span></td>
+                        <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ r.action }}</td>
+                        <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ r.lang }}</td>
+                        <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ r.target }}</td>
+                        <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ r.bd }};background:{{ r.bg }};color:{{ r.fg }};white-space:nowrap">{{ r.state }}</span></td>
+                        <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                          <sc-if value="{{ r.canRetry }}">
+                            <button type="button" onClick="{{ r.retry }}" disabled="{{ r.disabled }}" title="{{ r.title2 }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid {{ r.rBd }};background:{{ r.rBg }};color:{{ r.rFg }};font-size:13px;font-weight:600;cursor:{{ r.cur }};white-space:nowrap">重试</button>
+                          </sc-if>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+              <p style="font-size:13px;color:#5A737B;margin:0">状态机：待同步 → 同步中 → 已同步 / 失败（自动重试 3 次后告警）；「已阻断」= 英文未校验或条目被驳回，不推半截内容。下线 = Zendesk 归档不物理删除。</p>
+            </div>
+
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">结构映射</p>
+                <h3 style="font-size:15px;font-weight:700;margin:0">本台 ↔ Zendesk</h3>
+              </div>
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">本台</th>
+                  <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">Zendesk</th>
+                  <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">可见性</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ mapRows }}" as="m" hint-placeholder-count="3">
+                    <tr>
+                      <td style="padding:8px;font-size:13px;color:#13252B;border-bottom:1px solid #DFEEF3">{{ m.local }}</td>
+                      <td style="padding:8px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3">{{ m.zd }}</td>
+                      <td style="padding:8px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3">{{ m.vis }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+              <p style="font-size:13px;color:#5A737B;margin:0">知识库 → Help Center brand，目录 → Category，章节 → Section，条目 → Article，锚点 → 文章内 anchor，英文 → translation(en-us)。</p>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDash }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+            <div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid #CBE2E9;border-radius:12px;padding:2px">
+              <sc-for list="{{ dashTabs }}" as="t" hint-placeholder-count="3">
+                <button type="button" onClick="{{ t.go }}" aria-pressed="{{ t.on }}" style="min-height:30px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+            <span style="font-size:13px;color:#5A737B">指标全部按「条目 + 版本」两级切片 · 数据源 = Zendesk API + Webhook · 只读</span>
+          </div>
+
+          <sc-if value="{{ isDashKb }}">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 场景覆盖</p>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700">7 / 9</span><span style="font-size:13px;color:#5A737B">工单主题已有条目覆盖</span></div>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <sc-for list="{{ scenes }}" as="sc" hint-placeholder-count="5">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="flex:none;width:4em;font-size:13px;color:#5A737B">{{ sc.name }}</span>
+                        <div style="flex:1;height:8px;border-radius:9999px;background:#E0F1F6;overflow:hidden"><div style="height:100%;border-radius:9999px;background:{{ sc.color }};width:{{ sc.pct }}"></div></div>
+                        <span style="flex:none;width:2.2em;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E">{{ sc.n }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <p style="font-size:13px;color:#5A737B;margin:0">分母 = Zendesk 工单分类分布直拉；红条 = 有工单量、无条目覆盖。</p>
+                </div>
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 使用频率（分列）</p>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700">1,043</span><span style="font-size:13px;color:#5A737B">本周被消费次数</span></div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">AI bot 引用</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700">412</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">人工客服引用</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700">187</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#31474E">帮助中心浏览</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700">444</span></div>
+                  </div>
+                  <sc-if value="{{ tier }}"><span style="align-self:flex-start;padding:2px 8px;border-radius:9999px;font-size:13px;background:#F7F1E4;border:1px solid #E8D9BA;color:#8A5F1A">引用明细粒度随订阅档位 · 待核实</span></sc-if>
+                </div>
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 准确率（双口径）</p>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700">74%</span><span style="font-size:13px;color:#5A737B">bot 口径 automated resolution</span></div>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;color:#31474E">68%</span><span style="font-size:13px;color:#5A737B">工单口径 solved 未 reopen</span></div>
+                  <p style="font-size:13px;color:#5A737B;margin:0">两口径不合并、不取平均；条目级为近似归因，样本 &lt; 10 次不出数。</p>
+                </div>
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 向量索引健康度</p>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700">88%</span><span style="font-size:13px;color:#5A737B">条目向量覆盖率（84 / 96）</span></div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">待重建（内容已变更）</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#8A5F1A">7</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">向量失败（已告警）</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#B2453A">2</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#31474E">分片总数 / 维度</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700">1,142 / 3072</span></div>
+                  </div>
+                  <p style="font-size:13px;color:#5A737B;margin:0">向量服务本台内部：挖掘查重、缺口聚类、发布门禁代理评测。失败与待重建条目不参与查重，会漏判重复建条。</p>
+                </div>
+                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 版本健康度</p>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;color:#B2453A">3</span><span style="font-size:13px;color:#5A737B">发布后解决率下降的版本</span></div>
+                  <p style="font-size:13px;color:#31474E;margin:0">新版本上线两周内解决率跌破上一版本 10pp 触发红线告警，直接给出「回滚」入口。</p>
+                  <button type="button" onClick="{{ goEntryVer }}" style="align-self:flex-start;min-height:30px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594">查看退款政策 v2 告警</button>
+                </div>
+              </div>
+
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">条目 + 版本切片 · 最差浮顶</p>
+                    <h2 style="font-size:20px;font-weight:700;margin:0">条目效果列表</h2>
+                  </div>
+                  <span style="padding:2px 8px;border-radius:9999px;font-size:13px;background:#F7F1E4;border:1px solid #E8D9BA;color:#8A5F1A">标黄线：解决率 &lt; 60%</span>
+                </div>
+                <div style="overflow-x:auto">
+                  <table style="width:100%;border-collapse:collapse">
+                    <thead><tr>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">条目 / 版本</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">bot 引用</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">人工引用</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">踩</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">客服 flag</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">解决率</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">向量</th>
+                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
+                    </tr></thead>
+                    <tbody>
+                      <sc-for list="{{ effect }}" as="ef" hint-placeholder-count="5">
+                        <tr style="background:{{ ef.rowBg }}">
+                          <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ ef.title }}</span> <span style="font-family:ui-monospace,Menlo,monospace;color:#5A737B">{{ ef.ver }}</span><br><span style="color:#5A737B">{{ ef.chapter }}</span></td>
+                          <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.bot }}</td>
+                          <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.agent }}</td>
+                          <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.down }}</td>
+                          <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.flag }}</td>
+                          <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-weight:{{ ef.w }};color:{{ ef.fg }}">{{ ef.rate }}</td>
+                          <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ ef.vBd }};background:{{ ef.vBg }};color:{{ ef.vFg }};white-space:nowrap">{{ ef.vec }}</span></td>
+                          <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top"><button type="button" onClick="{{ ef.open }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="border-color:#0D7594;color:#0D7594">打开条目</button></td>
+                        </tr>
+                      </sc-for>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isDashGap }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px;align-items:start">
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">信号源① 工单 / 会话聚类</p>
+                  <h2 style="font-size:20px;font-weight:700;margin:0">无覆盖主题 Top</h2>
+                </div>
+                <sc-for list="{{ gapTopics }}" as="g" hint-placeholder-count="3">
+                  <div style="display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid #DFEEF3;border-radius:12px">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                      <span style="font-size:15px;font-weight:600;line-height:1.35">{{ g.topic }}</span>
+                      <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;flex:none">{{ g.n }}</span>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px">
+                      <span style="padding:1px 8px;border-radius:9999px;font-size:13px;background:#E0F1F6;border:1px solid #DFEEF3;color:#5A737B">{{ g.src }}</span>
+                      <span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ g.bd }};background:{{ g.bg }};color:{{ g.fg }}">{{ g.cover }}</span>
+                    </div>
+                    <button type="button" onClick="{{ g.act }}" disabled="{{ g.disabled }}" title="{{ g.title2 }}" style="align-self:flex-start;min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid {{ g.btnBd }};background:{{ g.btnBg }};color:{{ g.btnFg }};font-size:13px;font-weight:600;cursor:{{ g.cur }}">{{ g.actLabel }}</button>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">信号源② 帮助中心搜索</p>
+                  <h2 style="font-size:20px;font-weight:700;margin:0">搜索无结果关键词</h2>
+                </div>
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">关键词</th>
+                    <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">次数</th>
+                    <th style="text-align:left;padding:8px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">判定</th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ noResult }}" as="r" hint-placeholder-count="3">
+                      <tr>
+                        <td style="padding:8px;font-size:13px;font-weight:600;color:#13252B;border-bottom:1px solid #DFEEF3">{{ r.kw }}</td>
+                        <td style="padding:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3">{{ r.n }}</td>
+                        <td style="padding:8px;font-size:13px;border-bottom:1px solid #DFEEF3;color:{{ r.fg }}">{{ r.verdict }}</td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+                <p style="font-size:13px;color:#5A737B;margin:0">「有条目但没搜到」是命名 / 标签问题——改标题与 labels，不新建条目。</p>
+              </div>
+              <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">本周知识运营待办</p>
+                  <h2 style="font-size:20px;font-weight:700;margin:0">缺口 → 动作</h2>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="padding:10px;border-radius:12px;background:#E4F1F6;border:1px solid #BCDDE8;font-size:13px;color:#31474E"><strong>新建 3 条</strong>：极寒关机、第三方支架兼容、退货运费对外版</div>
+                  <div style="padding:10px;border-radius:12px;background:#FBF6EC;border:1px solid #E8D9BA;font-size:13px;color:#31474E"><strong>修订 4 条</strong>：含退款政策跨境起算日（已进审核 v3）</div>
+                  <div style="padding:10px;border-radius:12px;background:#F7FCFD;border:1px solid #DFEEF3;font-size:13px;color:#31474E"><strong>改标题 / labels 2 条</strong>：refund how long、solar cloudy</div>
+                  <div style="padding:10px;border-radius:12px;background:#F8EEEC;border:1px solid #E6C9C4;font-size:13px;color:#31474E"><strong>回滚 1 条</strong>：退款政策 v2 → v1（等审核员执行）</div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isDashCs }}">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+              <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">不重复建设</p>
+              <h2 style="font-size:20px;font-weight:700;margin:0">客服工作数据由 Zendesk Explore 承担</h2>
+              <p style="font-size:15px;color:#31474E;max-width:760px;margin:0;text-wrap:pretty">工单量、首响时长、CSAT、客服人效等分析 Explore 原生具备，本台不重建。省下的工时投入知识缺口与版本效果——回答「下一条写什么、哪条该修、哪个版本该回滚」。</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <a href="#" style="display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 16px;border-radius:10px;background:#0D7594;color:#fff;font-size:15px;font-weight:600;text-decoration:none"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>打开 Zendesk Explore</a>
+                <button type="button" onClick="{{ goGap }}" style="min-height:36px;padding:0 16px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:15px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594">去知识缺口</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isFeedback }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">按消费场景拆开看「是否命中知识 / 是否解决问题」· 信号落到条目 + 版本</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">信号矩阵</h2>
+              </div>
+              <sc-if value="{{ tier }}"><span style="padding:2px 8px;border-radius:9999px;font-size:13px;background:#F7F1E4;border:1px solid #E8D9BA;color:#8A5F1A">档位相关信号已标注，不押注未证实信号</span></sc-if>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">消费场景</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">「命中知识」信号</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">「是否解决」信号</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">获取确定性</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ signals }}" as="sg" hint-placeholder-count="4">
+                    <tr>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ sg.scene }}</span><br><span style="color:#5A737B">{{ sg.chan }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ sg.hit }}</td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ sg.solve }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ sg.bd }};background:{{ sg.bg }};color:{{ sg.fg }}">{{ sg.certainty }}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <p style="font-size:13px;color:#5A737B;margin:0">Webhook 接实时事件（投票 / flag / 工单状态）+ 定时增量拉取（工单 / 会话 / 引用明细）双通道。</p>
+          </div>
+
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">五源触发 · 转为修订建议后进统一审核队列</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">修订候选队列</h2>
+              </div>
+            </div>
+            <sc-for list="{{ revisions }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;border:1px solid #DFEEF3">
+                <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="padding:1px 8px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ r.srcBd }};background:{{ r.srcBg }};color:{{ r.srcFg }}">{{ r.src }}</span>
+                    <span style="font-size:15px;font-weight:600;color:#13252B">{{ r.item }}</span>
+                  </div>
+                  <span style="font-size:13px;color:#31474E">{{ r.signal }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ r.n }}</span>
+                  <button type="button" onClick="{{ r.act }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid transparent;background:#0D7594;color:#fff;font-size:13px;font-weight:600;cursor:pointer">{{ r.actLabel }}</button>
+                </div>
+              </div>
+            </sc-for>
+            <p style="font-size:13px;color:#5A737B;margin:0">AI 运营角色可在此提交优化建议（进审核队列），但不能自行发布或回滚——建议与执行分离。</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLogs }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">谁 / 何时 / 对什么对象 / 做了什么 / 改前改后 · 不可编辑不可删除</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">操作日志</h2>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid #CBE2E9;border-radius:12px;padding:2px">
+                  <sc-for list="{{ logTabs }}" as="t" hint-placeholder-count="4">
+                    <button type="button" onClick="{{ t.go }}" aria-pressed="{{ t.on }}" style="min-height:30px;padding:0 10px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+                  </sc-for>
+                </div>
+                <select style="min-height:32px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>操作人：全部</option><option>王雯</option><option>李骁</option><option>陈迪</option><option>运维 Ken</option></select>
+                <select style="min-height:32px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>时间：近 7 天</option><option>近 30 天</option><option>自定义</option></select>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">时间</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">操作人 / 角色</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">对象</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">动作</th>
+                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">改前 → 改后 / 说明</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ logRows }}" as="l" hint-placeholder-count="7">
+                    <tr>
+                      <td style="padding:10px 12px;font-size:13px;font-family:ui-monospace,Menlo,monospace;color:#5A737B;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ l.t }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ l.who }}</span><br><span style="color:#5A737B">{{ l.role }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ l.obj }}</td>
+                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ l.bd }};background:{{ l.bg }};color:{{ l.fg }};white-space:nowrap">{{ l.action }}</span></td>
+                      <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                        <sc-if value="{{ l.hasDiff }}">
+                          <span>字段「{{ l.field }}」：<span style="font-family:ui-monospace,Menlo,monospace;background:#F8EEEC;border-radius:6px;padding:0 5px">{{ l.before }}</span> → <span style="font-family:ui-monospace,Menlo,monospace;background:#EAF4F0;border-radius:6px;padding:0 5px">{{ l.after }}</span></span>
+                        </sc-if>
+                        <sc-if value="{{ l.hasNote }}"><span style="color:#5A737B">{{ l.note }}</span></sc-if>
+                      </td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <p style="font-size:13px;color:#5A737B;margin:0">日志保留 24 个月，支持按对象类型（条目 / 版本 / 权限 / 同步）、动作、操作人、时间筛选与导出；同步与回滚等系统动作也以「系统」身份留痕。</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRbac }}">
+        <div style="display:flex;flex-direction:column;gap:16px;animation:settle 200ms cubic-bezier(.2,0,0,1) both">
+          <sc-if value="{{ noRbacPerm }}">
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:12px 16px;border-radius:12px;background:#FBF6EC;border:1px solid #E8D9BA">
+              <i class="ph ph-lock-key" aria-hidden="true" style="color:#8A5F1A;margin-top:2px"></i>
+              <span style="font-size:13px;color:#31474E">当前身份（{{ roleName }}）只读本页：用户与角色的增删改仅系统管理员可执行。切换左下角身份为「系统管理员」可体验完整操作。</span>
+            </div>
+          </sc-if>
+
+          <div style="display:inline-flex;gap:2px;background:#fff;border:1.5px solid #CBE2E9;border-radius:12px;padding:2px;align-self:flex-start">
+            <sc-for list="{{ rbacTabs }}" as="t" hint-placeholder-count="3">
+              <button type="button" onClick="{{ t.go }}" aria-pressed="{{ t.on }}" style="min-height:32px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:{{ t.bg }};color:{{ t.fg }}">{{ t.label }}</button>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ rbacUsers }}">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">用户 → 角色 → 权限 → 资源（知识库 / 条目 / 审核任务 / 数据）</p>
+                  <h2 style="font-size:20px;font-weight:700;margin:0">用户列表</h2>
+                </div>
+                <button type="button" onClick="{{ createUser }}" disabled="{{ noRbacPermB }}" title="{{ rbacTitle }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid {{ cuBd }};background:{{ cuBg }};color:{{ cuFg }};font-size:13px;font-weight:600;cursor:{{ cuCur }}"><i class="ph ph-user-plus" aria-hidden="true"></i> 创建用户</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">用户</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">角色</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">权限范围（资源）</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">最近活跃</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ userRows }}" as="u" hint-placeholder-count="5">
+                      <tr style="opacity:{{ u.op }}">
+                        <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ u.name }}</span><br><span style="color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ u.mail }}</span></td>
+                        <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid #BCDDE8;background:#E4F1F6;color:#0D7594;white-space:nowrap">{{ u.role }}</span></td>
+                        <td style="padding:10px 12px;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ u.scope }}</td>
+                        <td style="padding:10px 12px;font-size:13px;font-family:ui-monospace,Menlo,monospace;color:#5A737B;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ u.last }}</td>
+                        <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ u.bd }};background:{{ u.bg }};color:{{ u.fg }}">{{ u.state }}</span></td>
+                        <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top">
+                          <button type="button" onClick="{{ u.toggle }}" disabled="{{ noRbacPermB }}" title="{{ rbacTitle }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid {{ u.btnBd }};background:{{ u.btnBg }};color:{{ u.btnFg }};font-size:13px;font-weight:600;cursor:{{ u.cur }};white-space:nowrap">{{ u.btnLabel }}</button>
+                        </td>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+              <p style="font-size:13px;color:#5A737B;margin:0">禁用用户立即失效会话，但其历史操作日志与已发布内容保留；权限范围支持按知识库粒度授权（如只授政策库）。</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rbacRoles }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+              <sc-for list="{{ roleCards }}" as="r" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid {{ r.bd }};border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                    <span style="font-size:15px;font-weight:700">{{ r.name }}</span>
+                    <span style="font-size:13px;color:#5A737B">{{ r.count }} 人</span>
+                  </div>
+                  <span style="font-size:13px;color:#31474E">{{ r.note }}</span>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid #DFEEF3;padding-top:10px">
+                    <sc-for list="{{ r.allow }}" as="a" hint-placeholder-count="4">
+                      <span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid #BFDDD2;background:#EAF4F0;color:#177A57">{{ a.t }}</span>
+                    </sc-for>
+                    <sc-for list="{{ r.deny }}" as="d" hint-placeholder-count="3">
+                      <span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid #E6C9C4;background:#F8EEEC;color:#B2453A">禁止 {{ d.t }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rbacMatrix }}">
+            <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">权限配置 · 点格子切换（仅系统管理员可改，改动写审计日志）</p>
+                <h2 style="font-size:20px;font-weight:700;margin:0">权限矩阵</h2>
+              </div>
+              <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse">
+                  <thead><tr>
+                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">权限 / 角色</th>
+                    <sc-for list="{{ matrixCols }}" as="c" hint-placeholder-count="4">
+                      <th style="text-align:center;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">{{ c.name }}</th>
+                    </sc-for>
+                  </tr></thead>
+                  <tbody>
+                    <sc-for list="{{ matrixRows }}" as="m" hint-placeholder-count="10">
+                      <tr>
+                        <td style="padding:8px 12px;font-size:13px;color:#13252B;border-bottom:1px solid #DFEEF3;font-weight:600">{{ m.p }}</td>
+                        <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="4">
+                          <td style="padding:8px 12px;text-align:center;border-bottom:1px solid #DFEEF3">
+                            <button type="button" onClick="{{ c.go }}" disabled="{{ noRbacPermB }}" title="{{ rbacTitle }}" style="width:26px;height:26px;border-radius:8px;border:1.5px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};font-size:13px;font-weight:700;cursor:{{ c.cur }}">{{ c.mark }}</button>
+                          </td>
+                        </sc-for>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+              <p style="font-size:13px;color:#5A737B;margin:0">硬约束（不可通过矩阵放开）：①提交人不能审核自己提交的版本；②任何角色都不能跳过审核直接同步 Zendesk；③AI 运营始终不可写内容。</p>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <sc-if value="{{ hasModal }}">
+    <div style="position:fixed;inset:0;background:rgba(19,37,43,.42);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div style="width:520px;max-width:100%;background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;animation:pop 160ms cubic-bezier(.2,0,0,1) both;box-shadow:0 20px 60px rgba(19,37,43,.28)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <h3 style="font-size:20px;font-weight:700;margin:0">{{ modal.title }}</h3>
+          <button type="button" onClick="{{ closeModal }}" style="width:30px;height:30px;border-radius:8px;border:1px solid #CBE2E9;background:#fff;color:#31474E;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph ph-x" aria-hidden="true"></i></button>
+        </div>
+        <p style="font-size:15px;color:#31474E;margin:0;line-height:1.6">{{ modal.body }}</p>
+        <sc-if value="{{ modal.hasList }}">
+          <div style="display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;background:#F7FCFD;border:1px solid #DFEEF3">
+            <sc-for list="{{ modal.list }}" as="l" hint-placeholder-count="3">
+              <span style="font-size:13px;color:#31474E">· {{ l.t }}</span>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ modal.hasInput }}">
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:13px;font-weight:600;color:#31474E">{{ modal.inputLabel }}</label>
+            <textarea onInput="{{ onModalInput }}" placeholder="{{ modal.placeholder }}" style="min-height:88px;padding:8px 12px;border:1.5px solid {{ modalInputBd }};border-radius:10px;font-size:15px;line-height:1.55;color:#13252B;background:#fff;resize:vertical;font-family:inherit" style-focus="border-color:#0D7594;outline:none"></textarea>
+            <sc-if value="{{ modalErr }}"><span style="font-size:13px;color:#B2453A;font-weight:600">{{ modalErrMsg }}</span></sc-if>
+          </div>
+        </sc-if>
+        <div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #DFEEF3;padding-top:12px">
+          <button type="button" onClick="{{ closeModal }}" style="min-height:36px;padding:0 16px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:15px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594">取消</button>
+          <button type="button" onClick="{{ confirmModal }}" style="min-height:36px;padding:0 16px;border-radius:10px;border:1.5px solid transparent;background:{{ modal.okBg }};color:#fff;font-size:15px;font-weight:600;cursor:pointer">{{ modal.ok }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}">
+    <div style="position:fixed;right:20px;bottom:20px;z-index:90;padding:12px 16px;border-radius:12px;background:#13252B;color:#fff;font-size:13px;max-width:420px;box-shadow:0 12px 40px rgba(19,37,43,.24);animation:pop 160ms cubic-bezier(.2,0,0,1) both">{{ toast }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;annotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;原型呈现&quot;},&quot;tierWarnings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;原型呈现&quot;}}">
+class Component extends DCLogic {
+  state = {
+    role: 'admin', view: 'work', workTab: 'draft', lib: 'policy',
+    open: { '售后政策': true, '退款与退货': true, '产品介绍': false, '使用指南': false },
+    sel: 0, tab: 'body', lang: 'zh', vec: '已向量化',
+    entryStatus: '已发布', zhDirty: false, enStatus: '已同步 Zendesk',
+    versions: null, diffPick: ['v1', 'v2'], showDiff: false,
+    reviewSel: 0, decided: {}, promoted: 0, sync: {},
+    logs: null, users: null, matrix: null, rbacTab: 'users',
+    modal: null, modalText: '', modalErr: false, toast: '', dash: 'kb', logFilter: 'all'
+  };
+
+  ROLES = {
+    admin: { name: '知识管理员', user: '王雯', note: '可创建、编辑、提交审核、管理知识库结构、查看数据；不能审核通过、不能直接发布、不能回滚——无绕过审核的路径。',
+      perms: { create: 1, edit: 1, submit: 1, review: 0, publish: 0, rollback: 0, sync: 0, manageKb: 1, viewData: 1, manageUser: 0, suggest: 1 } },
+    reviewer: { name: '知识审核员', user: '李骁', note: '审核、发布、回滚、触发同步的唯一角色；也可编辑与提交，但自己提交的条目需另一名审核员通过（四眼原则）。',
+      perms: { create: 1, edit: 1, submit: 1, review: 1, publish: 1, rollback: 1, sync: 1, manageKb: 1, viewData: 1, manageUser: 0, suggest: 1 } },
+    aiops: { name: 'AI 运营', user: '陈迪', note: '只读效果数据与未命中缺口，可提交优化建议进审核队列；禁止审核、发布、回滚，编辑器为只读。',
+      perms: { create: 0, edit: 0, submit: 0, review: 0, publish: 0, rollback: 0, sync: 0, manageKb: 0, viewData: 1, manageUser: 0, suggest: 1 } },
+    sysadmin: { name: '系统管理员', user: '运维 Ken', note: '管理用户、角色与权限矩阵，查看全量审计日志；不参与知识内容的审核与发布。',
+      perms: { create: 0, edit: 0, submit: 0, review: 0, publish: 0, rollback: 0, sync: 0, manageKb: 0, viewData: 1, manageUser: 1, suggest: 0 } }
+  };
+  PERM_LABELS = [['create', '新建条目'], ['edit', '编辑内容'], ['submit', '提交审核'], ['review', '审核'], ['publish', '发布'], ['rollback', '版本回滚'], ['sync', '触发同步'], ['manageKb', '管理结构'], ['viewData', '查看数据'], ['manageUser', '用户与权限']];
+
+  NAV = [
+    { label: '工作台', items: [{ k: 'work', label: '我的工作台', icon: 'ph-squares-four' }] },
+    { label: '知识生产', items: [
+      { k: 'kb', label: '知识库总览', icon: 'ph-books', count: 96 },
+      { k: 'entry', label: '条目工作台', icon: 'ph-note-pencil' },
+      { k: 'mine', label: 'AI 对话挖掘', icon: 'ph-robot', count: 6 }
+    ] },
+    { label: '质量与发布', items: [
+      { k: 'review', label: '审核中心', icon: 'ph-stamp', count: 0 },
+      { k: 'sync', label: '同步中心 · Zendesk', icon: 'ph-arrows-clockwise', count: 3 }
+    ] },
+    { label: '数据', items: [
+      { k: 'dash', label: '数据看板', icon: 'ph-chart-bar' },
+      { k: 'feedback', label: '反馈回流', icon: 'ph-arrow-u-down-left', count: 12 }
+    ] },
+    { label: '治理', items: [
+      { k: 'logs', label: '操作日志', icon: 'ph-scroll' },
+      { k: 'rbac', label: '用户与权限', icon: 'ph-users-three' }
+    ] }
+  ];
+  TITLES = { work: '我的工作台', kb: '知识库总览', entry: '条目工作台', mine: 'AI 对话挖掘', review: '审核中心', sync: '同步中心 · Zendesk', dash: '数据看板', feedback: '反馈回流', logs: '操作日志', rbac: '用户与权限' };
+  CRUMBS = { work: '工作台', kb: '知识生产 / 知识库总览', entry: '知识生产 / 知识库总览 / 条目', mine: '知识生产 / AI 对话挖掘', review: '质量与发布 / 审核中心', sync: '质量与发布 / 同步中心', dash: '数据 / 数据看板', feedback: '数据 / 反馈回流', logs: '治理 / 操作日志', rbac: '治理 / 用户与权限' };
+
+  LIBS = [
+    { k: 'policy', name: '政策与售后知识库', n: '38 条', note: '退款/退货/保修口径 · 含仅内部条目' },
+    { k: 'product', name: '产品与使用知识库', n: '46 条', note: '安装、配网、画质、会员' },
+    { k: 'internal', name: '客服话术库（仅内部）', n: '12 条', note: '不对外公开，仅挂客服 segment' }
+  ];
+  TREE = [
+    { name: '售后政策', n: '18', subs: [
+      { name: '退款与退货', zd: 'Sec 5101', items: [{ t: '退款政策' }, { t: '退货运费承担规则' }] },
+      { name: '保修与换新', zd: 'Sec 5102', items: [{ t: '保修期与凭证要求' }] }
+    ] },
+    { name: '订单与物流', n: '11', subs: [
+      { name: '发货与签收', zd: 'Sec 5110', items: [{ t: '订单发出后能否改地址' }] }
+    ] },
+    { name: '会员与账户', n: '9', subs: [
+      { name: '会员计费', zd: 'Sec 5120', items: [{ t: '会员退订与计费周期' }] }
+    ] }
+  ];
+
+  SCENE1 = ['售后与退款', '安装与配网', '设备使用', '会员与账户', '订单与物流'];
+  SCENE2 = { '售后与退款': ['退款时限', '退货运费', '保修换新'], '安装与配网': ['Wi-Fi 配对', '支架安装', '太阳能供电'], '设备使用': ['画质与录像', '夜视', '固件升级'], '会员与账户': ['会员计费', '账号绑定'], '订单与物流': ['发货与签收', '地址修改'] };
+
+  ENTRIES = [
+    { id: 'KB-0201', title: '退款政策', path: '政策与售后 / 售后政策 / 退款与退货', type: 'FAQ 政策型', vis: '对外公开 + 内部段落', ver: 'v2', status: '已发布', en: '已同步', sync: '已同步', rate: '70%', low: true, updated: '07-30 18:02', due: '复核到期 2026-11-26（剩 114 天）', dueLevel: 'ok', scene1: '售后与退款', scene2: '退款时限', tags: '退款 / 退货 / 运费', vec: '已向量化' },
+    { id: 'KB-0212', title: '退货运费承担规则', path: '政策与售后 / 售后政策 / 退款与退货', type: '内部口径', vis: '仅客服内部', ver: 'v1', status: '待审核', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 10:22', due: '首次发布后起算', dueLevel: 'ok', scene1: '售后与退款', scene2: '退货运费', tags: '运费 / 预付面单', vec: '未向量化' },
+    { id: 'KB-0188', title: '保修期与凭证要求', path: '政策与售后 / 售后政策 / 保修与换新', type: 'FAQ 政策型', vis: '对外公开', ver: 'v3', status: '已发布', en: '已同步', sync: '已同步', rate: '84%', updated: '07-18 09:40', due: '复核到期 2026-09-20（剩 47 天）', dueLevel: 'warn', scene1: '售后与退款', scene2: '保修换新', tags: '保修 / 凭证', vec: '已向量化' },
+    { id: 'KB-0233', title: '订单发出后能否改地址', path: '政策与售后 / 订单与物流 / 发货与签收', type: 'FAQ 型', vis: '对外公开', ver: 'v1', status: '草稿', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 06:00', due: '首次发布后起算', dueLevel: 'ok', scene1: '订单与物流', scene2: '地址修改', tags: '改地址 / 发货', vec: '未向量化' },
+    { id: 'KB-0240', title: '会员退订与计费周期', path: '政策与售后 / 会员与账户 / 会员计费', type: 'FAQ 型', vis: '对外公开', ver: 'v2', status: '已驳回', en: '待人工校验', sync: '待同步', rate: '58%', low: true, updated: '08-03 16:10', due: '复核已到期 12 天', dueLevel: 'bad', scene1: '会员与账户', scene2: '会员计费', tags: '会员 / 退订 / 计费', vec: '待重建' },
+    { id: 'KB-0155', title: '太阳能板阴天充不满电', path: '产品与使用 / 供电 / 太阳能', type: '操作流程型', vis: '对外公开', ver: 'v4', status: '已下线', en: '已确认', sync: '已归档', rate: '41%', low: true, updated: '08-02 11:25', due: '复核已到期 47 天', dueLevel: 'bad', scene1: '安装与配网', scene2: '太阳能供电', tags: '太阳能 / 充电', vec: '向量失败' }
+  ];
+
+  VERSIONS = [
+    { v: 'v1', label: '退款 7 天（原始口径）', status: '历史版本', span: '05-12 → 07-30', by: '李骁', calls: '10,000', hit: '95%', solve: '90%', adopt: '88%', solveNum: 90 },
+    { v: 'v2', label: '退款 5 天（财务口径调整）', status: '已发布', span: '07-30 → 至今', by: '王雯', calls: '8,000', hit: '90%', solve: '70%', adopt: '61%', solveNum: 70 },
+    { v: 'v3', label: '补充跨境订单与例外通道', status: '待审核', span: '未生效', by: '王雯', calls: '—', hit: '—', solve: '—', adopt: '—', solveNum: 0 }
+  ];
+  DIFF = {
+    'v1|v2': {
+      left: [
+        { t: '## 退款时限', k: 'same' },
+        { t: '- 质量问题：签收后 30 天内可申请全额退款', k: 'same' },
+        { t: '- 非质量问题：签收后 7 天内可退，运费用户承担', k: 'del' },
+        { t: '- 会员服务：按自然月退订', k: 'same' },
+        { t: '（无例外通道说明）', k: 'del' }
+      ],
+      right: [
+        { t: '## 退款时限', k: 'same' },
+        { t: '- 质量问题：签收后 30 天内可申请全额退款', k: 'same' },
+        { t: '- 非质量问题：签收后 5 天内可退，运费用户承担', k: 'add' },
+        { t: '- 会员服务：按自然月退订', k: 'same' },
+        { t: '> 内部：超时个案走主管审批，额度上限 $80', k: 'add' }
+      ]
+    },
+    'v2|v3': {
+      left: [
+        { t: '- 非质量问题：签收后 5 天内可退', k: 'same' },
+        { t: '（无跨境订单说明）', k: 'del' },
+        { t: '> 内部：超时个案走主管审批，额度上限 $80', k: 'same' }
+      ],
+      right: [
+        { t: '- 非质量问题：签收后 5 天内可退', k: 'same' },
+        { t: '- 跨境订单：以清关完成日起算 5 天', k: 'add' },
+        { t: '> 内部：超时个案走主管审批，额度上限 $80', k: 'same' }
+      ]
+    },
+    'v1|v3': {
+      left: [
+        { t: '- 非质量问题：签收后 7 天内可退', k: 'del' },
+        { t: '（无跨境订单说明）', k: 'del' }
+      ],
+      right: [
+        { t: '- 非质量问题：签收后 5 天内可退', k: 'add' },
+        { t: '- 跨境订单：以清关完成日起算 5 天', k: 'add' }
+      ]
+    }
+  };
+
+  PAIRS = [
+    { zh: '本政策适用于官网商城与亚马逊自营店铺购买的整机及配件。', en: 'This policy applies to complete units and accessories purchased from the official store and the Amazon first-party store.' },
+    { zh: '质量问题：签收后 30 天内可申请全额退款，运费由公司承担。', en: 'Quality issues: full refund within 30 days of delivery; return shipping is covered by COOLFLY.' },
+    { zh: '非质量问题（7 天无理由）：签收后 5 天内可退，运费由用户承担。', en: 'Change of mind: returns accepted within 5 days of delivery; return shipping is paid by the customer.', edited: true, editNote: '人工把 “buyer’s remorse” 改为 “change of mind”，更贴近北美用户表述（陈迪 08-01）' },
+    { zh: '内部口径（不对外）：超时个案走主管审批，额度上限 $80。', en: '（内部段落不翻译、不同步到对外帮助中心）', internal: true }
+  ];
+
+  LOGS = [
+    { t: '08-04 10:22', who: '王雯', role: '知识管理员', obj: 'KB-0212 退货运费承担规则', action: '提交审核', note: '来源：人工录入 · 进入审核中心待审' },
+    { t: '08-04 09:05', who: '陈迪', role: 'AI 运营', obj: 'KB-0201 退款政策', action: '提交优化建议', note: '建议：v2 解决率骤降，建议回滚 v1（只读角色可建议，不可执行）' },
+    { t: '08-03 16:10', who: '李骁', role: '知识审核员', obj: 'KB-0240 会员退订与计费周期', action: '审核驳回', note: '驳回理由：计费周期与财务口径不符，请附财务确认截图' },
+    { t: '08-01 14:30', who: '陈迪', role: 'AI 运营', obj: 'KB-0201 英文版本', action: '人工修订英文', field: 'buyer’s remorse', before: 'buyer’s remorse', after: 'change of mind' },
+    { t: '07-30 18:02', who: '李骁', role: '知识审核员', obj: 'KB-0201 退款政策 v2', action: '发布并同步 Zendesk', field: '退款时限', before: '7 天', after: '5 天' },
+    { t: '07-30 17:40', who: '王雯', role: '知识管理员', obj: 'KB-0201 退款政策', action: '创建版本 v2', field: '退款时限', before: '7 天', after: '5 天' },
+    { t: '07-28 11:12', who: '运维 Ken', role: '系统管理员', obj: '角色：AI 运营', action: '修改角色权限', field: '发布权限', before: '允许', after: '禁止' }
+  ];
+
+  USERS = [
+    { name: '王雯', mail: 'wangwen@coolfly', role: '知识管理员', scope: '政策与售后 / 产品与使用', last: '08-04 10:22', on: true },
+    { name: '李骁', mail: 'lixiao@coolfly', role: '知识审核员', scope: '全部知识库', last: '08-04 09:40', on: true },
+    { name: '陈迪', mail: 'chendi@coolfly', role: 'AI 运营', scope: '只读 · 全部知识库', last: '08-04 08:12', on: true },
+    { name: '运维 Ken', mail: 'ken@coolfly', role: '系统管理员', scope: '用户与权限', last: '08-03 21:40', on: true },
+    { name: 'Grace（菲律宾客服）', mail: 'grace@coolfly', role: 'AI 运营', scope: '只读 · 政策与售后', last: '07-22 03:11', on: false }
+  ];
+  MATRIX_ROLES = ['知识管理员', '知识审核员', 'AI 运营', '系统管理员'];
+  MATRIX = [
+    { p: '新建 / 编辑知识条目', v: [1, 1, 0, 0] },
+    { p: '提交审核', v: [1, 1, 0, 0] },
+    { p: '审核通过 / 驳回', v: [0, 1, 0, 0] },
+    { p: '发布到 Zendesk', v: [0, 1, 0, 0] },
+    { p: '版本回滚', v: [0, 1, 0, 0] },
+    { p: '管理目录与章节', v: [1, 1, 0, 0] },
+    { p: '查看效果与缺口数据', v: [1, 1, 1, 1] },
+    { p: '提交优化建议', v: [1, 1, 1, 0] },
+    { p: '用户与角色管理', v: [0, 0, 0, 1] },
+    { p: '查看全量审计日志', v: [0, 1, 0, 1] }
+  ];
+
+  QUEUE = [
+    { id: 'q1', src: 'AI 挖掘 · 新增', title: '喂鸟器在极寒天气下自动关机', freq: '17 次', meta: '产品与使用 / 供电 / 太阳能 · 建议对外公开', ver: 'v1（新建）', submitter: '系统 · AI 挖掘', at: '08-04 06:00',
+      body: '为什么低温天气下喂鸟器会自动关机？\n\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。', changes: [{ f: '新建条目', b: '—', a: '3 步骤 + 型号说明' }] },
+    { id: 'q2', src: '人工录入', title: '退货运费承担规则', freq: '人工', meta: '政策与售后 / 售后政策 / 退款与退货 · 仅客服内部', ver: 'v1（新建）', submitter: '王雯 · 知识管理员', at: '08-04 10:22',
+      body: '质量问题退货：运费由公司承担，客服直接发预付面单。\n非质量问题 7 天无理由：运费由用户承担。\n超 30 天：走个案审批，需主管确认。', changes: [{ f: '新建条目', b: '—', a: '三档运费口径' }] },
+    { id: 'q3', src: '版本修订', title: '退款政策 v3 · 补充跨境订单与例外通道', freq: 'v3', meta: '政策与售后 / 售后政策 / 退款与退货 · 对外 + 内部段', ver: 'v3（修订 v2）', submitter: '王雯 · 知识管理员', at: '08-04 09:12',
+      body: '在「退款时限」后新增：跨境订单以清关完成日起算 5 天。\n内部段落补充例外通道审批人与额度。', changes: [{ f: '退款时限', b: '签收日起算', a: '跨境订单按清关日起算' }, { f: '内部段落', b: '仅额度上限', a: '补审批人 + 记录要求' }] },
+    { id: 'q4', src: '反馈修订', title: '会员退订与计费周期（驳回后重新提交）', freq: '重提', meta: '政策与售后 / 会员与账户 · 对外公开', ver: 'v3（修订 v2）', submitter: '王雯 · 知识管理员', at: '08-04 11:05',
+      body: '已按驳回意见补充财务确认截图与计费示例（含跨月退订算法）。', changes: [{ f: '计费周期', b: '按自然月', a: '按自然月 + 跨月示例' }] }
+  ];
+
+  BATCHES = [
+    { head: '08-04 批次：37 个会话 → 6 条候选', meta: '邮件工单 21 · 在线聊天 16 · 新增 3 / 修订 2 / 合并 1', state: '完成' },
+    { head: '08-03 批次：29 个会话 → 3 条候选', meta: '邮件工单 18 · 在线聊天 11 · 已消化 2 条', state: '完成' },
+    { head: '08-02 批次：无新候选', meta: '会话 4 个 · 均未达频次阈值，如实标注', state: '无新草稿' },
+    { head: '08-01 批次：拉取失败', meta: 'Zendesk API 429 限流 · 次日照常拉取', state: '失败' }
+  ];
+  CANDIDATES = [
+    { type: '新增', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: '17 次 / 周', dup: '0.42', gap: '未覆盖', note: '三重准入通过 → 建议立新条', actLabel: '起草并提交审核',
+      summary: '用户反馈 -15°C 以下设备夜间自动关机、白天回温恢复。客服口径已趋一致，但知识库无对应条目，每次手写。' },
+    { type: '修订', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: '14 次 / 周', dup: '0.88', gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', actLabel: '挂为 KB-0155 修订建议',
+      summary: '现有条目只写「检查遮挡」，未覆盖固件 2.4 后的充电阈值变化；客服 flag 3 次「步骤过时」。' },
+    { type: '合并', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: '—', dup: '0.91', gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', actLabel: '发起合并（进审核）',
+      summary: '两条回答同一问题，bot 引用被分流导致都拿不满样本量。' }
+  ];
+
+  SYNC_ROWS = [
+    { id: 'KB-0201', title: '退款政策 v2', action: '更新正文 + labels', target: '帮助中心 · 退款与退货', state: '已同步', lang: '中 / 英' },
+    { id: 'KB-0212', title: '退货运费承担规则', action: '待过审后创建', target: '内部知识 · 仅客服 segment', state: '待同步', lang: '中（英文未生成）' },
+    { id: 'KB-0188', title: '保修期与凭证要求 v3', action: '更新正文', target: '帮助中心 · 保修与换新', state: '失败', lang: '中 / 英' },
+    { id: 'KB-0240', title: '会员退订与计费周期', action: '更新（被驳回，暂停）', target: '帮助中心 · 会员计费', state: '已阻断', lang: '英文待校验' },
+    { id: 'KB-0155', title: '太阳能板阴天充不满电', action: '归档 + 重定向', target: '帮助中心 · 太阳能', state: '失败', lang: '中 / 英' }
+  ];
+  DRIFT_ROWS = [
+    { title: '退款政策（Article 360012 4102）', who: 'Zendesk 端 客服主管 Ken', diff: '第 2 段被改写 · 08-03 21:40' },
+    { title: 'How to reset your feeder（Article 360011 9902）', who: 'Zendesk 端 Guide 管理员', diff: '新增一节 Battery notes · 08-02 15:12' }
+  ];
+  MAP_ROWS = [
+    { local: '政策与售后知识库', zd: 'Help Center brand: support.ourcoolfly.com', vis: '混合' },
+    { local: '售后政策 → 退款与退货', zd: 'Category 5100 → Section 5101', vis: '对外公开' },
+    { local: '客服话术库', zd: 'Category 5200（内部知识）', vis: '仅客服 segment' }
+  ];
+
+  SCENES = [
+    { name: '退款退货', n: 31, pct: '100%', color: '#0D7594' },
+    { name: '联网配对', n: 28, pct: '90%', color: '#0D7594' },
+    { name: '安装供电', n: 22, pct: '71%', color: '#0D7594' },
+    { name: '会员账户', n: 11, pct: '35%', color: '#0D7594' },
+    { name: '配件兼容', n: 6, pct: '19%', color: '#B2453A' }
+  ];
+  EFFECT = [
+    { title: '太阳能板阴天充不满电', ver: 'v4', chapter: '安装与配网 / 太阳能供电', bot: 58, agent: 21, down: 9, flag: 3, rate: '41%', low: true, vec: '向量失败' },
+    { title: '会员退订与计费周期', ver: 'v2', chapter: '会员与账户 / 会员计费', bot: 44, agent: 12, down: 6, flag: 2, rate: '58%', low: true, vec: '待重建' },
+    { title: '退款政策', ver: 'v2', chapter: '售后与退款 / 退款时限', bot: 132, agent: 47, down: 11, flag: 1, rate: '70%', low: false, vec: '已向量化' },
+    { title: '保修期与凭证要求', ver: 'v3', chapter: '售后与退款 / 保修换新', bot: 96, agent: 33, down: 3, flag: 0, rate: '84%', vec: '已向量化' },
+    { title: '退货运费承担规则', ver: 'v1', chapter: '售后与退款 / 退货运费', bot: 0, agent: 6, down: 0, flag: 0, rate: '样本积累中', sample: true, vec: '未向量化' }
+  ];
+  GAP = [
+    { topic: '喂鸟器极寒天气自动关机', n: '17 次 / 周', src: '工单 12 · 聊天 5', cover: '未覆盖 → 立新条', act: '新增' },
+    { topic: '跨境订单退款起算日', n: '13 次 / 周', src: '工单 11 · 聊天 2', cover: '已覆盖但答不好 → 修订', act: '修订' },
+    { topic: '第三方支架是否兼容', n: '11 次 / 周', src: '工单 8 · 聊天 3', cover: '未覆盖 → 立新条', act: '新增' }
+  ];
+  NO_RESULT = [
+    { kw: 'return shipping', n: 31, verdict: '无对应条目（内部有口径未对外）', bad: true },
+    { kw: 'refund how long', n: 24, verdict: '有条目，命名不匹配', warn: true },
+    { kw: 'freeze / frozen', n: 42, verdict: '无对应条目', bad: true }
+  ];
+  SIGNALS = [
+    { scene: 'AI bot 自动回答', chan: '在线聊天', hit: 'bot 引用了哪篇文章 + 哪个锚点', solve: 'automated resolution（确认解决或未追问）；转人工 = 未解决', certainty: '档位相关', warn: true },
+    { scene: '人工工单', chan: '邮件 + 转人工', hit: '客服 Knowledge 面板引用记录', solve: '工单 solved + reopen + CSAT', certainty: '工单必得 / 引用事件待核实', warn: true },
+    { scene: '用户自助浏览', chan: '帮助中心', hit: '浏览与搜索点击', solve: '文章赞 / 踩；看完未提单（弱信号）', certainty: '投票必得 / 浏览待核实', warn: true },
+    { scene: '客服主动反馈', chan: 'Zendesk 侧', hit: '—', solve: '客服标记文章过时 / 有问题（flag）', certainty: '原生 · 必得', ok: true }
+  ];
+  REVISIONS = [
+    { src: '客服 flag', item: '太阳能板阴天充不满电 v4', signal: '3 位客服标记步骤过时（固件 2.4 后阈值变化）', n: '3 flag' },
+    { src: '文章被踩', item: '退款政策 v2', signal: '踩 11 次，评论集中在「5 天太短，与页面标注不一致」', n: '11 踩' },
+    { src: 'bot 未解决', item: '会员退订与计费周期 v2', signal: 'bot 引用后 18 次转人工，缺跨月退订示例', n: '18 转人工' },
+    { src: '高频无覆盖', item: '（无条目）第三方支架兼容', signal: '工单 11 次 / 周，无覆盖 → 立新条', n: '11 次' },
+    { src: '搜索无结果', item: '（命名不匹配）refund how long', signal: '搜索 24 次无结果，已有条目 → 改标题与 labels', n: '24 次' }
+  ];
+
+  go = (v) => () => this.setState({ view: v, toast: '' });
+  say(msg) { this.setState({ toast: msg }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: '' }), 3600); }
+  perms() { return this.ROLES[this.state.role].perms; }
+  log(entry) {
+    const logs = this.state.logs || this.LOGS;
+    const r = this.ROLES[this.state.role];
+    this.setState({ logs: [{ t: '08-04 ' + new Date().toTimeString().slice(0, 5), who: r.user, role: r.name, ...entry }, ...logs] });
+  }
+  pill(kind) {
+    const map = {
+      ok: { bg: '#EAF4F0', bd: '#BFDDD2', fg: '#177A57' },
+      warn: { bg: '#FBF6EC', bd: '#E8D9BA', fg: '#8A5F1A' },
+      bad: { bg: '#F8EEEC', bd: '#E6C9C4', fg: '#B2453A' },
+      info: { bg: '#E0F1F6', bd: '#DFEEF3', fg: '#5A737B' },
+      accent: { bg: '#E4F1F6', bd: '#BCDDE8', fg: '#0D7594' },
+      plain: { bg: '#fff', bd: '#CBE2E9', fg: '#31474E' }
+    };
+    return map[kind] || map.info;
+  }
+  statusKind(s) {
+    if (s === '已发布') return 'ok';
+    if (s === '已驳回' || s === '已下线') return 'bad';
+    if (s === '待审核' || s === '审核中' || s === '审核通过') return 'warn';
+    return 'info';
+  }
+  enKind(s) {
+    if (s.indexOf('已同步') === 0) return 'ok';
+    if (s === '已确认') return 'ok';
+    if (s === '翻译失败') return 'bad';
+    if (s === '未生成') return 'info';
+    return 'warn';
+  }
+  btn(kind, disabled) {
+    if (disabled) return { bg: '#EDF4F6', bd: '#DFEEF3', fg: '#8FA5AC', cursor: 'not-allowed' };
+    if (kind === 'primary') return { bg: '#0D7594', bd: 'transparent', fg: '#fff', cursor: 'pointer' };
+    if (kind === 'danger') return { bg: '#fff', bd: '#E6C9C4', fg: '#B2453A', cursor: 'pointer' };
+    return { bg: '#fff', bd: '#CBE2E9', fg: '#13252B', cursor: 'pointer' };
+  }
+
+  docRef = React.createRef();
+  exec = (cmd, val) => () => {
+    if (!this.perms().edit) return this.say('当前角色（' + this.ROLES[this.state.role].name + '）对编辑器只读，无法修改内容。');
+    document.execCommand(cmd, false, val);
+    this.markDirty();
+  };
+  insertHTML = (html) => () => {
+    if (!this.perms().edit) return this.say('当前角色对编辑器只读。');
+    document.execCommand('insertHTML', false, html);
+    this.markDirty();
+  };
+  markDirty() {
+    if (this.state.lang === 'en') { this.setState({ enStatus: '人工修改中' }); return; }
+    if (!this.state.zhDirty) {
+      const en = this.state.enStatus;
+      const next = (en === '未生成' || en === '翻译失败') ? en : '待重新翻译';
+      this.setState({ zhDirty: true, enStatus: next, vec: '待重建', entryStatus: this.state.entryStatus === '已发布' ? '编辑中' : this.state.entryStatus });
+    }
+  }
+  rebuildVec = () => {
+    if (!this.perms().edit) return this.say('当前角色不可触发向量化。');
+    this.setState({ vec: '向量化中' });
+    this.log({ obj: 'KB-0201 退款政策', action: '重建向量索引', note: '模型 text-embedding-3-large · 分片 512 token / 重叠 64' });
+    setTimeout(() => { this.setState({ vec: '已向量化' }); this.say('向量索引已重建（12 个分片，用于查重与代理评测）'); }, 1500);
+  };
+
+  saveZh = () => {
+    if (!this.perms().edit) return this.say('无编辑权限。');
+    this.setState({ zhDirty: false, entryStatus: '编辑中' });
+    this.log({ obj: 'KB-0201 退款政策', action: '保存中文草稿（v3）', note: '英文版本自动置为「待重新校验」，同步被阻断' });
+    this.say('已保存中文草稿 · 英文置为待重新校验 · 状态：编辑中');
+  };
+  submit = () => {
+    if (!this.perms().submit) return this.say('当前角色不可提交审核。');
+    this.setState({ entryStatus: '待审核', promoted: this.state.promoted + 1, zhDirty: false });
+    this.log({ obj: 'KB-0201 退款政策 v3', action: '提交审核', note: '进入审核中心，等待审核员处理' });
+    this.say('已提交审核 → 审核中心待审 +1');
+  };
+  publish = () => {
+    if (!this.perms().publish) return this.say('无发布权限——发布只属于知识审核员。');
+    this.setState({ modal: { kind: 'publish', title: '确认发布并同步 Zendesk', body: '发布后本版本立即生效，并推送到 Zendesk 帮助中心（对外文章 + 内部段落按可见性拆分）。发布动作全程留痕。', ok: '确认发布', okBg: '#0D7594', hasList: true, list: [{ t: '中文：v3 生效，v2 结束' }, { t: '英文：已确认 → 发布后触发同步' }, { t: '内部段落不进对外文章' }] } });
+  };
+  askRollback = (v) => () => {
+    if (!this.perms().rollback) return this.say('无回滚权限——回滚只属于知识审核员。');
+    this.setState({ modal: { kind: 'rollback', target: v, title: '回滚到 ' + v, body: '回滚会把 ' + v + ' 重新置为发布版本，当前发布版本标记为「已回滚」，并立即同步 Zendesk。历史版本与指标不会被删除。', ok: '确认回滚', okBg: '#B2453A', hasList: true, list: [{ t: v + ' → 已发布（重新生效）' }, { t: '当前发布版本 → 已回滚' }, { t: '写入操作日志与同步队列' }] } });
+  };
+  reviewPass = (item) => () => {
+    if (!this.perms().review) return this.say('当前角色不可审核。');
+    this.setState({ decided: { ...this.state.decided, [item.id]: 'pass' }, reviewSel: 0 });
+    this.log({ obj: item.title, action: '审核通过', note: '进入发布门禁 → 同步队列' });
+    this.say('已通过：' + item.title + ' → 进同步队列');
+  };
+  askReject = (item) => () => {
+    if (!this.perms().review) return this.say('当前角色不可审核。');
+    this.setState({ modal: { kind: 'reject', target: item, title: '驳回：' + item.title, body: '驳回后条目回到提交人的草稿箱，状态变为「已驳回」。驳回理由必填，会写入审核历史与提交人待办。', ok: '确认驳回', okBg: '#B2453A', hasInput: true, inputLabel: '驳回理由（必填）', placeholder: '例如：计费周期与财务口径不符，请附财务确认截图' }, modalText: '', modalErr: false });
+  };
+  confirmModal = () => {
+    const m = this.state.modal; if (!m) return;
+    if (m.kind === 'reject') {
+      if (!this.state.modalText.trim()) return this.setState({ modalErr: true });
+      this.setState({ decided: { ...this.state.decided, [m.target.id]: 'reject' }, modal: null, modalText: '', reviewSel: 0 });
+      this.log({ obj: m.target.title, action: '审核驳回', note: '理由：' + this.state.modalText.trim() });
+      return this.say('已驳回并回退给提交人 · 理由已留痕');
+    }
+    if (m.kind === 'rollback') {
+      const vs = (this.state.versions || this.VERSIONS).map(v => {
+        if (v.v === m.target) return { ...v, status: '已发布', span: v.span.split(' → ')[0] + ' → 至今（回滚生效）' };
+        if (v.status === '已发布') return { ...v, status: '已回滚', span: v.span.replace('至今', '08-04') };
+        return v;
+      });
+      this.setState({ versions: vs, modal: null, sync: { ...this.state.sync, 'KB-0201': '同步中' } });
+      this.log({ obj: 'KB-0201 退款政策', action: '版本回滚', field: '发布版本', before: 'v2（退款 5 天）', after: m.target + '（退款 7 天）' });
+      this.say('已回滚到 ' + m.target + ' · 同步队列已入队');
+      setTimeout(() => { this.setState({ sync: { ...this.state.sync, 'KB-0201': '已同步' } }); this.say('回滚版本已同步 Zendesk'); }, 1500);
+      return;
+    }
+    if (m.kind === 'publish') {
+      this.setState({ entryStatus: '已发布', modal: null, enStatus: '已同步 Zendesk' });
+      this.log({ obj: 'KB-0201 退款政策 v3', action: '发布并同步 Zendesk', field: '发布版本', before: 'v2', after: 'v3' });
+      return this.say('已发布 v3 并同步 Zendesk');
+    }
+    if (m.kind === 'user') {
+      this.setState({ modal: null });
+      return this.say('已创建用户并分配角色（演示）');
+    }
+    this.setState({ modal: null });
+  };
+
+  translate = () => {
+    if (!this.perms().edit) return this.say('当前角色不可触发翻译。');
+    this.setState({ enStatus: 'AI 翻译中' });
+    this.log({ obj: 'KB-0201 英文版本', action: '触发 AI 翻译', note: '源：中文 v3' });
+    setTimeout(() => { this.setState({ enStatus: '待人工校验' }); this.say('AI 翻译完成 → 待人工校验'); }, 1400);
+  };
+  confirmEn = () => {
+    if (!this.perms().edit) return this.say('当前角色不可确认英文版本。');
+    this.setState({ enStatus: '已确认' });
+    this.log({ obj: 'KB-0201 英文版本', action: '英文校验确认', note: '校验人确认后方可同步' });
+    this.say('英文已确认 · 可进入同步');
+  };
+  syncEn = () => {
+    if (!this.perms().sync) return this.say('无同步权限——触发同步属于知识审核员。');
+    this.setState({ enStatus: '已同步 Zendesk' });
+    this.log({ obj: 'KB-0201 英文版本', action: '同步 Zendesk', note: 'locale en-us 翻译更新' });
+    this.say('英文版本已同步 Zendesk');
+  };
+  failTranslate = () => { this.setState({ enStatus: '翻译失败' }); this.log({ obj: 'KB-0201 英文版本', action: 'AI 翻译失败', note: '第 1 次失败：上游超时，保留上一次英文内容，同步被阻断' }); this.say('翻译失败（保留上次内容，可重试）'); };
+  zhEdited = () => { this.setState({ enStatus: '待重新校验', zhDirty: true }); this.say('中文已变更 → 英文置为待重新校验，同步阻断'); };
+
+  renderVals() {
+    const s = this.state;
+    const R = this.ROLES[s.role], P = R.perms;
+    const versions = s.versions || this.VERSIONS;
+    const logs = s.logs || this.LOGS;
+    const live = this.QUEUE.filter(q => !s.decided[q.id]);
+    const pending = live.length + s.promoted;
+    const syncRows = this.SYNC_ROWS.map(r => ({ ...r, state: s.sync[r.id] || r.state }));
+    const failCount = syncRows.filter(r => r.state === '失败').length;
+    const liveVer = (versions.find(v => v.status === '已发布') || { v: '—' }).v;
+
+    const navGroups = this.NAV.map(g => ({ label: g.label, items: g.items.map(n => {
+      const on = s.view === n.k;
+      const count = n.k === 'review' ? pending : n.count;
+      const dim = (n.k === 'rbac' && !P.manageUser) || (n.k === 'entry' && !P.viewData);
+      return { ...n, go: this.go(n.k), cur: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#31474E',
+        op: dim ? '.55' : '1', hasCount: count !== undefined && count !== null, count: String(count ?? ''),
+        countFg: n.k === 'review' && pending > 0 ? '#B2453A' : '#31474E' };
+    }) }));
+
+    const roleOpts = Object.keys(this.ROLES).map(k => {
+      const on = s.role === k, kk = this.pill(on ? 'accent' : 'plain');
+      return { label: this.ROLES[k].name, on: on ? 'true' : 'false', bg: kk.bg, bd: kk.bd, fg: kk.fg,
+        icon: on ? 'ph-radio-button' : 'ph-circle', go: () => { this.setState({ role: k, toast: '' }); this.say('已切换身份：' + this.ROLES[k].name + ' —— 权限即时生效'); } };
+    });
+
+    const permChips = this.PERM_LABELS.map(([k, label]) => {
+      const ok = !!P[k], kk = this.pill(ok ? 'ok' : 'bad');
+      return { label, bg: kk.bg, bd: kk.bd, fg: kk.fg, icon: ok ? 'ph-check' : 'ph-prohibit' };
+    });
+
+    const entries = this.ENTRIES;
+    const cur = entries[s.sel];
+    const curStatus = s.sel === 0 ? s.entryStatus : cur.status;
+    const dueK = this.pill(cur.dueLevel === 'bad' ? 'bad' : cur.dueLevel === 'warn' ? 'warn' : 'ok');
+
+    const WORK = {
+      draft: entries.filter(e => e.status === '草稿' || (e.id === 'KB-0201' && s.entryStatus === '编辑中')),
+      submitted: entries.filter(e => e.status === '待审核' || (e.id === 'KB-0201' && s.entryStatus === '待审核')),
+      rejected: entries.filter(e => e.status === '已驳回'),
+      todo: P.review ? entries.filter(e => e.status === '待审核') : []
+    };
+    const workTabs = [['draft', '我的草稿箱'], ['submitted', '我提交的'], ['rejected', '被驳回'], ['todo', '待我审核']].map(([k, label]) => {
+      const on = s.workTab === k;
+      return { label: label + '（' + (WORK[k] || []).length + '）', on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ workTab: k }) };
+    });
+    const nextOf = (st) => st === '草稿' || st === '编辑中' ? '继续编辑' : st === '待审核' ? (P.review ? '去审核' : '查看进度') : st === '已驳回' ? '按意见修改' : '查看条目';
+    const workRows = (WORK[s.workTab] || []).map((e, i) => {
+      const st = this.pill(this.statusKind(e.id === 'KB-0201' ? curStatus : e.status));
+      const idx = entries.indexOf(e);
+      return { ...e, status: e.id === 'KB-0201' ? curStatus : e.status, stBg: st.bg, stBd: st.bd, stFg: st.fg,
+        lang: '中文 ' + (e.id === 'KB-0201' ? (s.zhDirty ? '未保存' : '已保存') : '已保存') + ' / 英文 ' + (e.id === 'KB-0201' ? s.enStatus : e.en),
+        last: e.updated + ' · ' + (e.status === '已驳回' ? '李骁 驳回' : '王雯 编辑'),
+        next: nextOf(e.id === 'KB-0201' ? curStatus : e.status),
+        go: () => this.setState({ view: 'entry', sel: idx, tab: 'body' }) };
+    });
+    const workStats = [
+      { k: '我的草稿', v: String(WORK.draft.length), note: '未提交，仅自己可见', fg: '#13252B', go: () => this.setState({ workTab: 'draft' }) },
+      { k: '我提交待审', v: String(WORK.submitted.length + s.promoted), note: '等待审核员处理', fg: '#8A5F1A', go: () => this.setState({ workTab: 'submitted' }) },
+      { k: '被驳回待改', v: String(WORK.rejected.length), note: '带审核意见回退', fg: '#B2453A', go: () => this.setState({ workTab: 'rejected' }) },
+      { k: P.review ? '待我审核' : '（无审核权限）', v: P.review ? String(pending) : '—', note: P.review ? '含 AI 挖掘与人工提交' : '审核属于知识审核员', fg: P.review ? '#0D7594' : '#8FA5AC', go: () => this.setState({ workTab: 'todo' }) }
+    ].map(w => ({ ...w, bd: '#CBE2E9' }));
+
+    const cbtn = this.btn('primary', !P.create);
+    const libRows = this.LIBS.map(l => {
+      const on = s.lib === l.k, kk = this.pill(on ? 'accent' : 'plain');
+      return { ...l, on: on ? 'true' : 'false', bg: on ? '#E4F1F6' : '#fff', bd: on ? '#BCDDE8' : '#DFEEF3', fg: on ? '#0D7594' : '#13252B', go: () => this.setState({ lib: l.k }) };
+    });
+    const tree = this.TREE.map(c => {
+      const open = s.open[c.name];
+      return { name: c.name, n: c.n, caret: open ? 'ph-caret-down' : 'ph-caret-right',
+        toggle: () => this.setState({ open: { ...s.open, [c.name]: !open } }),
+        subs: open ? c.subs.map(sub => {
+          const so = s.open[sub.name];
+          return { name: sub.name, zd: sub.zd, caret: so ? 'ph-caret-down' : 'ph-caret-right',
+            toggle: () => this.setState({ open: { ...s.open, [sub.name]: !so } }),
+            items: so ? sub.items.map(it => {
+              const idx = entries.findIndex(e => e.title === it.t);
+              const on = idx === s.sel;
+              return { title: it.t, bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#31474E',
+                open: () => { if (idx >= 0) this.setState({ view: 'entry', sel: idx, tab: 'body' }); } };
+            }) : [] };
+        }) : [] };
+    });
+    const vecKindOf = (v) => v === '已向量化' ? 'ok' : v === '向量失败' ? 'bad' : v === '向量化中' ? 'accent' : 'warn';
+    const entryRows = entries.map((e, i) => {
+      const st = this.pill(this.statusKind(e.id === 'KB-0201' ? curStatus : e.status));
+      const en = this.pill(this.enKind(e.id === 'KB-0201' ? s.enStatus : e.en));
+      const vp = this.pill(vecKindOf(e.id === 'KB-0201' ? s.vec : e.vec));
+      return { ...e, status: e.id === 'KB-0201' ? curStatus : e.status, en: e.id === 'KB-0201' ? s.enStatus : e.en,
+        vec: e.id === 'KB-0201' ? s.vec : e.vec, vBg: vp.bg, vBd: vp.bd, vFg: vp.fg,
+        scene: e.scene1 + ' · ' + e.scene2,
+        sync: e.id === 'KB-0201' ? (s.sync['KB-0201'] || e.sync) : e.sync,
+        stBg: st.bg, stBd: st.bd, stFg: st.fg, enBg: en.bg, enBd: en.bd, enFg: en.fg,
+        syFg: (e.sync === '失败' ? '#B2453A' : '#31474E'), rowBg: i === s.sel ? '#E0F1F6' : 'transparent',
+        rateFg: e.low ? '#B2453A' : '#31474E', rateW: e.low ? '700' : '400',
+        open: () => this.setState({ view: 'entry', sel: i, tab: 'body' }) };
+    });
+
+    const FLOW = ['草稿', '编辑中', '待审核', '审核中', '审核通过', '已发布'];
+    const idxNow = FLOW.indexOf(curStatus);
+    const flow = FLOW.map((f, i) => {
+      const done = idxNow >= 0 && i < idxNow, now = f === curStatus;
+      const kk = this.pill(now ? 'accent' : done ? 'ok' : 'plain');
+      return { label: f, bg: kk.bg, bd: kk.bd, fg: now ? '#0D7594' : done ? '#177A57' : '#8FA5AC',
+        icon: now ? 'ph-dot-outline' : done ? 'ph-check' : 'ph-circle', arrow: i < FLOW.length - 1 };
+    });
+    if (curStatus === '已驳回' || curStatus === '已下线') {
+      const kk = this.pill('bad');
+      flow.push({ label: curStatus, bg: kk.bg, bd: kk.bd, fg: kk.fg, icon: 'ph-warning', arrow: false });
+    }
+
+    const acts = [];
+    acts.push({ label: '保存中文草稿', icon: 'ph-floppy-disk', go: this.saveZh, kind: P.edit ? 'sec' : 'sec', disabled: !P.edit, title: P.edit ? '' : '当前角色对编辑器只读' });
+    acts.push({ label: '提交审核', icon: 'ph-stamp', go: this.submit, kind: 'primary', disabled: !P.submit || curStatus === '待审核', title: !P.submit ? '当前角色不可提交' : curStatus === '待审核' ? '已在审核队列中' : '' });
+    acts.push({ label: '发布并同步', icon: 'ph-rocket-launch', go: this.publish, kind: 'primary', disabled: !P.publish, title: P.publish ? '' : '发布权限仅知识审核员' });
+    const entryActions = acts.map(a => {
+      const b = this.btn(a.kind === 'primary' ? 'primary' : 'sec', a.disabled);
+      return { ...a, bg: b.bg, bd: b.bd, fg: b.fg, cursor: b.cursor, disabled: a.disabled ? true : false };
+    });
+    const enBad = s.enStatus !== '已确认' && s.enStatus !== '已同步 Zendesk';
+    const vecBad = s.vec !== '已向量化';
+    const gateMsg = !P.publish
+      ? '统一过审铁律：' + R.name + '不能直接发布，必须由知识审核员在审核中心通过后发布。'
+      : enBad ? '英文版本为「' + s.enStatus + '」，发布会被同步门禁阻断——先完成英文确认。'
+        : vecBad ? '向量状态为「' + s.vec + '」，需先重建向量索引再发布（查重与代理评测依赖它）。'
+          : '门禁通过：正文已保存、英文已确认、向量已就绪，可发布并同步。';
+    const gateFg = !P.publish ? '#8A5F1A' : (enBad || vecBad) ? '#B2453A' : '#177A57';
+
+    const entryTabs = [['body', '知识正文'], ['ver', '版本与回滚'], ['metric', '效果指标'], ['log', '操作日志']].map(([k, label]) => {
+      const on = s.tab === k;
+      return { label, on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ tab: k }) };
+    });
+
+    const tb = [
+      { text: 'H2', title: '二级标题', cmd: () => this.exec('formatBlock', 'h2')() },
+      { text: 'H3', title: '三级标题', cmd: () => this.exec('formatBlock', 'h3')() },
+      { icon: 'ph-text-b', title: '加粗', cmd: () => this.exec('bold')() },
+      { icon: 'ph-text-italic', title: '斜体', cmd: () => this.exec('italic')() },
+      { icon: 'ph-list-bullets', title: '无序列表', cmd: () => this.exec('insertUnorderedList')() },
+      { icon: 'ph-list-numbers', title: '有序列表', cmd: () => this.exec('insertOrderedList')() },
+      { icon: 'ph-table', title: '插入表格', cmd: () => this.insertHTML('<table><thead><tr><th>项目</th><th>说明</th></tr></thead><tbody><tr><td>　</td><td>　</td></tr><tr><td>　</td><td>　</td></tr></tbody></table>')() },
+      { icon: 'ph-image', title: '插入图片占位 + 图片说明', cmd: () => this.insertHTML('<figure><div style="width:100%;height:130px;border-radius:12px;border:1px dashed #CBE2E9;background:repeating-linear-gradient(45deg,#F2F9FB,#F2F9FB 10px,#E6F3F7 10px,#E6F3F7 20px);display:flex;align-items:center;justify-content:center;color:#4E6870;font-family:ui-monospace,Menlo,monospace;font-size:13px">拖入图片或点击上传</div><figcaption>图片说明（同步到 Zendesk）</figcaption></figure>')() },
+      { icon: 'ph-link', title: '超链接', cmd: () => this.exec('createLink', 'https://support.ourcoolfly.com')() },
+      { icon: 'ph-quotes', title: '引用块', cmd: () => this.exec('formatBlock', 'blockquote')() },
+      { icon: 'ph-code', title: '行内代码', cmd: () => this.insertHTML('<code>代码</code>')() },
+      { icon: 'ph-paperclip', title: '附件', cmd: () => this.insertHTML('<p style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #DFEEF3;border-radius:10px;background:#F7FCFD;font-size:13px;color:#31474E">附件：新附件.pdf · 待上传</p>')() },
+      { icon: 'ph-eraser', title: '清除格式', cmd: () => this.exec('removeFormat')() }
+    ];
+    const toolbar = tb.map(b => ({ title: b.title, go: b.cmd, isIcon: !!b.icon, isText: !!b.text, icon: b.icon || '', text: b.text || '' }));
+
+    const lockedBg = P.edit ? '#fff' : '#EDF4F6';
+    const fields = [
+      { k: '所属知识库', isSelect: true, options: [{ v: '政策与售后知识库' }, { v: '产品与使用知识库' }] },
+      { k: '目录 / 章节', isSelect: true, options: [{ v: '售后政策 → 退款与退货' }, { v: '售后政策 → 保修与换新' }] },
+      { k: '问题场景（一级）', isSelect: true, options: this.SCENE1.map(v => ({ v })), hint: '一级场景决定条目归属的问题域，是缺口看板与工单分类的对照维度' },
+      { k: '问题场景（二级）', isSelect: true, options: (this.SCENE2[cur.scene1] || []).map(v => ({ v })) },
+      { k: '标签（同步 Zendesk labels）', isText: true, v: cur.tags, hint: '用户问法变体，多值用 / 分隔；影响帮助中心搜索与 bot 匹配' },
+      { k: '可见性', isSelect: true, options: [{ v: '对外公开 + 内部段落' }, { v: '对外公开' }, { v: '仅客服内部' }] },
+      { k: '适用型号', isText: true, v: '全型号' },
+      { k: '复核周期', isSelect: true, options: [{ v: '180 天' }, { v: '90 天' }, { v: '365 天' }] },
+      { k: '负责人', isText: true, v: '王雯（知识管理员）' }
+    ].map(f => ({ ...f, isSelect: !!f.isSelect, isText: !!f.isText, locked: !P.edit, bg: lockedBg, hasHint: !!f.hint, hint: f.hint || '', options: f.options || [], v: f.v || '' }));
+
+    const vecKind = s.vec === '已向量化' ? 'ok' : s.vec === '向量失败' ? 'bad' : s.vec === '向量化中' ? 'accent' : 'warn';
+    const vecK = this.pill(vecKind);
+    const vb = this.btn('primary', !P.edit || s.vec === '向量化中');
+    const vecRows = [
+      { k: '向量状态', v: s.vec },
+      { k: 'Embedding 模型', v: 'text-embedding-3-large' },
+      { k: '分片策略', v: '512 token / 重叠 64' },
+      { k: '分片数 / 维度', v: s.vec === '未向量化' ? '— / 3072' : '12 / 3072' },
+      { k: '最后向量化', v: s.vec === '未向量化' ? '—' : s.vec === '待重建' ? '07-30 18:05（内容已变更）' : '08-04 11:20' },
+      { k: '用途', v: '挖掘查重 · 缺口聚类 · 发布门禁代理评测' }
+    ];
+
+    const enK = this.pill(this.enKind(s.enStatus));
+    const zhK = this.pill(s.zhDirty ? 'warn' : 'ok');
+    const langCards = [
+      { name: '中文版本（权威源）', status: s.zhDirty ? '有未保存改动' : (curStatus === '已发布' ? '已发布' : curStatus), at: s.zhDirty ? '刚刚（未保存）' : '07-30 18:02', by: '王雯 · 知识管理员', sync: '—（中文不直接对外）', mode: '人工维护',
+        bd: '#CBE2E9', stBg: zhK.bg, stBd: zhK.bd, stFg: zhK.fg, syncFg: '#5A737B',
+        note: '中文是唯一权威源；所有结构、字段、口径以中文版本为准。',
+        actions: [{ label: '保存草稿', go: this.saveZh, disabled: !P.edit, title: P.edit ? '' : '只读角色' }, { label: '提交审核', go: this.submit, disabled: !P.submit, title: P.submit ? '' : '无提交权限' }] },
+      { name: '英文版本（同步 Zendesk）', status: s.enStatus, at: s.enStatus === '未生成' ? '—' : '08-01 14:30', by: s.enStatus === '未生成' ? '—' : '陈迪（人工修订 1 处）', sync: s.enStatus === '已同步 Zendesk' ? '已同步 · en-us' : '未同步（门禁阻断）', mode: 'AI 翻译 + 人工校验',
+        bd: '#BCDDE8', stBg: enK.bg, stBd: enK.bd, stFg: enK.fg, syncFg: s.enStatus === '已同步 Zendesk' ? '#177A57' : '#B2453A',
+        note: '英文允许人工独立修改，但不能改变政策口径；中文更新后必须重新校验。',
+        actions: [
+          { label: s.enStatus === '未生成' ? '生成英文翻译' : '重新翻译', go: this.translate, disabled: !P.edit, title: P.edit ? '' : '只读角色' },
+          { label: '标记已确认', go: this.confirmEn, disabled: !P.edit || s.enStatus !== '待人工校验' && s.enStatus !== '待重新校验', title: '需先完成 AI 翻译并人工校验' },
+          { label: '同步到 Zendesk', go: this.syncEn, disabled: !P.sync || s.enStatus !== '已确认', title: !P.sync ? '同步权限仅审核员' : '需英文已确认' }
+        ] }
+    ].map(l => ({ ...l, actions: l.actions.map(a => { const b = this.btn('sec', a.disabled); return { ...a, bg: b.bg, bd: b.bd, fg: b.fg, cursor: b.cursor, disabled: a.disabled ? true : false, title: a.title || '' }; }) }));
+
+    const EN_FLOW = ['未生成', 'AI 翻译中', '待人工校验', '已确认', '已同步 Zendesk'];
+    const enFlow = EN_FLOW.map((f, i) => {
+      const now = f === s.enStatus, done = EN_FLOW.indexOf(s.enStatus) > i;
+      const kk = this.pill(now ? 'accent' : done ? 'ok' : 'plain');
+      return { label: f, bg: kk.bg, bd: kk.bd, fg: now ? '#0D7594' : done ? '#177A57' : '#8FA5AC', arrow: i < EN_FLOW.length - 1 };
+    });
+    if (s.enStatus === '翻译失败' || s.enStatus === '待重新校验') {
+      const kk = this.pill(s.enStatus === '翻译失败' ? 'bad' : 'warn');
+      enFlow.push({ label: s.enStatus, bg: kk.bg, bd: kk.bd, fg: kk.fg, arrow: false });
+    }
+    const pairs = this.PAIRS.map(p => ({ ...p, bg: p.internal ? '#EDF4F6' : p.edited ? '#FBF6EC' : '#fff', bd: p.internal ? '#DFEEF3' : p.edited ? '#E8D9BA' : '#DFEEF3', edited: !!p.edited, editNote: p.editNote || '' }));
+
+    const pick = s.diffPick;
+    const key = ['v1', 'v2', 'v3'].filter(v => pick.indexOf(v) >= 0).join('|');
+    const diff = this.DIFF[key] || { left: [], right: [] };
+    const dcolor = (k) => k === 'del' ? { bg: '#F8EEEC', bd: '#E6C9C4' } : k === 'add' ? { bg: '#EAF4F0', bd: '#BFDDD2' } : { bg: '#F7FCFD', bd: '#DFEEF3' };
+    const versionRows = versions.map(v => {
+      const kk = this.pill(v.status === '已发布' ? 'ok' : v.status === '待审核' ? 'warn' : v.status === '已回滚' ? 'bad' : 'info');
+      const picked = pick.indexOf(v.v) >= 0;
+      const canRb = v.status !== '已发布' && v.status !== '待审核';
+      const rb = this.btn('danger', !P.rollback);
+      return { ...v, bg: kk.bg, bd: kk.bd, fg: kk.fg, rowBg: v.status === '已发布' ? '#F5FBFC' : 'transparent',
+        solveFg: v.solveNum && v.solveNum < 80 ? '#B2453A' : v.solveNum ? '#177A57' : '#5A737B',
+        pickBd: picked ? '#0D7594' : '#CBE2E9', pickBg: picked ? '#0D7594' : '#fff', pickMark: picked ? '✓' : '',
+        pick: () => {
+          const has = pick.indexOf(v.v) >= 0;
+          let next = has ? pick.filter(x => x !== v.v) : [...pick, v.v];
+          if (next.length > 2) next = next.slice(-2);
+          this.setState({ diffPick: next, showDiff: next.length === 2 ? s.showDiff : false });
+        },
+        canRollback: canRb, rbDisabled: !P.rollback ? true : false, rbTitle: P.rollback ? '' : '回滚权限仅知识审核员',
+        rbBg: rb.bg, rbBd: rb.bd, rbFg: rb.fg, rbCursor: rb.cursor, rollback: this.askRollback(v.v) };
+    });
+    const pubV = versions.find(v => v.status === '已发布');
+    const rolled = versions.some(v => v.status === '已回滚');
+    const verdictK = this.pill(rolled ? 'ok' : 'warn');
+
+    const verBars = versions.filter(v => v.solveNum > 0).map(v => ({ v: v.v, label: v.label.slice(0, 6), solve: v.solve, h: v.solveNum + '%',
+      color: v.solveNum < 80 ? '#B2453A' : '#0D7594', fg: v.solveNum < 80 ? '#B2453A' : '#177A57' }));
+
+    const modal = s.modal ? { ...s.modal, hasList: !!s.modal.hasList, hasInput: !!s.modal.hasInput, list: (s.modal.list || []), ok: s.modal.ok, okBg: s.modal.okBg } : { title: '', body: '', list: [], hasList: false, hasInput: false, ok: '', okBg: '#0D7594' };
+
+    const entryLogs = logs.filter(l => l.obj.indexOf('KB-0201') === 0 || l.obj.indexOf('退款政策') >= 0).map(l => ({
+      t: l.t, who: l.who + '（' + l.role + '）', action: l.action, hasDiff: !!l.field, field: l.field || '', before: l.before || '', after: l.after || '', hasNote: !!l.note, note: l.note || '' }));
+
+    const secB = (dis) => this.btn('sec', dis);
+    const priB = (dis) => this.btn('primary', dis);
+
+    const candidates = this.CANDIDATES.map(c => {
+      const tk = this.pill(c.type === '新增' ? 'accent' : c.type === '修订' ? 'warn' : 'info');
+      const dis = !P.submit && !P.suggest;
+      const b = priB(dis);
+      return { ...c, typeBg: tk.bg, typeBd: tk.bd, typeFg: tk.fg,
+        dupFg: parseFloat(c.dup) >= 0.85 ? '#8A5F1A' : '#13252B',
+        gapFg: c.gap === '未覆盖' ? '#0D7594' : '#8A5F1A',
+        disabled: dis ? true : false, title: dis ? '当前角色不可提交' : '',
+        btnBg: b.bg, btnBd: b.bd, btnFg: b.fg, btnCur: b.cursor,
+        act: () => { if (dis) return this.say('当前角色不可提交审核。'); this.setState({ promoted: s.promoted + 1 }); this.log({ obj: c.title, action: P.submit ? '提交审核（AI 挖掘候选）' : '提交优化建议', note: '三重准入：频次 ' + c.freq + ' · 查重 ' + c.dup + ' · ' + c.gap }); this.say('已进审核队列：' + c.title); },
+        drop: () => { this.log({ obj: c.title, action: '丢弃候选', note: '同主题再达阈值会重新出现' }); this.say('已丢弃候选（留痕）'); } };
+    });
+
+    const queue = live.map((q, i) => {
+      const on = i === Math.min(s.reviewSel, live.length - 1);
+      const kind = q.src.indexOf('AI') === 0 ? 'accent' : q.src === '人工录入' ? 'plain' : q.src === '版本修订' ? 'warn' : 'info';
+      const sk = this.pill(kind);
+      return { ...q, bg: on ? '#E0F1F6' : '#fff', bd: on ? '#0D7594' : '#DFEEF3',
+        srcBg: sk.bg, srcBd: sk.bd, srcFg: sk.fg, open: () => this.setState({ reviewSel: i }) };
+    });
+    const revSrc = live[Math.min(s.reviewSel, Math.max(live.length - 1, 0))];
+    const okb = priB(!P.review), nob = this.btn('danger', !P.review);
+    const rev = revSrc ? { ...revSrc, changes: revSrc.changes,
+      disabled: !P.review ? true : false, title2: P.review ? '' : '审核权限仅知识审核员',
+      okBg: okb.bg, okBd: okb.bd, okFg: okb.fg, okCur: okb.cursor, noBg: nob.bg, noBd: nob.bd, noFg: nob.fg,
+      gate: P.review ? '通过后自动跑发布门禁：静态检查 + 英文校验状态 + 代理评测，全过才入同步队列。' : '当前身份为' + R.name + '，只能查看，不能通过或驳回。',
+      gateFg: P.review ? '#177A57' : '#8A5F1A',
+      pass: this.reviewPass(revSrc), reject: this.askReject(revSrc) } : null;
+    const gateRows = [
+      { k: '格式与字段完整性', v: '标题 / 章节 / 可见性 / 锚点 / 标签均已填。', ok: true },
+      { k: '敏感信息与内部口径', v: '内部段落已标记，不会进对外文章。', ok: true },
+      { k: '英文版本状态', v: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' ? '英文已确认，可同步。' : '英文为「' + s.enStatus + '」——同步会被阻断，先完成校验。', ok: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' },
+      { k: '代理评测（pgvector）', v: '38 / 41 召回通过；代理指标不等于 Zendesk AI 真实表现，如实标注。', ok: false }
+    ].map(g => { const kk = this.pill(g.ok ? 'ok' : 'warn'); return { ...g, bg: kk.bg, bd: kk.bd, fg: kk.fg, icon: g.ok ? 'ph-check-circle' : 'ph-warning-circle' }; });
+    const reviewHistory = [
+      { who: '李骁（知识审核员）', act: '驳回', t: '08-03 16:10', note: '计费周期与财务口径不符，请附财务确认截图。' },
+      { who: '王雯（知识管理员）', act: '重新提交', t: '08-04 11:05', note: '已补充财务确认截图与跨月退订示例。' },
+      { who: '李骁（知识审核员）', act: '发布 v2', t: '07-30 18:02', note: '退款时限 7 天 → 5 天，按财务口径调整。' }
+    ];
+
+    const syncStats = [
+      { k: '待同步', v: String(syncRows.filter(r => r.state === '待同步').length), note: '过审后入队，分钟级推送', fg: '#13252B' },
+      { k: '同步中', v: String(syncRows.filter(r => r.state === '同步中').length), note: '推送 Zendesk API 中', fg: '#0D7594' },
+      { k: '已同步', v: '91', note: '本周成功 34 次 / 失败 2 次', fg: '#177A57' },
+      { k: '失败 / 阻断', v: String(failCount + syncRows.filter(r => r.state === '已阻断').length), note: '重试 3 次后告警；阻断=英文未校验', fg: '#B2453A' }
+    ];
+    const rsync = secB(!P.sync);
+    const syncRowsOut = syncRows.map(r => {
+      const kind = r.state === '已同步' ? 'ok' : r.state === '失败' ? 'bad' : r.state === '同步中' ? 'accent' : r.state === '已阻断' ? 'warn' : 'info';
+      const kk = this.pill(kind);
+      return { ...r, bg: kk.bg, bd: kk.bd, fg: kk.fg, canRetry: r.state === '失败',
+        disabled: !P.sync ? true : false, title2: P.sync ? '' : '触发同步仅知识审核员',
+        rBg: rsync.bg, rBd: rsync.bd, rFg: rsync.fg, cur: rsync.cursor,
+        retry: () => {
+          if (!P.sync) return this.say('无同步权限。');
+          this.setState({ sync: { ...this.state.sync, [r.id]: '同步中' } });
+          this.log({ obj: r.title, action: '手动重试同步' });
+          setTimeout(() => { this.setState({ sync: { ...this.state.sync, [r.id]: '已同步' } }); this.say('同步成功：' + r.title); }, 1400);
+        } };
+    });
+    const fb = priB(!P.sync);
+    const driftRows = this.DRIFT_ROWS.map(d => ({ ...d,
+      disabled: !P.sync ? true : false, title2: P.sync ? '' : '覆盖动作仅知识审核员',
+      fBg: fb.bg, fBd: fb.bd, fFg: fb.fg, cur: fb.cursor,
+      force: () => { if (!P.sync) return this.say('无覆盖权限。'); this.log({ obj: d.title, action: '以本台内容覆盖 Zendesk', note: 'Zendesk 端修改被丢弃' }); this.say('已覆盖线上文章（留痕）'); },
+      pull: () => { this.setState({ promoted: this.state.promoted + 1 }); this.log({ obj: d.title, action: '拉回 Zendesk 内容进审核队列', note: '作为存量认领来源待审' }); this.say('已拉回进审核队列'); } }));
+
+    const dashTabs = [['kb', '知识库效果'], ['gap', '知识缺口'], ['cs', '客服工作数据']].map(([k, label]) => {
+      const on = s.dash === k;
+      return { label, on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ dash: k }) };
+    });
+    const effect = this.EFFECT.map(e => ({ ...e, rowBg: e.low ? '#FBF6EC' : 'transparent',
+      vBg: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').bg,
+      vBd: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').bd,
+      vFg: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').fg,
+      fg: e.low ? '#B2453A' : e.sample ? '#5A737B' : '#31474E', w: e.low ? '700' : '400',
+      open: () => { const i = entries.findIndex(x => e.title.indexOf(x.title) >= 0 || x.title.indexOf(e.title) >= 0); this.setState({ view: 'entry', sel: i >= 0 ? i : 0, tab: 'metric' }); } }));
+    const gsub = priB(!P.submit && !P.suggest);
+    const gapTopics = this.GAP.map(g => {
+      const kk = this.pill(g.act === '修订' ? 'warn' : 'bad');
+      const dis = !P.submit && !P.suggest;
+      return { ...g, bg: kk.bg, bd: kk.bd, fg: kk.fg,
+        actLabel: g.act === '修订' ? '挂为修订建议' : '起草新条目',
+        disabled: dis ? true : false, title2: dis ? '当前角色不可提交' : '',
+        btnBg: gsub.bg, btnBd: gsub.bd, btnFg: gsub.fg, cur: gsub.cursor,
+        act: () => { this.setState({ promoted: s.promoted + 1 }); this.log({ obj: g.topic, action: P.submit ? '起草并提交审核' : '提交优化建议', note: '来源：知识缺口看板 · ' + g.n }); this.say('已进审核队列：' + g.topic); } };
+    });
+    const noResult = this.NO_RESULT.map(r => ({ ...r, fg: r.bad ? '#B2453A' : '#8A5F1A' }));
+    const signals = this.SIGNALS.map(x => { const kk = this.pill(x.ok ? 'ok' : 'warn'); return { ...x, bg: kk.bg, bd: kk.bd, fg: kk.fg }; });
+    const revisions = this.REVISIONS.map(r => {
+      const kk = this.pill(r.src === '客服 flag' ? 'warn' : r.src === '文章被踩' ? 'bad' : 'accent');
+      return { ...r, srcBg: kk.bg, srcBd: kk.bd, srcFg: kk.fg,
+        actLabel: r.src === '搜索无结果' ? '改标题与 labels' : r.src === '高频无覆盖' ? '起草新条目' : '转为修订建议',
+        act: () => { this.setState({ promoted: this.state.promoted + 1 }); this.log({ obj: r.item, action: P.submit ? '转为修订建议并提交审核' : '提交优化建议', note: '触发源：' + r.src + ' · ' + r.n }); this.say('已进审核队列：' + r.item); } };
+    });
+
+    const logTabs = [['all', '全部'], ['content', '内容变更'], ['flow', '审核与发布'], ['perm', '权限与系统']].map(([k, label]) => {
+      const on = s.logFilter === k;
+      return { label, on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ logFilter: k }) };
+    });
+    const logKind = (a) => a.indexOf('发布') >= 0 || a.indexOf('通过') >= 0 || a.indexOf('同步') >= 0 && a.indexOf('失败') < 0 ? 'ok'
+      : a.indexOf('驳回') >= 0 || a.indexOf('回滚') >= 0 || a.indexOf('失败') >= 0 || a.indexOf('禁用') >= 0 ? 'bad'
+      : a.indexOf('提交') >= 0 || a.indexOf('建议') >= 0 || a.indexOf('权限') >= 0 ? 'warn' : 'info';
+    const logRows = logs.filter(l => {
+      if (s.logFilter === 'all') return true;
+      if (s.logFilter === 'content') return /保存|创建版本|修订|翻译|丢弃|拉回/.test(l.action);
+      if (s.logFilter === 'flow') return /提交|通过|驳回|发布|回滚|同步/.test(l.action);
+      return /权限|角色|用户|禁用|启用/.test(l.action) || /角色|用户/.test(l.obj);
+    }).map(l => { const kk = this.pill(logKind(l.action)); return { ...l, bg: kk.bg, bd: kk.bd, fg: kk.fg,
+      hasDiff: !!l.field, field: l.field || '', before: l.before || '', after: l.after || '', hasNote: !l.field && !!l.note, note: l.note || '' }; });
+
+    const rbacTabs = [['users', '用户管理'], ['roles', '角色管理'], ['matrix', '权限矩阵']].map(([k, label]) => {
+      const on = s.rbacTab === k;
+      return { label, on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ rbacTab: k }) };
+    });
+    const users = s.users || this.USERS;
+    const ub = secB(!P.manageUser);
+    const userRows = users.map((u, i) => {
+      const kk = this.pill(u.on ? 'ok' : 'bad');
+      return { ...u, state: u.on ? '启用' : '已禁用', bg: kk.bg, bd: kk.bd, fg: kk.fg, op: u.on ? '1' : '.6',
+        btnLabel: u.on ? '禁用' : '启用', btnBg: ub.bg, btnBd: ub.bd, btnFg: ub.fg, cur: ub.cursor,
+        toggle: () => {
+          if (!P.manageUser) return this.say('无用户管理权限（仅系统管理员）。');
+          const next = users.map((x, j) => j === i ? { ...x, on: !x.on } : x);
+          this.setState({ users: next });
+          this.log({ obj: '用户：' + u.name, action: u.on ? '禁用用户' : '启用用户', field: '账号状态', before: u.on ? '启用' : '已禁用', after: u.on ? '已禁用' : '启用' });
+          this.say((u.on ? '已禁用 ' : '已启用 ') + u.name + '（会话即时失效，历史留痕保留）');
+        } };
+    });
+    const matrix = s.matrix || this.MATRIX;
+    const roleCards = [
+      { name: '知识管理员', count: 4, allow: ['新建 / 编辑', '提交审核', '管理目录章节', '查看数据'], deny: ['审核', '发布', '回滚'], note: '知识生产主力；所有产出必须过审，无直接发布路径。' },
+      { name: '知识审核员', count: 2, allow: ['审核通过 / 驳回', '发布与同步', '版本回滚', '编辑'], deny: ['用户管理'], note: '质量与发布唯一执行者；不能审核自己提交的版本（四眼原则硬约束）。' },
+      { name: 'AI 运营', count: 3, allow: ['查看效果与缺口', '查看 AI 调用数据', '提交优化建议'], deny: ['编辑内容', '审核', '发布', '回滚'], note: '只读 + 建议角色：把数据洞察变成审核队列里的建议，不直接改库。' },
+      { name: '系统管理员', count: 1, allow: ['用户管理', '角色与权限', '查看审计日志'], deny: ['审核', '发布', '编辑内容'], note: '职责分离：管人不管内容，避免既配权限又改知识。' }
+    ].map(r => ({ ...r, bd: r.name === R.name ? '#BCDDE8' : '#CBE2E9', allow: r.allow.map(t => ({ t })), deny: r.deny.map(t => ({ t })) }));
+    const matrixCols = this.MATRIX_ROLES.map(name => ({ name }));
+    const mb = !P.manageUser;
+    const matrixRows = matrix.map((m, ri) => ({ p: m.p, cells: m.v.map((v, ci) => ({
+      mark: v ? '✓' : '', bg: v ? '#0D7594' : '#fff', bd: v ? '#0D7594' : '#CBE2E9', fg: '#fff', cur: mb ? 'not-allowed' : 'pointer',
+      go: () => {
+        if (mb) return this.say('权限矩阵仅系统管理员可修改。');
+        const next = matrix.map((row, j) => j === ri ? { ...row, v: row.v.map((x, k) => k === ci ? (x ? 0 : 1) : x) } : row);
+        this.setState({ matrix: next });
+        this.log({ obj: '角色：' + this.MATRIX_ROLES[ci], action: '修改角色权限', field: m.p, before: v ? '允许' : '禁止', after: v ? '禁止' : '允许' });
+        this.say('已更新权限矩阵（改动已写审计日志）');
+      } })) }));
+    const cub = priB(!P.manageUser);
+
+    const batches = this.BATCHES.map(b => {
+      const kk = this.pill(b.state === '完成' ? 'ok' : b.state === '失败' ? 'bad' : 'info');
+      return { ...b, bg: kk.bg, bd: kk.bd, fg: kk.fg };
+    });
+
+    return {
+      batches, candidates, queue, rev, hasRev: !!rev, queueEmpty: !rev, gateRows, reviewHistory,
+      syncStats, syncRows: syncRowsOut, driftRows, mapRows: this.MAP_ROWS,
+      dashTabs, isDashKb: s.dash === 'kb', isDashGap: s.dash === 'gap', isDashCs: s.dash === 'cs',
+      scenes: this.SCENES, effect, gapTopics, noResult, signals, revisions,
+      logTabs, logRows, rbacTabs, rbacUsers: s.rbacTab === 'users', rbacRoles: s.rbacTab === 'roles', rbacMatrix: s.rbacTab === 'matrix',
+      userRows, roleCards, matrixCols, matrixRows,
+      noRbacPerm: !P.manageUser, noRbacPermB: !P.manageUser ? true : false, rbacTitle: P.manageUser ? '' : '仅系统管理员可操作',
+      cuBg: cub.bg, cuBd: cub.bd, cuFg: cub.fg, cuCur: cub.cursor,
+      createUser: () => { if (!P.manageUser) return this.say('无用户管理权限。'); this.setState({ modal: { kind: 'user', title: '创建用户', body: '演示原型：创建用户时必须选择角色与权限范围（可授单个知识库），保存后写入审计日志。', ok: '创建', okBg: '#0D7594', hasList: true, list: [{ t: '角色：知识管理员 / 知识审核员 / AI 运营 / 系统管理员' }, { t: '权限范围：全部知识库 或 指定知识库' }, { t: '首次登录强制改密' }] } }); },
+      tier: this.props.tierWarnings ?? true,
+      goGap: () => this.setState({ view: 'dash', dash: 'gap' }),
+      goEntryVer: () => this.setState({ view: 'entry', sel: 0, tab: 'ver' }),
+      navGroups, roleOpts, permChips, roleName: R.name, userName: R.user, roleNote: R.note,
+      title: this.TITLES[s.view], crumb: this.CRUMBS[s.view], pending, syncFailCount: failCount,
+      isWork: s.view === 'work', isKb: s.view === 'kb', isEntry: s.view === 'entry',
+      isMine: s.view === 'mine', isReview: s.view === 'review', isSync: s.view === 'sync',
+      isDash: s.view === 'dash', isFeedback: s.view === 'feedback', isLogs: s.view === 'logs', isRbac: s.view === 'rbac',
+      workTabs, workRows, workStats, workEmpty: workRows.length === 0,
+      workEmptyNote: s.workTab === 'todo' ? '当前角色没有待审任务（审核权限仅知识审核员）。' : '换个分组，或新建一条知识条目。',
+      workHint: s.workTab === 'draft' ? '草稿仅本人可见，提交后进审核中心' : s.workTab === 'rejected' ? '按审核意见修改后可重新提交' : '状态与下一步动作由 RBAC 决定',
+      createBg: cbtn.bg, createFg: cbtn.fg, createCur: cbtn.cursor, newDraft: () => { if (!P.create) return this.say('当前角色不可新建条目。'); this.setState({ view: 'entry', sel: 0, tab: 'body', entryStatus: '草稿' }); this.say('已新建草稿（演示：进入条目工作台）'); },
+      libs: libRows, libName: (this.LIBS.find(l => l.k === s.lib) || {}).name, libCount: (this.LIBS.find(l => l.k === s.lib) || {}).n, tree, entryRows,
+      cur: { ...cur, status: curStatus }, liveVer, dueBg: dueK.bg, dueBd: dueK.bd, dueFg: dueK.fg,
+      flow, statusMeta: '最近操作：' + (curStatus === '待审核' ? '王雯 提交审核 · 08-04 09:12' : curStatus === '编辑中' ? R.user + ' 编辑中 · 刚刚' : '李骁 发布 v2 · 07-30 18:02'),
+      entryActions, gateMsg, gateFg, entryTabs,
+      tabBody: s.tab === 'body', tabVer: s.tab === 'ver', tabMetric: s.tab === 'metric', tabLog: s.tab === 'log',
+      toolbar, fields, canEdit: P.edit ? 'true' : 'false',
+      isZh: s.lang === 'zh', isEn: s.lang === 'en',
+      langSeg: [['zh', '中文（权威源）'], ['en', '英文（同步 Zendesk）']].map(([k, label]) => {
+        const on = s.lang === k;
+        return { label, on: on ? 'true' : 'false', bg: on ? '#0D7594' : 'transparent', fg: on ? '#fff' : '#4E6870', go: () => this.setState({ lang: k }) };
+      }),
+      enActions: [
+        { label: s.enStatus === '未生成' ? 'AI 生成英文' : 'AI 重新翻译', icon: 'ph-translate', go: this.translate, dis: !P.edit },
+        { label: '标记英文已确认', icon: 'ph-check', go: this.confirmEn, dis: !P.edit || s.enStatus === '未生成' || s.enStatus === 'AI 翻译中' || s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' },
+        { label: '同步到 Zendesk', icon: 'ph-cloud-arrow-up', go: this.syncEn, dis: !P.sync || s.enStatus !== '已确认' },
+        { label: '模拟翻译失败', icon: 'ph-warning', go: this.failTranslate, dis: false }
+      ].map(a => { const b = this.btn('sec', a.dis); return { ...a, bg: b.bg, bd: b.bd, fg: b.fg, cursor: b.cursor, disabled: a.dis ? true : false, title: a.dis ? (P.edit ? '当前状态不可执行该动作' : '当前角色只读') : '' }; }),
+      vecStatus: s.vec, vecBg: vecK.bg, vecBd: vecK.bd, vecFg: vecK.fg, vecRows,
+      vecBtnBg: vb.bg, vecBtnBd: vb.bd, vecBtnFg: vb.fg, vecBtnCur: vb.cursor,
+      vecBtnDis: (!P.edit || s.vec === '向量化中') ? true : false,
+      vecBtnLabel: s.vec === '向量化中' ? '向量化中…' : s.vec === '向量失败' ? '重试向量化' : '重建向量索引',
+      rebuildVec: this.rebuildVec,
+      vecNote: s.vec === '待重建' ? '内容已变更，向量落后于正文——发布前必须重建，否则查重与代理评测跑的是旧内容。'
+        : s.vec === '向量失败' ? '向量化失败（Embedding 服务超时）：保留上一次向量，已告警；失败条目不参与查重与代理评测。'
+        : s.vec === '未向量化' ? '尚未向量化：首次过审入库时自动触发，也可手动执行。'
+        : '向量与当前正文一致。向量只服务本台内部（查重 / 聚类 / 代理评测），Zendesk AI 有自己的索引。',
+      onDocInput: () => this.markDirty(),
+      dirtyLabel: !P.edit ? '只读模式（' + R.name + '）' : s.zhDirty ? '● 有未保存改动' : '已保存',
+      dirtyFg: !P.edit ? '#8FA5AC' : s.zhDirty ? '#B2453A' : '#177A57',
+      langCards, enStatus: s.enStatus, enBg: enK.bg, enBd: enK.bd, enFg: enK.fg, enFlow, pairs,
+      enPairs: s.enStatus !== '未生成' && s.enStatus !== 'AI 翻译中', enPending: s.enStatus === 'AI 翻译中' || s.enStatus === '未生成' || s.enStatus === '翻译失败',
+      enPendingMsg: s.enStatus === 'AI 翻译中' ? 'AI 正在翻译中文 v3……完成后状态转「待人工校验」，校验前不可同步。' : s.enStatus === '翻译失败' ? '翻译失败（上游超时）：已保留上一次英文内容，同步被阻断，可重试；连续 3 次失败会告警。' : '英文版本尚未生成：点上方「生成英文翻译」由 AI 起草，再人工校验。',
+      versions: versionRows, diffLabel: pick.length === 2 ? pick.join(' ↔ ') : '请选两个版本', showDiff: s.showDiff && pick.length === 2,
+      openDiff: () => { if (pick.length !== 2) return this.say('请先勾选两个版本再比对。'); this.setState({ showDiff: !s.showDiff }); },
+      diffLeft: diff.left.map(d => ({ t: d.t, ...dcolor(d.k) })), diffRight: diff.right.map(d => ({ t: d.t, ...dcolor(d.k) })),
+      diffLeftName: pick[0] || '', diffRightName: pick[1] || '',
+      verdictBg: verdictK.bg, verdictBd: verdictK.bd, verdictFg: verdictK.fg,
+      verdictMsg: rolled ? '已回滚：v1（退款 7 天）重新生效，v2 标记已回滚并保留全部历史指标，回滚动作已写入日志与同步队列。' : '效果评估：当前发布版本 ' + (pubV ? pubV.v + '（' + pubV.label + '）解决率 ' + pubV.solve : '—') + '，较 v1 下降 20pp，建议回滚 v1 后再单独修订口径。',
+      entryMetrics: [
+        { k: '当前版本调用次数', v: pubV ? pubV.calls : '—', note: '近 30 天 · bot + 人工引用合计', fg: '#13252B' },
+        { k: '命中率', v: pubV ? pubV.hit : '—', note: '检索到本条目 / 相关提问', fg: '#13252B' },
+        { k: '解决率', v: pubV ? pubV.solve : '—', note: '引用后会话判解决（近似归因）', fg: pubV && pubV.solveNum < 80 ? '#B2453A' : '#177A57' },
+        { k: '采纳率', v: pubV ? pubV.adopt : '—', note: 'bot 引用后真正写进回答', fg: '#13252B' },
+        { k: '向量状态', v: s.vec, note: s.vec === '已向量化' ? '12 分片 / 3072 维 · 与正文一致' : '向量落后于正文，影响查重与代理评测', fg: s.vec === '已向量化' ? '#177A57' : '#B2453A' }
+      ], verBars,
+      entryFeedback: [
+        { src: '文章被踩', ver: 'v2', text: '「5 天太短，和商品页写的 7 天不一致」——口径冲突投诉', n: '11 踩' },
+        { src: 'bot 未解决转人工', ver: 'v2', text: '用户追问跨境订单起算日，条目未覆盖', n: '13 次' },
+        { src: '客服 flag', ver: 'v2', text: '客服标记：内部例外通道缺审批人信息', n: '1 flag' },
+        { src: '文章投票', ver: 'v1', text: '历史版本赞 42 / 踩 3，解决率 90%', n: '历史' }
+      ],
+      entryLogs,
+      hasModal: !!s.modal, modal, closeModal: () => this.setState({ modal: null, modalErr: false, modalText: '' }),
+      confirmModal: this.confirmModal, onModalInput: (e) => this.setState({ modalText: e.target.value, modalErr: false }),
+      modalErr: s.modalErr, modalErrMsg: '驳回理由必填——审核意见会回传给提交人并留痕。', modalInputBd: s.modalErr ? '#B2453A' : '#CBE2E9',
+      toast: s.toast, hasToast: !!s.toast,
+      goReview: this.go('review'), goSync: this.go('sync'), goKb: this.go('kb'),
+      failTranslate: this.failTranslate, zhEdited: this.zhEdited
+    };
+  }
+}
+</script>
+</body>
+</html>
