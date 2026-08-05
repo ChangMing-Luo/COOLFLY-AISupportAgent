@@ -81,7 +81,10 @@ export function App() {
 
   const can = (p: Permission): boolean => user.permissions.includes(p);
   const goto = (v: ViewKey, id?: string): void => {
-    if (id) setEntryId(id);
+    // 进入条目工作台不带 id = 新建；不清空会残留上一次打开的条目 id，
+    // 使「新建条目」入口去加载旧条目（旧条目已删时直接报「条目不存在」）
+    if (v === 'entry') setEntryId(id ?? null);
+    else if (id) setEntryId(id);
     setView(v);
   };
 
