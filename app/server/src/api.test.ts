@@ -96,8 +96,8 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
         ownerId: null,
         body: {
           paragraphs: [
-            { id: 'p0', text: '首次配对失败排查', internal: false, heading: true },
-            { id: 'p1', text: '1. 确认手机连接的是 2.4GHz 网络。', internal: false, heading: false },
+            { id: 'p0', text: '首次配对失败排查', html: '', internal: false, heading: true },
+            { id: 'p1', text: '1. 确认手机连接的是 2.4GHz 网络。', html: '', internal: false, heading: false },
           ],
         },
       },
@@ -217,7 +217,7 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
         title: '自审放行验证条目', libraryId: 'lib_policy', chapterId: 'ch_refund', entryType: 'FAQ 型',
         visibility: 'public', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['测试'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
-        body: { paragraphs: [{ id: 'p0', text: '内容', internal: false, heading: false }] },
+        body: { paragraphs: [{ id: 'p0', text: '内容', html: '', internal: false, heading: false }] },
       },
     });
     const selfId = JSON.parse(create.body).id as string;
@@ -261,7 +261,7 @@ describe('RULE-04 可见性同步：内部段落零外泄', () => {
     );
     expect(rows[0]).toBeTruthy();
     const publicHtml = toPublicHtml({
-      paragraphs: [{ id: 'a', text: '内部话术', internal: true, heading: false }],
+      paragraphs: [{ id: 'a', text: '内部话术', html: '', internal: true, heading: false }],
     });
     expect(publicHtml.trim()).toBe('');
   });
@@ -382,7 +382,7 @@ describe('RULE-06 同步失败 / 阻断 / drift / 并发冲突', () => {
       title: '订单发出后能否改地址', libraryId: 'lib_policy', chapterId: 'ch_ship', entryType: 'FAQ 型',
       visibility: 'public', sceneL1: '订单与物流', sceneL2: '地址修改', labels: ['改地址'],
       deviceModels: [], reviewCycleDays: 180, ownerId: null,
-      body: { paragraphs: [{ id: 'p0', text: 'A 用户的改动', internal: false, heading: false }] },
+      body: { paragraphs: [{ id: 'p0', text: 'A 用户的改动', html: '', internal: false, heading: false }] },
       expectedVersion: e.lock_version,
     };
     const first = await app.inject({ method: 'PUT', url: `/api/kb/entries/${e.id}`, headers: as('manager'), payload });
@@ -392,7 +392,7 @@ describe('RULE-06 同步失败 / 阻断 / drift / 并发冲突', () => {
       method: 'PUT',
       url: `/api/kb/entries/${e.id}`,
       headers: as('reviewer'),
-      payload: { ...payload, body: { paragraphs: [{ id: 'p0', text: 'B 用户的改动', internal: false, heading: false }] } },
+      payload: { ...payload, body: { paragraphs: [{ id: 'p0', text: 'B 用户的改动', html: '', internal: false, heading: false }] } },
     });
     expect(stale.statusCode).toBe(409);
     expect(JSON.parse(stale.body).message).toContain('并发编辑冲突');
@@ -544,7 +544,7 @@ describe('FLOW-02 驳回理由必填与往返留痕', () => {
         title: '驳回往返验证', libraryId: 'lib_policy', chapterId: 'ch_billing', entryType: 'FAQ 型',
         visibility: 'public', sceneL1: '会员与账户', sceneL2: '会员计费', labels: ['会员'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
-        body: { paragraphs: [{ id: 'p0', text: '初版内容', internal: false, heading: false }] },
+        body: { paragraphs: [{ id: 'p0', text: '初版内容', html: '', internal: false, heading: false }] },
       },
     });
     const id = JSON.parse(create.body).id as string;
@@ -639,7 +639,7 @@ describe('FLOW-06 翻译工作流状态机', () => {
         title: '保修期与凭证要求', libraryId: 'lib_policy', chapterId: 'ch_warranty', entryType: 'FAQ 政策型',
         visibility: 'public', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修', '凭证'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
-        body: { paragraphs: [{ id: 'p0', text: '保修范围（已更新口径）', internal: false, heading: true }] },
+        body: { paragraphs: [{ id: 'p0', text: '保修范围（已更新口径）', html: '', internal: false, heading: true }] },
         expectedVersion: e.lock_version,
       },
     });
@@ -665,9 +665,9 @@ describe('FLOW-06 翻译工作流状态机', () => {
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: {
           paragraphs: [
-            { id: 'p0', text: '退款时限', internal: false, heading: true },
-            { id: 'p1', text: '非质量问题：签收后 5 天内可退。', internal: false, heading: false },
-            { id: 'p2', text: '内部：超时个案走主管审批，额度上限 $80。', internal: true, heading: false },
+            { id: 'p0', text: '退款时限', html: '', internal: false, heading: true },
+            { id: 'p1', text: '非质量问题：签收后 5 天内可退。', html: '', internal: false, heading: false },
+            { id: 'p2', text: '内部：超时个案走主管审批，额度上限 $80。', html: '', internal: true, heading: false },
           ],
         },
       },

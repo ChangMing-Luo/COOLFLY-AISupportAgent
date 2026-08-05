@@ -16,6 +16,7 @@ import {
   type Visibility,
 } from '@kb/contracts';
 import { api, ApiError } from '../api';
+import { BilingualEditor } from '../editor';
 import {
   ConfirmModal,
   L,
@@ -179,7 +180,7 @@ function emptyForm(): FormState {
     deviceModelsText: '全型号',
     reviewCycleDays: TUNABLES.reviewCycleDays,
     ownerId: null,
-    paragraphs: [{ id: 'p_0', text: '', internal: false, heading: false }],
+    paragraphs: [{ id: 'p_0', text: '', html: '', internal: false, heading: false }],
   };
 }
 
@@ -423,344 +424,93 @@ function SummaryPanel({
   );
 }
 
-/* ============================ ④ 中文段落编辑器 ============================ */
+/* ============================ ④ 英文标题对照 ============================ */
 
-function ParagraphEditor({
-  paragraphs,
-  readOnly,
-  onChange,
-}: {
-  paragraphs: Paragraph[];
-  readOnly: boolean;
-  onChange: (next: Paragraph[]) => void;
-}) {
-  const patch = (i: number, p: Partial<Paragraph>): void => {
-    onChange(paragraphs.map((item, idx) => (idx === i ? { ...item, ...p } : item)));
-  };
-  const move = (i: number, delta: number): void => {
-    const target = i + delta;
-    if (target < 0 || target >= paragraphs.length) return;
-    const next = [...paragraphs];
-    const a = next[i]!;
-    next[i] = next[target]!;
-    next[target] = a;
-    onChange(next);
-  };
-  const remove = (i: number): void => {
-    if (paragraphs.length <= 1) return;
-    onChange(paragraphs.filter((_, idx) => idx !== i));
-  };
-  const add = (): void => {
-    const maxId = paragraphs.reduce((m, p) => {
-      const n = Number(p.id.replace(/^p_/, ''));
-      return Number.isFinite(n) && n > m ? n : m;
-    }, -1);
-    onChange([...paragraphs, { id: `p_${maxId + 1}`, text: '', internal: false, heading: false }]);
-  };
-
-  return (
-    <div>
-      {paragraphs.map((p, i) => (
-        <div
-          key={p.id}
-          className="card"
-          style={{
-            marginTop: i === 0 ? 0 : 10,
-            padding: 12,
-            background: p.internal ? 'var(--surface-warm)' : 'var(--surface)',
-          }}
-        >
-          <div className="btn-row" style={{ marginBottom: 6 }}>
-            <span className="meta mono">段落 {i + 1} · {p.id}</span>
-            <label className="meta" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <input
-                type="checkbox"
-                checked={p.internal}
-                disabled={readOnly}
-                onChange={(e) => patch(i, { internal: e.target.checked })}
-              />
-              内部段落
-            </label>
-            <label className="meta" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <input
-                type="checkbox"
-                checked={p.heading}
-                disabled={readOnly}
-                onChange={(e) => patch(i, { heading: e.target.checked })}
-              />
-              小标题
-            </label>
-            {p.internal && <StatusPill kind="warn" text="不进对外文章 · 不翻译" />}
-            <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6 }}>
-              <GatedButton
-                label="上移"
-                size="sm"
-                onClick={() => move(i, -1)}
-                disabled={readOnly || i === 0}
-                reason={readOnly ? zhCN.ironLaw.readOnlyEditor : '已是第一段'}
-              />
-              <GatedButton
-                label="下移"
-                size="sm"
-                onClick={() => move(i, 1)}
-                disabled={readOnly || i === paragraphs.length - 1}
-                reason={readOnly ? zhCN.ironLaw.readOnlyEditor : '已是最后一段'}
-              />
-              <GatedButton
-                label="删除"
-                size="sm"
-                variant="danger"
-                onClick={() => remove(i)}
-                disabled={readOnly || paragraphs.length <= 1}
-                reason={readOnly ? zhCN.ironLaw.readOnlyEditor : '正文至少保留一个段落'}
-              />
-            </span>
-          </div>
-          <textarea
-            className="textarea"
-            style={{ minHeight: p.heading ? 44 : 90, fontWeight: p.heading ? 700 : 400 }}
-            value={p.text}
-            readOnly={readOnly}
-            placeholder={p.heading ? '小标题文字' : '段落正文'}
-            onChange={(e) => patch(i, { text: e.target.value })}
-          />
-        </div>
-      ))}
-      <div className="btn-row" style={{ marginTop: 12 }}>
-        <GatedButton
-          label="新增段落"
-          size="sm"
-          onClick={add}
-          disabled={readOnly}
-          reason={zhCN.ironLaw.readOnlyEditor}
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ============================ ⑤ 英文逐段对照 ============================ */
-
-function EnglishPanel({
+/**
+ * 标题不是段落，进不了双语编辑器的逐段对照，故单独成卡。
+ * 英文标题缺失会让英文读者看到中文标题，因此与正文同属人工校验范围、缺失即阻断同步。
+ */
+function EnTitleCard({
   entryId,
-  pairs,
-  enStatus,
   zhTitle,
   enTitle,
   canWrite,
-  canPublish,
   onDone,
 }: {
   entryId: string;
-  pairs: PairRow[];
-  enStatus: string;
   zhTitle: string;
   enTitle: string | null;
   canWrite: boolean;
-  canPublish: boolean;
   onDone: () => void;
 }) {
   const { toast } = useApp();
-  const [drafts, setDrafts] = useState<Record<string, { en: string; note: string }>>({});
-  const [titleDraft, setTitleDraft] = useState<{ en: string; note: string } | null>(null);
-  const [busy, setBusy] = useState('');
+  const [draft, setDraft] = useState<{ en: string; note: string } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const draftOf = (p: PairRow): { en: string; note: string } => drafts[p.id] ?? { en: p.en ?? '', note: '' };
-  const setDraft = (id: string, patch: Partial<{ en: string; note: string }>): void => {
-    setDrafts((d) => ({ ...d, [id]: { ...(d[id] ?? { en: '', note: '' }), ...patch } }));
-  };
-
-  const run = async (key: string, fn: () => Promise<unknown>, okMsg: string): Promise<void> => {
-    setBusy(key);
+  const save = async (): Promise<void> => {
+    setBusy(true);
     try {
-      await fn();
-      toast(okMsg);
-      setDrafts({});
-      setTitleDraft(null);
+      await api.put(`/api/kb/entries/${entryId}/translation/title`, {
+        enTitle: draft?.en ?? '',
+        note: draft?.note ?? '',
+      });
+      toast('已保存英文标题并留痕');
+      setDraft(null);
       onDone();
     } catch (err) {
       toast((err as Error).message);
     } finally {
-      setBusy('');
+      setBusy(false);
     }
   };
 
-  const syncable = enStatus === 'confirmed' || enStatus === 'synced';
-  const syncReason = !canPublish ? zhCN.ironLaw.publishBlocked : zhCN.translation.confirmRequired;
-
   return (
-    <div>
-      <div className="btn-row" style={{ marginBottom: 12 }}>
-        <StatusPill kind={enStatusKind(enStatus)} text={`英文：${L.enStatus(enStatus)}`} />
-        <GatedButton
-          label={enStatus === 'none' ? '生成英文翻译' : '重新翻译'}
-          size="sm"
-          onClick={() => void run('tr', () => api.post(`/api/kb/entries/${entryId}/translate`), '已触发 AI 翻译（内部段落跳过）')}
-          disabled={!canWrite || busy !== ''}
-          reason={!canWrite ? zhCN.ironLaw.readOnlyEditor : '处理中，请稍候'}
-          testId="en-translate"
-        />
-        <GatedButton
-          label="标记已确认"
-          size="sm"
-          variant="primary"
-          onClick={() =>
-            void run('cf', () => api.post(`/api/kb/entries/${entryId}/translation/confirm`), '英文已标记为「已确认」')
-          }
-          disabled={!canWrite || enStatus === 'confirmed' || busy !== ''}
-          reason={!canWrite ? zhCN.ironLaw.readOnlyEditor : enStatus === 'confirmed' ? '英文已是「已确认」状态' : '处理中，请稍候'}
-          testId="en-confirm"
-        />
-        <GatedButton
-          label="同步到 Zendesk"
-          size="sm"
-          onClick={() =>
-            void run('sy', () => api.post(`/api/review/${entryId}/publish`), '已写入同步队列（分钟级推送 Zendesk）')
-          }
-          disabled={!canPublish || !syncable || busy !== ''}
-          reason={busy !== '' ? '处理中，请稍候' : syncReason}
-          testId="en-sync"
-        />
+    <div className="card" style={{ padding: 12, marginBottom: 10 }}>
+      <div className="btn-row" style={{ marginBottom: 6 }}>
+        <span className="meta mono">标题</span>
+        {!enTitle?.trim() && <StatusPill kind="warn" text="英文标题缺失 · 同步阻断" />}
       </div>
-
-      {/* 标题对照：英文标题缺失会让英文读者看到中文标题，故与正文同属人工校验范围 */}
-      <div className="card" style={{ padding: 12, marginBottom: 10 }}>
-        <div className="btn-row" style={{ marginBottom: 6 }}>
-          <span className="meta mono">标题</span>
-          {!enTitle?.trim() && <StatusPill kind="warn" text="英文标题缺失 · 同步阻断" />}
+      <div className="grid grid--2">
+        <div>
+          <div className="field__label">中文（权威源）</div>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{zhTitle}</div>
         </div>
-        <div className="grid grid--2">
-          <div>
-            <div className="field__label">中文（权威源）</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{zhTitle}</div>
-          </div>
-          <div>
-            <div className="field__label">英文标题（同步 Zendesk）</div>
-            <input
-              className="input"
-              value={titleDraft?.en ?? enTitle ?? ''}
-              readOnly={!canWrite}
-              placeholder="English title"
-              onChange={(e) => setTitleDraft({ en: e.target.value, note: titleDraft?.note ?? '' })}
-              data-testid="en-title-input"
+        <div>
+          <div className="field__label">英文标题（同步 Zendesk）</div>
+          <input
+            className="input"
+            value={draft?.en ?? enTitle ?? ''}
+            readOnly={!canWrite}
+            placeholder="English title"
+            onChange={(e) => setDraft({ en: e.target.value, note: draft?.note ?? '' })}
+            data-testid="en-title-input"
+          />
+          <input
+            className="input"
+            style={{ marginTop: 6 }}
+            value={draft?.note ?? ''}
+            readOnly={!canWrite}
+            placeholder="修订说明（可留空）"
+            onChange={(e) => setDraft({ en: draft?.en ?? enTitle ?? '', note: e.target.value })}
+          />
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <GatedButton
+              label="保存英文标题"
+              size="sm"
+              onClick={() => void save()}
+              disabled={!canWrite || (draft?.en ?? enTitle ?? '').trim() === '' || busy}
+              reason={
+                !canWrite
+                  ? zhCN.ironLaw.readOnlyEditor
+                  : (draft?.en ?? enTitle ?? '').trim() === ''
+                    ? '英文标题不能为空'
+                    : '处理中，请稍候'
+              }
+              testId="en-title-save"
             />
-            <input
-              className="input"
-              style={{ marginTop: 6 }}
-              value={titleDraft?.note ?? ''}
-              readOnly={!canWrite}
-              placeholder="修订说明（可留空）"
-              onChange={(e) => setTitleDraft({ en: titleDraft?.en ?? enTitle ?? '', note: e.target.value })}
-            />
-            <div className="btn-row" style={{ marginTop: 6 }}>
-              <GatedButton
-                label="保存英文标题"
-                size="sm"
-                onClick={() =>
-                  void run(
-                    'en-title',
-                    () =>
-                      api.put(`/api/kb/entries/${entryId}/translation/title`, {
-                        enTitle: titleDraft?.en ?? '',
-                        note: titleDraft?.note ?? '',
-                      }),
-                    '已保存英文标题并留痕',
-                  )
-                }
-                disabled={!canWrite || (titleDraft?.en ?? '').trim() === '' || busy !== ''}
-                reason={
-                  !canWrite
-                    ? zhCN.ironLaw.readOnlyEditor
-                    : (titleDraft?.en ?? '').trim() === ''
-                      ? '英文标题不能为空'
-                      : '处理中，请稍候'
-                }
-                testId="en-title-save"
-              />
-            </div>
           </div>
         </div>
       </div>
-
-      {pairs.length === 0 ? (
-        <div className="empty">尚未生成英文对照——先点「生成英文翻译」。内部段落不参与翻译。</div>
-      ) : (
-        pairs.map((p, i) => {
-          const d = draftOf(p);
-          return (
-            <div
-              key={p.id}
-              className="card"
-              style={{
-                marginTop: i === 0 ? 0 : 10,
-                padding: 12,
-                background: p.internal ? 'var(--surface-warm)' : 'var(--surface)',
-              }}
-            >
-              <div className="btn-row" style={{ marginBottom: 6 }}>
-                <span className="meta mono">段落 {i + 1}</span>
-                {p.internal && <StatusPill kind="warn" text="内部段落" />}
-                {p.humanEdited && <StatusPill kind="accent" text="人工修订" />}
-              </div>
-              <div className="grid grid--2">
-                <div>
-                  <div className="field__label">中文（权威源）</div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{p.zh}</div>
-                </div>
-                <div>
-                  <div className="field__label">英文（同步 Zendesk）</div>
-                  {p.internal ? (
-                    <div className="note note--warn">{zhCN.translation.internalSkip}</div>
-                  ) : (
-                    <>
-                      <textarea
-                        className="textarea"
-                        style={{ minHeight: 80 }}
-                        value={d.en}
-                        readOnly={!canWrite}
-                        placeholder="English paragraph"
-                        onChange={(e) => setDraft(p.id, { en: e.target.value })}
-                      />
-                      <input
-                        className="input"
-                        style={{ marginTop: 6 }}
-                        value={d.note}
-                        readOnly={!canWrite}
-                        placeholder="修订说明（例如：把 buyer's remorse 改为 change of mind，更贴近北美用户表述）"
-                        onChange={(e) => setDraft(p.id, { note: e.target.value })}
-                      />
-                      <div className="btn-row" style={{ marginTop: 6 }}>
-                        <GatedButton
-                          label="保存本段英文"
-                          size="sm"
-                          onClick={() =>
-                            void run(
-                              p.id,
-                              () =>
-                                api.put(`/api/kb/entries/${entryId}/translation/${p.id}`, {
-                                  en: d.en,
-                                  note: d.note.trim() || '人工修订英文表述（不改政策口径）',
-                                }),
-                              '已保存英文修订并留痕',
-                            )
-                          }
-                          disabled={!canWrite || d.en.trim() === '' || busy !== ''}
-                          reason={
-                            !canWrite ? zhCN.ironLaw.readOnlyEditor : d.en.trim() === '' ? '英文内容不能为空' : '处理中，请稍候'
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-                  {p.humanEdited && p.editNote && (
-                    <div className="meta" style={{ marginTop: 4 }}>修订标注：{p.editNote}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }
@@ -1163,12 +913,13 @@ function LogsTab({ logs }: { logs: EntryLogRow[] }) {
 export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
   const { can, toast, goto, refreshNav } = useApp();
   const [tab, setTab] = useState<TabKey>('body');
-  const [lang, setLang] = useState<'zh' | 'en'>('zh');
   const [form, setForm] = useState<FormState>(emptyForm);
   const [hydrated, setHydrated] = useState<string>('');
   const [conflict, setConflict] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [sumBusy, setSumBusy] = useState(false);
+  const [enBusy, setEnBusy] = useState('');
+  const [enEdits, setEnEdits] = useState<Record<string, { en: string; note: string }>>({});
   const [sumEditing, setSumEditing] = useState(false);
   const [sumDraft, setSumDraft] = useState('');
 
@@ -1282,6 +1033,40 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
       reloadAll();
     } catch (err) {
       toast((err as Error).message);
+    }
+  };
+
+  /** 英文侧动作：生成翻译 / 标记已确认 */
+  const runEn = async (key: string, fn: () => Promise<unknown>, okMsg: string): Promise<void> => {
+    setEnBusy(key);
+    try {
+      await fn();
+      toast(okMsg);
+      setEnEdits({});
+      reloadAll();
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setEnBusy('');
+    }
+  };
+
+  /** 保存人工修订的英文段落（逐段 PUT，留痕并标「人工修订」） */
+  const saveEnEdits = async (): Promise<void> => {
+    const items = Object.entries(enEdits);
+    if (items.length === 0 || !entryId) return;
+    setEnBusy('save');
+    try {
+      for (const [pairId, v] of items) {
+        await api.put(`/api/kb/entries/${entryId}/translation/${pairId}`, { en: v.en, note: v.note });
+      }
+      toast(`已保存 ${items.length} 段英文修订（已留痕）`);
+      setEnEdits({});
+      reloadAll();
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setEnBusy('');
     }
   };
 
@@ -1407,46 +1192,72 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
             {readOnly && <div className="note note--warn" style={{ marginBottom: 12 }}>{zhCN.ironLaw.readOnlyEditor}</div>}
             <div className="card">
               <div className="btn-row" style={{ marginBottom: 12 }}>
-                <button
-                  type="button"
-                  className={`btn btn--sm${lang === 'zh' ? ' btn--primary' : ''}`}
-                  onClick={() => setLang('zh')}
-                  data-lang="zh"
-                >
-                  中文（权威源）
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn--sm${lang === 'en' ? ' btn--primary' : ''}`}
-                  onClick={() => setLang('en')}
-                  data-lang="en"
-                >
-                  英文（同步 Zendesk）
-                </button>
+                <StatusPill kind={enStatusKind(entry?.enStatus ?? 'none')} text={`英文：${L.enStatus(entry?.enStatus ?? 'none')}`} />
+                <GatedButton
+                  label={(entry?.enStatus ?? 'none') === 'none' ? '生成英文翻译' : '重新翻译'}
+                  size="sm"
+                  onClick={() => void runEn('tr', () => api.post(`/api/kb/entries/${entryId}/translate`), '已生成英文对照（内部段落跳过）')}
+                  disabled={!canWrite || isNew || enBusy !== ''}
+                  reason={!canWrite ? zhCN.ironLaw.readOnlyEditor : isNew ? '请先保存中文草稿，再生成英文' : '处理中，请稍候'}
+                  testId="en-translate"
+                />
+                <GatedButton
+                  label="标记已确认"
+                  size="sm"
+                  variant="primary"
+                  onClick={() => void runEn('cf', () => api.post(`/api/kb/entries/${entryId}/translation/confirm`), '英文已标记为「已确认」')}
+                  disabled={!canWrite || isNew || entry?.enStatus === 'confirmed' || enBusy !== ''}
+                  reason={!canWrite ? zhCN.ironLaw.readOnlyEditor : entry?.enStatus === 'confirmed' ? '英文已是「已确认」状态' : '请先保存中文草稿'}
+                  testId="en-confirm"
+                />
                 <span className="meta" style={{ marginLeft: 'auto' }}>
-                  {lang === 'zh' ? '中文是唯一权威源，结构与口径以中文为准' : zhCN.translation.staleHint}
+                  中文是唯一权威源；中文一改，英文自动置「待重新校验」并阻断同步
                 </span>
               </div>
 
-              {lang === 'zh' ? (
-                <ParagraphEditor
-                  paragraphs={form.paragraphs}
-                  readOnly={readOnly}
-                  onChange={(paragraphs) => setForm((f) => ({ ...f, paragraphs }))}
-                />
-              ) : isNew || !entry ? (
-                <div className="empty">新建条目请先保存中文草稿，再生成英文版本。</div>
-              ) : (
-                <EnglishPanel
+              {!isNew && entry && (
+                <EnTitleCard
                   entryId={entry.id}
-                  pairs={detail.data?.pairs ?? []}
-                  enStatus={entry.enStatus}
                   zhTitle={entry.title}
                   enTitle={entry.enTitle}
                   canWrite={canWrite}
-                  canPublish={canPublish}
                   onDone={reloadAll}
                 />
+              )}
+
+              {/* 英文标题：PR#1 把「英文标题缺失」做成了同步阻断条件，双语改版后仍须保留 */}
+              {!isNew && entry && (
+                <EnTitleCard
+                  entryId={entry.id}
+                  zhTitle={entry.title}
+                  enTitle={entry.enTitle}
+                  canWrite={canWrite}
+                  onDone={reloadAll}
+                />
+              )}
+
+              <BilingualEditor
+                paragraphs={form.paragraphs}
+                pairs={detail.data?.pairs ?? []}
+                readOnly={readOnly}
+                enBusy={enBusy === 'tr'}
+                onChange={(paragraphs) => setForm((f) => ({ ...f, paragraphs }))}
+                onEnChange={(pairId, en, note) => setEnEdits((m) => ({ ...m, [pairId]: { en, note } }))}
+              />
+
+              {Object.keys(enEdits).length > 0 && (
+                <div className="btn-row" style={{ marginTop: 12 }}>
+                  <GatedButton
+                    label={`保存英文修订（${Object.keys(enEdits).length} 段）`}
+                    size="sm"
+                    variant="primary"
+                    onClick={() => void saveEnEdits()}
+                    disabled={!canWrite || enBusy !== ''}
+                    reason={zhCN.ironLaw.readOnlyEditor}
+                    testId="en-save"
+                  />
+                  <span className="meta">人工修订会留痕并标注「人工修订」</span>
+                </div>
               )}
             </div>
           </div>

@@ -98,7 +98,7 @@ async function main(): Promise<void> {
         { text: '质量问题：签收后 30 天内可申请全额退款，运费由公司承担。' },
         { text: '非质量问题：签收后 5 天内可退，运费由用户承担。' },
         { text: '会员服务：按自然月退订。' },
-        { text: '内部：超时个案走主管审批，额度上限 $80。', internal: true },
+        { text: '内部：超时个案走主管审批，额度上限 $80。', html: '', internal: true },
       ],
     },
     {
@@ -157,7 +157,7 @@ async function main(): Promise<void> {
   for (const e of entries) {
     const body = {
       paragraphs: e.paragraphs.map((p, i) => ({
-        id: `p_${i}`, text: p.text, internal: p.internal ?? false, heading: p.heading ?? false,
+        id: `p_${i}`, text: p.text, html: p.html ?? '', internal: p.internal ?? false, heading: p.heading ?? false,
       })),
     };
     await query(

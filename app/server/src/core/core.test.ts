@@ -13,9 +13,9 @@ import { runPublishGate } from './gate.js';
 
 const body = {
   paragraphs: [
-    { id: 'p0', text: '退款时限', internal: false, heading: true },
-    { id: 'p1', text: '质量问题：签收后 30 天内可申请全额退款。', internal: false, heading: false },
-    { id: 'p2', text: '内部：超时个案走主管审批，额度上限 $80。', internal: true, heading: false },
+    { id: 'p0', text: '退款时限', html: '', internal: false, heading: true },
+    { id: 'p1', text: '质量问题：签收后 30 天内可申请全额退款。', html: '', internal: false, heading: false },
+    { id: 'p2', text: '内部：超时个案走主管审批，额度上限 $80。', html: '', internal: true, heading: false },
   ],
 };
 
@@ -40,14 +40,14 @@ describe('内部段落剥离（RULE-04 数据泄漏级零容忍）', () => {
   });
 
   it('HTML 转义防注入', () => {
-    const html = toPublicHtml({ paragraphs: [{ id: 'x', text: '<script>alert(1)</script>', internal: false, heading: false }] });
+    const html = toPublicHtml({ paragraphs: [{ id: 'x', text: '<script>alert(1)</script>', html: '', internal: false, heading: false }] });
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
   it('hasInternal 识别混合条目', () => {
     expect(hasInternal(body)).toBe(true);
-    expect(hasInternal({ paragraphs: [{ id: 'a', text: 'x', internal: false, heading: false }] })).toBe(false);
+    expect(hasInternal({ paragraphs: [{ id: 'a', text: 'x', html: '', internal: false, heading: false }] })).toBe(false);
   });
 });
 
@@ -112,7 +112,7 @@ describe('发布门禁三查（AC-P-12 rev6：08-05-2026 由四查收敛）', ()
   it('混合可见性但无内部段落标记 → 阻断', () => {
     const r = runPublishGate({
       ...base,
-      body: { paragraphs: [{ id: 'a', text: '纯对外内容', internal: false, heading: false }] },
+      body: { paragraphs: [{ id: 'a', text: '纯对外内容', html: '', internal: false, heading: false }] },
     });
     expect(r.passed).toBe(false);
     expect(r.checks.find((c) => c.key === 'internal')?.passed).toBe(false);

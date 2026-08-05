@@ -33,8 +33,13 @@ export const TUNABLES = {
 /** 段落节点：内部段落带 internal 标记，同步与翻译按标记剥离 */
 export const paragraphSchema = z.object({
   id: z.string().min(1),
+  /** 纯文本：版本 diff / 翻译 / 搜索 / drift 哈希的基准，由 html 去标签得到 */
   text: z.string(),
+  /** 富文本行内标记（加粗/斜体/链接/图片/列表…）；空串表示纯文本段落 */
+  html: z.string().default(''),
+  /** 内部段落：不进对外文章、不翻译、不同步对外（发布门禁第②查依据） */
   internal: z.boolean().default(false),
+  /** 小标题：由编辑器块类型派生（heading 节点），不再是勾选框 */
   heading: z.boolean().default(false),
 });
 export type Paragraph = z.infer<typeof paragraphSchema>;

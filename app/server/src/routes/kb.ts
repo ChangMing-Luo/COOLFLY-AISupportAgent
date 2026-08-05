@@ -295,7 +295,7 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
         [
           id, code, title, libraryId, chapter.id, visibility,
           JSON.stringify(['批量导入']),
-          JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_0', text: bodyParts.join('|'), internal: false, heading: false }] }),
+          JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_0', text: bodyParts.join('|'), html: '', internal: false, heading: false }] }),
           req.currentUser!.id,
         ],
       );
