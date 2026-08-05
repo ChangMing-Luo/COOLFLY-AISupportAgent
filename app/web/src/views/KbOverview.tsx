@@ -10,6 +10,7 @@ import { api } from '../api';
 import { ImportPanel, type ChapterOption } from '../import';
 import {
   ConfirmModal,
+  HelpModal,
   L,
   StatusPill,
   dueText,
@@ -82,6 +83,7 @@ export function KbOverviewView() {
   const [moving, setMoving] = useState<{ id: string; name: string } | null>(null);
   const [moveTarget, setMoveTarget] = useState('');
   const [importing, setImporting] = useState(false);
+  const [helpOpen, setHelpOpen] = useState<null | 'tree' | 'list'>(null);
 
   const libs = useAsync<Library[]>(() => api.get<Library[]>('/api/kb/libraries'), []);
   const tree = useAsync<TreeRoot[]>(
@@ -125,7 +127,8 @@ export function KbOverviewView() {
   }, [libs.error, tree.error, entries.error, toast]);
 
   const canManage = can('structure.manage');
-  const currentLib = libs.data?.find((l) => l.id === libraryId) ?? null;
+  // 单知识库（08-05-2026 拍板）：库名不进入界面，固定使用唯一知识库
+  const currentLib = libs.data?.[0] ?? null;
   const allRows = entries.data ?? [];
   const sceneOptions = [...new Set(allRows.map((r) => r.sceneL1))].sort();
   const rows = allRows.filter(
@@ -250,55 +253,23 @@ export function KbOverviewView() {
     <div className="grid" style={{ gridTemplateColumns: 'minmax(240px, 260px) minmax(0, 1fr)', alignItems: 'start' }}>
       <div>
         <div className="card">
-          <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-            <h2 className="card__title" style={{ margin: 0 }}>知识库（多库并行）</h2>
-            {can('entry.write') && (
-              <button
-                type="button"
-                className="btn btn--sm btn--primary"
-                onClick={() => setImporting(true)}
-                disabled={!libraryId}
-                title={libraryId ? '把历史知识库文档一次性切成多条条目导入' : '请先选择一个知识库'}
-                data-testid="open-import"
-              >
-                一键批量导入
-              </button>
-            )}
-          </div>
-          {libs.loading && <div className="empty">加载中…</div>}
-          <div className="grid">
-            {(libs.data ?? []).map((lib) => (
-              <button
-                key={lib.id}
-                type="button"
-                className={`stat${lib.id === libraryId ? ' stat--active' : ''}`}
-                aria-pressed={lib.id === libraryId}
-                onClick={() => {
-                  setLibraryId(lib.id);
-                  setChapterId('');
-                }}
-                data-library={lib.id}
-              >
-                <div className="stat__label">{lib.name}</div>
-                <div className="stat__value">{lib.count} 条</div>
-                <div className="stat__hint">{lib.note}</div>
-                {lib.internalOnly && (
-                  <div style={{ marginTop: 6 }}>
-                    <StatusPill kind="info" text="不对外公开，仅挂客服 segment" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
           <div className="tree__head">
             <div>
               <div className="tree__eyebrow">目录 → 章节 → 条目</div>
               <h2 className="card__title" style={{ margin: 0 }}>结构树</h2>
             </div>
-            <StatusPill kind="info" text="仅已发布" />
+            <div className="tree__head-ops">
+              <StatusPill kind="info" text="仅已发布" />
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                onClick={() => setHelpOpen('tree')}
+                aria-label="结构树说明"
+                data-testid="tree-help"
+              >
+                ?
+              </button>
+            </div>
           </div>
 
           {canManage && (
@@ -404,7 +375,6 @@ export function KbOverviewView() {
                             >
                               {child.name}
                             </button>
-                            <span className="tree__ref">{child.sectionRef ? `Zendesk ${child.sectionRef}` : 'Section 未映射'}</span>
                             <span className="tree__count mono">{child.count}</span>
                             {canManage && (
                               <span className="tree__ops">
@@ -441,19 +411,35 @@ export function KbOverviewView() {
               </div>
             ))}
           </div>
-
-          <div className="note" style={{ marginTop: 12 }}>{zhCN.sync.mappingNote}</div>
-          {canManage && (
-            <div className="note" style={{ marginTop: 8 }}>
-              含条目或子章节的章节不可直接删除——请先把条目移到其他章节（防孤儿条目）。结构变更即时生效并留痕，同步中心按映射更新 Zendesk 结构。
-            </div>
-          )}
         </div>
       </div>
       <div className="card">
-        <h2 className="card__title">
-          条目列表{currentLib ? ` · ${currentLib.name}（共 ${currentLib.count} 条）` : ''}
-        </h2>
+        <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+          <h2 className="card__title" style={{ margin: 0 }}>条目列表{rows.length > 0 ? `（共 ${rows.length} 条）` : ''}</h2>
+          <div className="btn-row">
+            {can('entry.write') && (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                onClick={() => setImporting(true)}
+                disabled={!libraryId}
+                title="把历史知识库文档一次性切成多条条目导入"
+                data-testid="open-import"
+              >
+                一键批量导入
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              onClick={() => setHelpOpen('list')}
+              aria-label="条目列表说明"
+              data-testid="entries-help"
+            >
+              ?
+            </button>
+          </div>
+        </div>
         {selectedChapter && (
           <div className="note" style={{ marginBottom: 12 }}>
             已按章节「{selectedChapter.name}」筛选（{rows.length} 条）
@@ -553,9 +539,6 @@ export function KbOverviewView() {
             </table>
           </div>
         )}
-        <div className="note" style={{ marginTop: 12 }}>
-          点任意行进入条目工作台。列表只呈现最新状态，历史全部落在版本与日志里。
-        </div>
       </div>
 
       {creating && (
@@ -634,10 +617,35 @@ export function KbOverviewView() {
       {importing && currentLib && (
         <ImportPanel
           libraryId={currentLib.id}
-          libraryName={currentLib.name}
           chapters={chapterOptions}
           onClose={() => setImporting(false)}
           onDone={() => { entries.reload(); tree.reload(); }}
+        />
+      )}
+
+      {helpOpen && (
+        <HelpModal
+          title={helpOpen === 'tree' ? '结构树说明' : '条目列表说明'}
+          onClose={() => setHelpOpen(null)}
+          sections={
+            helpOpen === 'tree'
+              ? [
+                  {
+                    heading: '结构与 Zendesk 的对应',
+                    items: ['目录对应 Help Center Category，章节对应 Section，条目对应 Article', '结构只在本系统维护并实时同步到 Zendesk，Zendesk 侧不再手工维护结构', '章节行不再逐行显示映射 id——结构映射可在同步中心查看'],
+                  },
+                  {
+                    heading: '结构与操作规则',
+                    items: ['结构深度恒为 2：章节只能挂在顶级目录下，不支持目录与章节互转', '含条目或子章节的章节不可直接删除——请先把条目移到其他章节（防孤儿条目）', '树内仅呈现已发布条目', '结构变更即时生效并留痕，可在操作日志追溯'],
+                  },
+                ]
+              : [
+                  {
+                    heading: '列表与交互',
+                    items: ['点任意行进入条目工作台', '列表只呈现最新状态，历史全部落在版本与日志里', '路径列按「目录 / 章节」显示条目归属', '搜索支持标题 / 标识 / 标签，可与场景、状态、可见性、复核到期组合筛选'],
+                  },
+                ]
+          }
         />
       )}
 

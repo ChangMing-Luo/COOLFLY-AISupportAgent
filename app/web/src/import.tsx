@@ -85,13 +85,11 @@ interface ImportResult {
 
 export function ImportPanel({
   libraryId,
-  libraryName,
   chapters,
   onClose,
   onDone,
 }: {
   libraryId: string;
-  libraryName: string;
   chapters: ChapterOption[];
   onClose: () => void;
   onDone: () => void;
@@ -168,7 +166,7 @@ export function ImportPanel({
     <div className="modal__mask" role="dialog" aria-modal="true">
       <div className="modal imp" style={{ width: 980, maxWidth: 'calc(100vw - 48px)' }}>
         <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-          <h3 className="modal__title" style={{ margin: 0 }}>一键批量导入 · {libraryName}</h3>
+          <h3 className="modal__title" style={{ margin: 0 }}>一键批量导入</h3>
           <button type="button" className="btn btn--sm" onClick={onClose}>关闭</button>
         </div>
 
@@ -341,7 +339,7 @@ export function ImportPanel({
 
         {confirming && (
           <ConfirmModal
-            title={`导入 ${stats.total} 条条目到「${libraryName}」`}
+            title={`导入 ${stats.total} 条条目`}
             consequences={[
               '全部条目进审核队列（来源「批量导入」），需人工逐条过审才会生效',
               '未过审条目不同步 Zendesk、不出现在知识库总览',

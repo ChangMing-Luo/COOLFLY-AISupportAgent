@@ -136,6 +136,43 @@ export function ConfirmModal({
 }
 
 /**
+ * 问号说明弹窗：提示信息不进主内容容器（信息密度优先），
+ * 统一收进标题旁「?」图标，点击弹窗展示。
+ */
+export function HelpModal({
+  title,
+  sections,
+  onClose,
+}: {
+  title: string;
+  sections: Array<{ heading: string; items: string[] }>;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal__mask" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="modal modal--narrow" onClick={(e) => e.stopPropagation()}>
+        <h3 className="modal__title">{title}</h3>
+        {sections.map((s) => (
+          <div key={s.heading} className="field" style={{ marginTop: 12 }}>
+            <div className="field__label">{s.heading}</div>
+            <ul className="note" style={{ paddingLeft: 20, marginBottom: 0 }}>
+              {s.items.map((it) => (
+                <li key={it}>{it}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={onClose}>
+            知道了
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * 数据加载 hook：以 deps 序列化值 + tick 作为唯一依赖键。
  * loader 每次渲染都是新函数引用，故用 ref 持有最新实现——
  * 依赖数组保持静态长度与完整依赖，无需关闭 lint 规则。

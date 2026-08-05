@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   zhCN,
   TUNABLES,
@@ -952,6 +952,14 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     setConflict('');
   }
 
+  // 单知识库（08-05-2026 拍板）：新建条目自动归属唯一知识库，界面无库名概念
+  useEffect(() => {
+    const first = libs.data?.[0];
+    if (first && entryId === null) {
+      setForm((f) => (f.libraryId === '' ? { ...f, libraryId: first.id } : f));
+    }
+  }, [libs.data, entryId]);
+
   const canWrite = can('entry.write');
   const canSubmit = can('entry.submit');
   const canPublish = can('publish');
@@ -1287,21 +1295,6 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
                   readOnly={readOnly}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 />
-              </div>
-              <div className="field">
-                <label className="field__label" htmlFor="f-lib">所属知识库</label>
-                <select
-                  id="f-lib"
-                  className="select"
-                  value={form.libraryId}
-                  disabled={readOnly}
-                  onChange={(e) => setForm((f) => ({ ...f, libraryId: e.target.value, chapterId: '' }))}
-                >
-                  <option value="">请选择知识库</option>
-                  {(libs.data ?? []).map((l) => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
               </div>
               <div className="field">
                 <label className="field__label" htmlFor="f-chap">目录 / 章节</label>

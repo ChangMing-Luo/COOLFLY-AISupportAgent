@@ -384,15 +384,15 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   await ctx.close();
 }
 
-// ---------- FLOW-07：总览多库 / 结构树 / 筛选 / 复核 / 章节保护 ----------
+// ---------- FLOW-07：总览单库 / 结构树 / 筛选 / 复核 / 章节保护 ----------
 {
   const { ctx, page } = await loginAs('wangwen@coolfly.com');
   await go(page, 'kb');
   const text = await page.locator('.content').innerText();
-  const threeLibs = ['政策与售后知识库', '产品与使用知识库', '客服话术库'].every((s) => text.includes(s));
-  const internalNote = text.includes('不对外公开');
-  const sectionRef = text.includes('Sec 51');
-  const mappingNote = text.includes('Help Center brand');
+  // 单知识库：无库切换卡、无库名概念（08-05-2026 拍板）
+  const noLibSwitch = !text.includes('知识库切换') && !text.includes('政策与售后知识库') && !text.includes('客服话术库');
+  const noSectionRef = !text.includes('Section 未映射') && !text.includes('Sec 51');
+  const helpBtn = await page.locator('[data-testid="tree-help"]').count();
   const overdue = text.includes('复核已到期');
   // 三级结构树：目录行 → 章节行 → 条目行（树内仅已发布）
   const onlyPublishedBadge = text.includes('仅已发布');
@@ -453,10 +453,10 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   });
   record(
     'FLOW-07',
-    threeLibs && internalNote && sectionRef && mappingNote && overdue && selectCount >= 3 &&
+    noLibSwitch && noSectionRef && helpBtn > 0 && overdue && selectCount >= 3 &&
       onlyPublishedBadge && toolbar && leafTarget !== null && leafCount > 0 && leafAfterCollapse < leafCount && moveResp.ok === 200 && moveResp.moved &&
       delResp.status === 409 && delResp.msg.includes('移空'),
-    `三库可切换=${threeLibs}、仅内部库说明=${internalNote}、Section 映射标识=${sectionRef}、映射说明条=${mappingNote}、超期标注=${overdue}、筛选器=${selectCount} 个、「仅已发布」徽章=${onlyPublishedBadge}、结构工具条三按钮=${toolbar}、三级树条目行=${leafCount} 个（章节「${leafTarget?.chapter ?? '无已发布条目'}」，折叠后 ${leafAfterCollapse}）、调整层级=${moveResp.ok}/移动生效=${moveResp.moved}、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
+    `单库无切换/无库名=${noLibSwitch}、行内无 Section 映射=${noSectionRef}、树「?」说明按钮=${helpBtn}、超期标注=${overdue}、筛选器=${selectCount} 个、「仅已发布」徽章=${onlyPublishedBadge}、结构工具条三按钮=${toolbar}、三级树条目行=${leafCount} 个（章节「${leafTarget?.chapter ?? '无已发布条目'}」，折叠后 ${leafAfterCollapse}）、调整层级=${moveResp.ok}/移动生效=${moveResp.moved}、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
   );
   await ctx.close();
 }

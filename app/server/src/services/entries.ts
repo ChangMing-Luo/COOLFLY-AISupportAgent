@@ -88,7 +88,7 @@ export function toEntryRow(r: EntryDbRow): EntryRow {
     id: r.id,
     code: r.code,
     title: r.title,
-    path: `${r.library_name} / ${r.parent_name ? `${r.parent_name} / ` : ''}${r.chapter_name}`,
+    path: `${r.parent_name ? `${r.parent_name} / ` : ''}${r.chapter_name}`,
     entryType: r.entry_type,
     visibility: r.visibility as EntryRow['visibility'],
     versionLabel: r.current_version > 0 ? `v${r.current_version}` : '—',
