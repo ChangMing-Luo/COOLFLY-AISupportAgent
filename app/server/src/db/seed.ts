@@ -5,13 +5,59 @@ import { toHtml } from '../core/content.js';
 
 const INITIAL_PASSWORD = process.env.SEED_PASSWORD ?? 'Coolfly@2026';
 
-/** 正文模板（原型 bodyOf / translateBody，逐字一致） */
-function bodyZhOf(categoryZh: string): string {
+/**
+ * 正文模板（原型 bodyOf / translateBody 的结构），二、三段按二级场景取真实口径——
+ * 全库共用同一段模板会让查重与 AI 助手恒报 100% 重叠，那是假数据造成的假告警。
+ */
+const SCENE_RULE: Record<string, [string, string]> = {
+  改签退票: [
+    '旅客可在起飞前通过 App、官网或客服热线提交改签或退票申请；系统按舱位等级、距起飞时间与航司政策自动计算费用，并在提交后 30 分钟内反馈结果。',
+    '因航司原因导致的变更不收取任何费用；不可抗力情形按航司当次公告执行，坐席须引用公告编号。',
+  ],
+  退款处理: [
+    '退款按原支付路径退回：银行卡 3–7 个工作日、第三方支付 1–3 个工作日、里程即时返还账户。逾期未到账需提供交易流水号发起查询。',
+    '涉及部分使用的行程按未使用航段计算可退金额，税费按航司规则单独核退。',
+  ],
+  值机登机: [
+    '值机失败最常见的三类原因：证件信息与订单不一致、航班已关闭值机、特殊旅客需柜台办理。前两类可在 App 自助排查，第三类须引导至柜台。',
+    '证件信息不符须在起飞前 4 小时联系客服修改，修改成功后重新值机；起飞前 4 小时内只能到机场柜台处理。',
+  ],
+  行李服务: [
+    '免费行李额按舱位与航线执行：成人与儿童票同额，婴儿票单独计算且不占座。超额部分按航司逾重行李费率收取。',
+    '代码共享航班的行李额以实际承运方规则为准，坐席须先确认承运航司再报额度。',
+  ],
+  特殊旅客: [
+    '孕妇满 32 周须提供 72 小时内医疗诊断证明；无成人陪伴儿童须提前 48 小时申请并由航司确认承运名额。',
+    '轮椅、担架、导盲犬等特殊服务须在起飞前 48 小时提交申请，未提前申请的航司有权拒载。',
+  ],
+  航班异常: [
+    '航班延误 4 小时以上由承运人原因导致的，旅客可申请补偿或免费改签；天气等不可抗力不在补偿范围内。',
+    '大面积延误时坐席按当次航司公告统一口径应答，先给确定信息（原因、预计时间、可选方案），再处理个案诉求。',
+  ],
+  会员权益: [
+    '里程兑换的机票退改按兑换时的会员等级执行：白金及以上免费改期一次，其余按里程票规则扣减手续里程。',
+    '里程转赠限定直系亲友且账户须绑定满 30 天，每自然年转赠上限以会员条款为准。',
+  ],
+  酒店订单: [
+    '境内酒店多数支持入住前 18:00 免费取消，境外酒店以房型条款为准，特惠房型通常不可取消。',
+    '因不可抗力无法入住的，须在入住日前提交证明材料，由酒店方审核后按实际情况退款。',
+  ],
+  支付与发票: [
+    '支付失败但已扣款属银行预授权未释放，通常 1–3 个工作日自动退回；超过 3 个工作日未退需提供交易流水号发起查询。',
+    '电子发票在行程结束后 24 小时内开具，抬头错误可在 90 天内申请重开，重开后原发票自动作废。',
+  ],
+};
+
+function bodyZhOf(categoryZh: string, sceneZh?: string): string {
+  const rule = (sceneZh && SCENE_RULE[sceneZh]) || [
+    '旅客可在起飞前通过 App、官网或客服热线提交申请；系统将根据舱位等级、距起飞时间与航司政策自动计算结果，并在提交后 30 分钟内反馈。',
+    '因航司原因导致的变更不收取任何费用；不可抗力情形按航司公告执行，坐席须引用当次公告编号。',
+  ];
   return [
-    `一、适用范围。本条款适用于 COOLFLY 平台出票的${categoryZh}订单。`,
-    '二、处理规则。旅客可在起飞前通过 App、官网或客服热线提交申请；系统将根据舱位等级、距起飞时间与航司政策自动计算结果，并在提交后 30 分钟内反馈。',
-    '三、特殊情形。因航司原因导致的变更不收取任何费用；不可抗力情形按航司公告执行，坐席须引用当次公告编号。',
-    '四、常见追问。若旅客对计算结果有异议，应引导其在订单详情页查看费用明细，必要时转人工复核，复核时限为 1 个工作日。',
+    `一、适用范围。本条款适用于 COOLFLY 平台出票的${categoryZh}订单${sceneZh ? `（${sceneZh}场景）` : ''}。`,
+    `二、处理规则。${rule[0]}`,
+    `三、特殊情形。${rule[1]}`,
+    '四、常见追问。若旅客对结果有异议，应引导其在订单详情页查看明细，必要时转人工复核，复核时限为 1 个工作日。',
   ].join('\n\n');
 }
 
@@ -325,7 +371,7 @@ async function main(): Promise<void> {
     entryId.set(e.code, id);
     // 待审条目必然已通过提交闸（缺英文不可提交），所以 pending 也必须是已翻译的
     const translated = ['published', 'offline', 'fixing', 'pending'].includes(e.status);
-    const bodyZh = toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category));
+    const bodyZh = toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category, e.scene));
     const bodyEn = translated
       ? toHtml(VERSION_BODIES[e.version]?.en ?? bodyEnOf(catEn.get(e.category) ?? e.category))
       : '';
@@ -443,7 +489,7 @@ async function main(): Promise<void> {
         e.owner,
         e.titleZh,
         TITLE_EN[e.titleZh] ?? '',
-        toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category)),
+        toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category, e.scene)),
         e.status === 'published' ? toHtml(bodyEnOf(catEn.get(e.category) ?? e.category)) : '',
         e.adopt,
         e.hits,

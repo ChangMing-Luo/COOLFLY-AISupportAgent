@@ -245,6 +245,12 @@ export async function createEntry(user: SessionUser, args: CreateArgs): Promise<
      VALUES ($1,$2,'v0.1','创建','新建条目',$3,$4)`,
     [newId('ver'), id, user.id, user.name],
   );
+  await writeAudit(actorOf(user), {
+    action: '新建条目',
+    objectCode: code,
+    objectLabel: `${code} ${args.titleZh}`,
+    version: 'v0.1',
+  });
   return findEntry(code);
 }
 

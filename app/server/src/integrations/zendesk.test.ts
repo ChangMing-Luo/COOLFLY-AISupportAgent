@@ -21,6 +21,7 @@ const ENV_KEYS = [
 interface Call {
   url: string;
   auth: string;
+  method: string;
   body: Record<string, unknown> | null;
 }
 
@@ -50,6 +51,7 @@ function stubFetch(
     calls.push({
       url,
       auth: headers.Authorization ?? '',
+      method,
       body: init.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : null,
     });
     if (url.endsWith('/oauth/tokens')) {
@@ -234,16 +236,18 @@ describe('locale 配置', () => {
     process.env.ZENDESK_OAUTH_CLIENT_SECRET = 'secret_value';
   });
 
-  it('默认 zh-cn，英文译文单独走 en-us translations', async () => {
+  it('默认 zh-cn，英文译文单独打 en-us 的 translations 端点', async () => {
     const calls = stubFetch();
     const { getZendesk } = await loadZendesk();
     await getZendesk().upsertArticle({ ...PUSH, enBodyHtml: '<p>Full refund within 30 days.</p>' });
-    const create = calls.find((c) => c.url.includes('/articles.json'))!.body as { article: { locale: string } };
-    expect(create.article.locale).toBe('zh-cn');
-    const trans = calls.find((c) => c.url.includes('/translations.json'))!.body as {
-      translation: { locale: string };
+    const create = calls.find((c) => c.url.includes('/sections/') && c.url.includes('/articles.json'))!.body as {
+      article: { locale: string };
     };
-    expect(trans.translation.locale).toBe('en-us');
+    expect(create.article.locale).toBe('zh-cn');
+    // 译文写入走 upsert：先 PUT 指定 locale 的翻译，404 才 POST 创建
+    const trans = calls.find((c) => c.url.includes('/translations/en-us.json'));
+    expect(trans).toBeDefined();
+    expect(trans!.method).toBe('PUT');
   });
 
   it('传了 enTitle 时英文译文用英文标题，而非回退中文标题', async () => {
@@ -254,11 +258,23 @@ describe('locale 配置', () => {
       enTitle: 'Refund policy',
       enBodyHtml: '<p>Full refund within 30 days.</p>',
     });
-    const trans = calls.find((c) => c.url.includes('/translations.json'))!.body as {
+    const trans = calls.find((c) => c.url.includes('/translations/en-us.json'))!.body as {
       translation: { title: string };
     };
     expect(trans.translation.title).toBe('Refund policy');
     expect(trans.translation.title).not.toBe(PUSH.title);
+  });
+
+  it('传了 articleRef 走更新路径：不再新建文章，改打对象与翻译端点', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().upsertArticle({ ...PUSH, articleRef: '54105583966355', enBodyHtml: '<p>EN</p>' });
+    // 重复同步不得再创建文章——否则帮助中心会堆出重复条目
+    expect(calls.some((c) => c.url.includes('/sections/') && c.url.includes('/articles.json'))).toBe(false);
+    expect(calls.some((c) => c.method === 'PUT' && c.url.includes('/articles/54105583966355.json'))).toBe(true);
+    expect(
+      calls.some((c) => c.method === 'PUT' && c.url.includes('/articles/54105583966355/translations/zh-cn.json')),
+    ).toBe(true);
   });
 
   it('ZENDESK_LOCALE 生效', async () => {

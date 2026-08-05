@@ -64,6 +64,7 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
         <div className="field">
           <label>邮箱</label>
           <input
+            id="em"
             className="input"
             type="email"
             value={email}
@@ -75,6 +76,7 @@ export function Login({ onLogin }: { onLogin: (u: SessionUser) => void }) {
         <div className="field" style={{ marginTop: 12 }}>
           <label>密码</label>
           <input
+            id="pw"
             className="input"
             type="password"
             value={password}

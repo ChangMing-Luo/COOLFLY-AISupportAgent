@@ -250,12 +250,16 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 |---|---|---|---|
 | POST | `/auth/login` | — | 邮箱 + 密码 → 会话 |
 | POST | `/auth/logout` | 登录 | 注销 |
+| POST | `/auth/switch` | 登录 | 切换账号（验目标账号密码后换会话） |
+| GET | `/auth/accounts` | 登录 | 切换对话框的可选账号（不含任何凭据） |
 | GET | `/auth/me` | 登录 | 当前用户 + 权限 |
 | GET | `/bootstrap` | 登录 | 一次性返回：me / 分类树 / 标签 / 徽标计数 / 侧栏统计 |
 | GET | `/dashboard` | 登录 | KPI / 待办 / 生命周期 / Zendesk 卡 / 最近动态 |
 | GET | `/search?q=` | 登录 | 全局搜索（标题/ID/场景/分类），≤6 条 |
 | GET | `/entries?view=` | 登录 | 列表：`drafts/mine/queue/all/offline/sync` |
 | GET | `/entries/:code` | 登录 | 详情（含版本、同步、反馈、元数据、健康度） |
+| GET | `/entries/:code/editor` | 登录 | 编辑器装载（正文原文、分类树、AI 建议、翻译引擎名） |
+| GET | `/entries/:code/review` | 登录 | 审核装载（diff、AI 预检、提交信息、队列序号） |
 | POST | `/entries` | 编辑 | 新建草稿（可带来源：候选/未命中） |
 | PUT | `/entries/:code` | 编辑 | 保存草稿（标题/正文/分类/场景/标签/变更说明） |
 | POST | `/entries/:code/translate` | 编辑 | LLM 翻译标题 + 正文 → 英文 |
@@ -286,7 +290,13 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | GET | `/sync/logs` | 登录 | 同步日志（报文号 / 耗时 / 结果） |
 | GET | `/analytics/health` | 登录 | 健康度 KPI / 分布 / 场景覆盖 / 待修复 |
 | GET | `/admin/users` `/admin/permissions` `/admin/audit` | super | 系统管理三页 |
-| POST | `/admin/users/:id/toggle` | super | 启用 / 停用 |
+| POST | `/admin/users` | super | 新增用户（返回一次性初始密码，不落明文） |
+| POST | `/admin/users/:id/toggle` | super | 启用 / 停用（停用即刻销毁其会话） |
+| POST | `/admin/users/:id/review-grant` | super | 单独授予 / 收回审核权限 |
+| PUT | `/admin/permissions` | super | 调整权限矩阵（即时生效 + 审计） |
+| GET | `/review/log` | 登录 | 审核记录（从审计筛通过 / 驳回） |
+| POST | `/collect/run` | 采集 | 手动跑一次抽取（与每日 07:00 cron 同一入口，界面不暴露按钮） |
+| POST | `/misses/refresh` | 反馈 | 从帮助中心「搜索无结果」刷新未命中（cron 每小时同入口） |
 | GET | `/healthz` | — | 依赖模式自曝（zendesk / llm） |
 
 ---
@@ -311,31 +321,75 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 |---|---|---|---|
 | 登录 | 无，直接进工作台 | 保留登录页（argon2 + 会话 Cookie） | 删认证是安全回归 |
 | 顶栏「切换」 | 即时切 陈默↔林静 | 打开「切换账号」对话框（选账号 + 验密码 → 重新登录） | 免密切身份 = 越权漏洞；按钮与位置保持不变 |
-| Zendesk 写入 | `setTimeout` 模拟 | 发布后真实调用，`sync_status` 由真实结果驱动；失败落 `fail_reason` | — |
-| 采纳率/命中数 | 种子常量 | `entry_metrics` 表，由 Zendesk 文章投票与工单信号回填；无数据显示「暂无数据」 | 不编造指标 |
-| 抽取任务 | 前端假定时 | 后台 cron（`COLLECT_CRON`，默认每日 07:00）+ 手动触发端点 | — |
-| 日期 | 硬编码 `08-05` | 真实时间（本地时区），显示格式保持 `MM-DD HH:mm` | — |
+| Zendesk 写入 | `setTimeout` 模拟 | 发布后真实调用，`sync_status` 由真实结果驱动；失败落 `sync_fail_reason` 并可重试 | — |
+| 重复同步 | 不涉及 | `PushInput.articleRef` 走更新路径（翻译端点 PUT，404 才 POST） | 原实现只有创建路径，重试会在帮助中心堆重复文章 |
+| 采纳率/命中数 | 种子常量 | `entry_metrics` 表，由 Zendesk 文章投票回填（`adopt = up/(up+down)`）；未回填即为 0 | 不编造指标 |
+| 场景覆盖率 | 常量数组 | 单场景 = 已发布数 /（已发布数 + 该场景待处理未命中数）；总体 = 有已发布知识的场景数 / 启用场景数 | 口径可算、可复核 |
+| 抽取任务 | 前端假定时 | 后台 cron（`COLLECT_CRON`，默认每日 07:00）；**界面不加手动按钮**，因原型明写「抽取由后台定时任务完成，无需手动创建」 | 保持原型口径一致 |
+| 未命中来源 | 静态种子 | cron 每小时从帮助中心「搜索无结果」刷新；接口不可得时不写数据、不造数 | — |
+| 新增用户 | 只弹 toast | 真建账号：一次性初始密码仅在响应中出现一次，`must_change_password=true` | 生产必须能建号 |
+| 权限矩阵「调整」 | 只开详情抽屉 | 详情抽屉 + 底部「对运营开放 / 收回」按钮，即时生效并写审计 | 保留原型按钮文案，功能落地 |
+| Zendesk 卡 | 4 行（实例 / 上次拉取 / 待同步 / 同步失败） | 保持 4 行；沙箱模式在「实例」值后缀「（沙箱）」并置 accent | 不新增行，同时不掩盖沙箱事实 |
+| 日期 | 硬编码 `08-05` | 真实时间（`DISPLAY_TZ`，默认 Asia/Shanghai），格式保持 `MM-DD HH:mm` | — |
+
+### 7.1 生产写入的两道闸
+
+1. `ZENDESK_FORCE_SANDBOX=1`（开发机 `.env` 默认开）→ 全部 Zendesk 调用走落盘沙箱。
+2. 去掉①后仍需 `ALLOW_LIVE_SYNC=1`，否则 `LiveZendesk` 的写方法直接抛错并把失败原因写进同步日志。
+
+**未取得用户当次授权前，不得放开这两道闸。**
 
 ---
 
-## 8. 验收契约
+## 8. 验收契约与结果
 
-| 编号 | 类型 | 验收项 | 判据 |
+执行：`node app/e2e/flows.mjs`（闭环，15 项）+ `node app/e2e/ui.mjs`（视觉，7 项，产出 `app/e2e/shots/*.png`）。
+下表「结果」为 08-06-2026 的实跑结论，依赖：真实 PostgreSQL `kb_console_v4` + 真实通义千问 + Zendesk 沙箱。
+
+| 编号 | 类型 | 验收项 | 结果 |
 |---|---|---|---|
-| DESIGN-01 | 视觉 | 10 组导航 / 5 KPI / 6 列表格列宽 / 三色 diff / 抽屉 640px / 弹窗 440px / toast 392px 与原型一致 | 浏览器截图逐项比对 |
-| DESIGN-02 | 视觉 | 六态 tag 文案与配色、四同步态文案与配色与 `ST` 表一致 | 截图 |
-| FLOW-01 | 闭环 | 候选「生成草稿」→ 草稿箱出现新条目，来源标注抽取任务与候选号 | E2E |
-| FLOW-02 | 闭环 | 草稿缺场景/未翻译 → 提交被拒并打开编辑器报错 | E2E |
-| FLOW-03 | 闭环 | 翻译 → 英文标题与正文生成，翻译控制台状态变「已完成」 | E2E |
-| FLOW-04 | 闭环 | 提交 → 待审队列出现；通过 → 大版本 +1、published、写入版本历史 | E2E |
-| FLOW-05 | 闭环 | 发布后 Zendesk 同步：`pending → synced`，同步日志新增一条含耗时与报文号 | E2E + 沙箱/真实回读 |
-| FLOW-06 | 闭环 | 驳回（必填意见）→ 条目 rejected 且草稿箱可见意见 | E2E |
-| FLOW-07 | 闭环 | 从 Zendesk 拉取客诉 → 反馈列表新增；「去修复」→ 小版本草稿，反馈置修复中 | E2E |
-| FLOW-08 | 闭环 | 未命中「新建条目」→ 草稿生成，未命中置「已排期」 | E2E |
-| FLOW-09 | 闭环 | 回滚提交 → pending(rollback)；审核通过 → 版本回到目标版本并重新同步 | E2E |
-| FLOW-10 | 闭环 | 下线 → offline + Zendesk 归档；已下线页「恢复」→ draft | E2E |
-| RULE-01 | 安全 | `ops` 访问 `admin.*` → 403 页，API 亦 403 | curl + UI |
-| RULE-02 | 安全 | 审计 append-only：UPDATE/DELETE 被数据库拒绝 | psql |
-| RULE-03 | 安全 | 未登录访问任意 `/api`（除 login/healthz）→ 401 | curl |
-| RULE-04 | 数据 | 元数据新增分类/场景 → 同步创建 Zendesk Category/Section | 真实/沙箱回读 |
-| RULE-05 | 数据 | 标签不翻译、不进 Zendesk | 代码 + 用例 |
+| DESIGN-01a | 视觉 | 根容器 1440 / 侧栏 236 / 导航 10 组 / KPI 5 列 | ✅ 全等 |
+| DESIGN-01b | 视觉 | 列表 6 列宽 34/13/11/15/11/16 | ✅ 全等 |
+| DESIGN-01c | 视觉 | 审核抽屉 640px、三色 diff 逐行渲染 | ✅ 640px / 5 行 |
+| DESIGN-01d | 视觉 | 回滚弹窗 440px | ✅ 440px |
+| DESIGN-02a | 视觉 | 六态 tag 文案与配色 | ✅ 草稿/待审核/已驳回/已发布/修复中 |
+| DESIGN-02b | 视觉 | 四同步态文案与配色 | ✅ 已同步 / 同步失败 |
+| FLOW-01 | 闭环 | 候选「生成草稿」→ 草稿带来源 `AI 抽取 · CT-xxxx / EX-xx` | ✅ EX-01 → KB-20545 |
+| FLOW-02 | 闭环 | 缺英文 → 提交 422 并列出校验项 | ✅ 422「尚未翻译为英文」 |
+| FLOW-03 | 闭环 | 真实大模型翻译标题与正文 | ✅ qwen 产出英文标题 |
+| FLOW-04 | 闭环 | 提交进队列 → 通过 → 大版本 +1 且写版本历史 | ✅ v0.1 → v1.0 |
+| FLOW-05 | 闭环 | 发布即同步 + 报文号 + 耗时留痕 | ✅ synced / #88212 / 3ms |
+| FLOW-06 | 闭环 | 驳回空意见被拒；带意见回写条目 | ✅ 400 → 200，意见落库 |
+| FLOW-07 | 闭环 | Zendesk 拉客诉 → 去修复生成小版本草稿 | ✅ v1.0 → v1.1，反馈置修复中 |
+| FLOW-08 | 闭环 | 未命中新建条目 → 未命中置已排期 | ✅ MS-441 → KB-20546 |
+| FLOW-09 | 闭环 | 回滚必须过审；过审后内容与指标一并回退并重新同步 | ✅ v3.2 → v3.1，正文实测已回退 |
+| FLOW-10 | 闭环 | 下线 → offline + Zendesk 归档；恢复 → draft | ✅ 双向通过 |
+| RULE-01 | 安全 | ops 访问 admin：API 403 + 页面 403 | ✅ 两层均拦 |
+| RULE-02 | 安全 | 审计 append-only | ✅ 接口无修改路径；psql `UPDATE 0 / DELETE 0` |
+| RULE-03 | 安全 | 未登录访问 `/api` → 401 | ✅ |
+| RULE-04 | 数据 | 新增分类/场景 → 懒创建 Zendesk Category/Section | ✅ 场景挂上 Section id |
+| RULE-05 | 数据 | 标签不翻译、不进 Zendesk | ✅ 无英文字段；翻译端点拒标签 |
+
+单元测试：`vitest run` **35/35**（状态机与版本号、权限单独授予、段落 diff LCS、脱敏、时间格式、Zendesk 契约含更新路径防回归）。
+
+---
+
+## 9. 运行手册
+
+```bash
+# 依赖：本机 PostgreSQL（无需 Docker）
+corepack pnpm -C app install
+corepack pnpm -C app --filter @kb/contracts build
+corepack pnpm -C app --filter @kb/server db:migrate   # 自动建 kb_console_v4
+corepack pnpm -C app --filter @kb/server db:seed      # 原型基线数据，初始密码 Coolfly@2026
+corepack pnpm -C app --filter @kb/server dev          # 3311
+corepack pnpm -C app --filter @kb/web dev             # 5311（代理 /api → 3311）
+```
+
+| 环境变量 | 作用 |
+|---|---|
+| `DATABASE_URL` | 默认 `postgres://localhost:5432/kb_console_v4` |
+| `QWEN_API_KEY` / `QWEN_MODEL` | 翻译与抽取；缺失则降级为本地确定性模式并在界面如实标注 |
+| `ZENDESK_*` | 实例与凭据；见 §7.1 两道写入闸 |
+| `DISABLE_CRON=1` | 关闭抽取与未命中刷新的定时任务 |
+| `DISPLAY_TZ` | 界面时区，默认 `Asia/Shanghai` |
