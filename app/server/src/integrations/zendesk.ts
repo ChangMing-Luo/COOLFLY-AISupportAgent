@@ -37,6 +37,36 @@ export interface PushInput {
   enBodyHtml?: string;
 }
 
+/**
+ * 工单快照（原始层，一条工单一行）。
+ * `customFields` 整体透传：场景分类落在哪个自定义字段尚未确定，
+ * 先存原始结构，口径定了靠重算消化，避免因字段选错而重拉历史。
+ */
+export interface ZendeskTicketSnapshot {
+  id: number;
+  status: string;
+  channel: string;
+  subject: string;
+  tags: string[];
+  customFields: Array<{ id: number; value: unknown }>;
+  ticketFormId: number | null;
+  groupId: number | null;
+  satisfactionScore: string | null;
+  /** 以下四项来自 metric_sets sideload；未随页返回时为 null，不猜测不填零 */
+  reopens: number | null;
+  replies: number | null;
+  fullResolutionMin: number | null;
+  solvedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface TicketPage {
+  tickets: ZendeskTicketSnapshot[];
+  afterCursor: string | null;
+  endOfStream: boolean;
+}
+
 export interface ZendeskClient {
   readonly mode: 'sandbox' | 'live';
   upsertArticle(input: PushInput): Promise<ZendeskArticle>;
@@ -63,6 +93,12 @@ export interface ZendeskClient {
   fetchTicketSignals(sinceIso: string): Promise<{ solved: number; reopened: number; csatGood: number; csatBad: number }>;
   /** 帮助中心搜索无结果关键词——档位相关，依订阅；不可得时返回空数组由上层如实标注 */
   fetchNoResultSearches(sinceIso: string): Promise<Array<{ keyword: string; count: number }>>;
+  /**
+   * 工单增量快照分页（08-05-2026 新增）——游标分页，每页上限 1000。
+   * 首次传 startTimeSec，之后传上一页的 afterCursor，直到 endOfStream。
+   * 调用方须持久化游标，否则每次从头重拉、超一页即丢数据。
+   */
+  fetchTicketPage(input: { startTimeSec?: number; cursor?: string | null }): Promise<TicketPage>;
 }
 
 export class ZendeskApiError extends Error {
@@ -305,6 +341,43 @@ class SandboxZendesk implements ZendeskClient {
       { keyword: 'solar panel cloudy', count: 12 + (seed % 6) },
       { keyword: 'night vision blurry', count: 9 + (seed % 5) },
     ];
+  }
+
+  /**
+   * 沙箱工单分页：造**两页**再 endOfStream，让「游标推进 / 只取第一页会丢数据」
+   * 这条链路在无生产凭据时也能被验收——单页沙箱会让分页缺陷继续藏着。
+   */
+  async fetchTicketPage(input: { startTimeSec?: number; cursor?: string | null }): Promise<TicketPage> {
+    this.maybeFail('__ticket_page__');
+    const page = input.cursor === 'sbx_page_2' ? 2 : 1;
+    const base = page === 1 ? 9001 : 9051;
+    const statuses = ['solved', 'closed', 'open', 'pending'];
+    const channels = ['email', 'chat', 'web'];
+    const tickets = Array.from({ length: 5 }, (_, i) => {
+      const n = base + i;
+      return {
+        id: n,
+        status: statuses[n % statuses.length]!,
+        channel: channels[n % channels.length]!,
+        subject: `沙箱工单 ${n}`,
+        tags: [n % 2 === 0 ? '退款退货' : '联网配对'],
+        customFields: [{ id: 900001, value: n % 2 === 0 ? '退款退货' : '联网配对' }],
+        ticketFormId: 700001,
+        groupId: 800001,
+        satisfactionScore: n % 3 === 0 ? 'good' : n % 7 === 0 ? 'bad' : 'unoffered',
+        reopens: n % 5 === 0 ? 1 : 0,
+        replies: 2 + (n % 4),
+        fullResolutionMin: 60 + (n % 120),
+        solvedAt: n % 4 === 2 ? null : new Date(n * 1000).toISOString(),
+        createdAt: new Date(n * 1000).toISOString(),
+        updatedAt: new Date(n * 1000 + 3600).toISOString(),
+      };
+    });
+    return {
+      tickets,
+      afterCursor: page === 1 ? 'sbx_page_2' : null,
+      endOfStream: page === 2,
+    };
   }
 
   /** 供测试/演练注入外部故障 */
@@ -653,6 +726,65 @@ class LiveZendesk implements ZendeskClient {
    */
   async fetchNoResultSearches(): Promise<Array<{ keyword: string; count: number }>> {
     return [];
+  }
+
+  /**
+   * 工单增量快照分页。`include=metric_sets` 把重开次数/回复数/解决时长随页带回，
+   * 省去逐工单调 /tickets/{id}/metrics（官方明确 last_audits 不支持 sideload，
+   * 故 KnowledgeLinked 事件仍需逐单拉，不在本方法范围）。
+   */
+  async fetchTicketPage(input: { startTimeSec?: number; cursor?: string | null }): Promise<TicketPage> {
+    // start_time 须至少早于当前 1 分钟（官方约束），无游标且未指定时默认回看 7 天
+    const fallback = Math.floor(Date.now() / 1000) - 7 * 86400;
+    const qs = input.cursor
+      ? `cursor=${encodeURIComponent(input.cursor)}`
+      : `start_time=${input.startTimeSec ?? fallback}`;
+    const data = await this.call<{
+      tickets?: Array<{
+        id: number; status?: string; subject?: string; tags?: string[];
+        via?: { channel?: string };
+        custom_fields?: Array<{ id: number; value: unknown }>;
+        ticket_form_id?: number | null; group_id?: number | null;
+        satisfaction_rating?: { score?: string } | null;
+        created_at?: string; updated_at?: string;
+      }>;
+      metric_sets?: Array<{
+        ticket_id: number; reopens?: number; replies?: number;
+        full_resolution_time_in_minutes?: { business?: number; calendar?: number } | null;
+        solved_at?: string | null;
+      }>;
+      after_cursor?: string | null;
+      end_of_stream?: boolean;
+    }>(`/incremental/tickets/cursor.json?${qs}&include=metric_sets`);
+
+    const metrics = new Map((data.metric_sets ?? []).map((m) => [m.ticket_id, m]));
+    const tickets = (data.tickets ?? []).map((t) => {
+      const m = metrics.get(t.id);
+      return {
+        id: t.id,
+        status: t.status ?? '',
+        channel: t.via?.channel ?? '',
+        subject: t.subject ?? '',
+        tags: t.tags ?? [],
+        customFields: t.custom_fields ?? [],
+        ticketFormId: t.ticket_form_id ?? null,
+        groupId: t.group_id ?? null,
+        satisfactionScore: t.satisfaction_rating?.score ?? null,
+        // sideload 未随页返回时保持 null——0 会被下游当成「确实没重开过」而算错解决率
+        reopens: m?.reopens ?? null,
+        replies: m?.replies ?? null,
+        fullResolutionMin: m?.full_resolution_time_in_minutes?.calendar ?? null,
+        solvedAt: m?.solved_at ?? null,
+        createdAt: t.created_at ?? null,
+        updatedAt: t.updated_at ?? null,
+      };
+    });
+    return {
+      tickets,
+      afterCursor: data.after_cursor ?? null,
+      // 官方明确：不可用 count 判完，只认 end_of_stream
+      endOfStream: data.end_of_stream === true,
+    };
   }
 }
 

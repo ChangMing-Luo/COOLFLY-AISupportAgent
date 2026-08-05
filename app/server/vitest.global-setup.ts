@@ -9,6 +9,7 @@
  * 用子进程而不是直接 import：seed 脚本自带 pool 生命周期，同进程调用会关掉测试共用的连接池。
  */
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -24,5 +25,9 @@ export default function setup(): void {
   // 不擦的话 seed 会带着真实凭据跑，把演示文章推进生产帮助中心。
   const env = { ...process.env };
   for (const k of EXTERNAL_KEYS) delete env[k];
-  execFileSync('npx', ['tsx', join(root, 'src/db/seed.ts')], { stdio: 'inherit', cwd: root, env });
+  // 直接用当前 node 跑 tsx 的 CLI，不经 npx：Windows 上 npx 是 npx.cmd，
+  // 而 Node 自 CVE-2024-27980 修复起禁止不带 shell 直接 spawn .cmd（EINVAL），
+  // 加 shell:true 又要处理路径引号。解析 tsx/cli 入口最稳且无平台分支。
+  const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
+  execFileSync(process.execPath, [tsxCli, join(root, 'src/db/seed.ts')], { stdio: 'inherit', cwd: root, env });
 }

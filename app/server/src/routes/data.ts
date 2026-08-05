@@ -6,8 +6,22 @@ import { requirePermission } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
 import { DomainError } from '../services/entries.js';
 import { collectSignals } from '../services/signals.js';
+import { syncTickets } from '../services/tickets.js';
 
 export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
+  /** 手动触发一轮工单快照同步（只读拉取；cron 之外的补采入口） */
+  app.post('/api/data/tickets/sync', { preHandler: [requireLogin, requirePermission('metrics.view')] }, async (req) => {
+    const r = await syncTickets();
+    await writeAudit(req.currentUser!, {
+      objectType: 'signal', objectId: null, objectLabel: 'Zendesk 工单快照同步',
+      action: '同步工单快照', category: 'content',
+      field: '结果', before: '—',
+      after: `页 ${r.pages} / 工单 ${r.tickets} / ${r.endOfStream ? '已到流末尾' : '未到流末尾'}`,
+      note: r.degraded.length ? `降级项：${r.degraded.join('；')}` : '全部页拉取成功',
+    });
+    return r;
+  });
+
   /** 手动触发一轮信号采集（cron 之外的补采入口）；degraded 项如实回传给界面标注 */
   app.post('/api/data/signals/collect', { preHandler: [requireLogin, requirePermission('metrics.view')] }, async (req) => {
     const r = await collectSignals();

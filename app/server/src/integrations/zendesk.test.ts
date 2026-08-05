@@ -33,6 +33,7 @@ function stubFetch(
     sectionArticleCount?: number;
     categorySectionCount?: number;
     sourceLocale?: string;
+    ticketPage?: Record<string, unknown>;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -56,6 +57,10 @@ function stubFetch(
       return respond(200, { access_token: opts.token ?? 'tok_1', expires_in: opts.expiresIn ?? 1800 });
     }
     if (method === 'DELETE') return respond(204, undefined);
+    // 工单增量导出（游标分页 + metric_sets sideload）
+    if (/\/incremental\/tickets\/cursor\.json/.test(url)) {
+      return respond(200, opts.ticketPage ?? { tickets: [], after_cursor: null, end_of_stream: true });
+    }
     // 结构端点
     if (/\/help_center\/categories\.json$/.test(url) && method === 'POST') {
       return respond(201, { category: { id: 9001 } });
@@ -386,5 +391,91 @@ describe('结构维护（沙箱：与真实契约同形）', () => {
   it('不存在的 Category 下建 Section 报 404（与真实 API 同语义）', async () => {
     const { getZendesk, ZendeskApiError } = await loadZendesk();
     await expect(getZendesk().createSection('cat_ghost', 'x')).rejects.toThrow(ZendeskApiError);
+  });
+});
+
+describe('工单增量快照分页（live）', () => {
+  beforeEach(() => {
+    process.env.ZENDESK_SUBDOMAIN = 'ourcoolfly-48181';
+    process.env.ZENDESK_EMAIL = '312555102@qq.com';
+    process.env.ZENDESK_API_TOKEN = 'tk';
+  });
+
+  it('首次拉取带 start_time 与 metric_sets sideload，不带 cursor', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().fetchTicketPage({ startTimeSec: 1785000000 });
+    const req = calls.find((c) => c.url.includes('/incremental/tickets/cursor.json'))!;
+    expect(req.url).toContain('start_time=1785000000');
+    expect(req.url).toContain('include=metric_sets');
+    expect(req.url).not.toContain('cursor=');
+  });
+
+  it('有游标时改传 cursor，不再传 start_time（否则每轮从头重拉）', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().fetchTicketPage({ startTimeSec: 1785000000, cursor: 'cur_abc' });
+    const req = calls.find((c) => c.url.includes('/incremental/tickets/cursor.json'))!;
+    expect(req.url).toContain('cursor=cur_abc');
+    expect(req.url).not.toContain('start_time=');
+  });
+
+  it('metric_sets 按 ticket_id 归并进对应工单', async () => {
+    stubFetch({
+      ticketPage: {
+        tickets: [
+          { id: 11, status: 'solved', subject: '退款多久到账', tags: ['退款'], via: { channel: 'email' },
+            custom_fields: [{ id: 900001, value: '退款退货' }], created_at: '2026-08-01T00:00:00Z' },
+          { id: 12, status: 'open', subject: '配网失败', via: { channel: 'chat' } },
+        ],
+        metric_sets: [
+          { ticket_id: 11, reopens: 2, replies: 5,
+            full_resolution_time_in_minutes: { business: 90, calendar: 120 }, solved_at: '2026-08-02T00:00:00Z' },
+        ],
+        after_cursor: 'cur_next',
+        end_of_stream: false,
+      },
+    });
+    const { getZendesk } = await loadZendesk();
+    const page = await getZendesk().fetchTicketPage({ startTimeSec: 1 });
+    expect(page.tickets[0]).toMatchObject({
+      id: 11, status: 'solved', channel: 'email', reopens: 2, replies: 5, fullResolutionMin: 120,
+    });
+    expect(page.tickets[0]!.customFields).toEqual([{ id: 900001, value: '退款退货' }]);
+    expect(page.afterCursor).toBe('cur_next');
+    expect(page.endOfStream).toBe(false);
+  });
+
+  it('无 metric_sets 的工单四项指标为 null，不填 0（0 会被下游当成真没重开过）', async () => {
+    stubFetch({
+      ticketPage: { tickets: [{ id: 12, status: 'open' }], metric_sets: [], end_of_stream: true },
+    });
+    const { getZendesk } = await loadZendesk();
+    const page = await getZendesk().fetchTicketPage({ startTimeSec: 1 });
+    expect(page.tickets[0]).toMatchObject({
+      reopens: null, replies: null, fullResolutionMin: null, solvedAt: null,
+    });
+  });
+
+  it('end_of_stream 缺省视为未完成——只认显式 true，不用 count 判完', async () => {
+    stubFetch({ ticketPage: { tickets: [], after_cursor: 'c' } });
+    const { getZendesk } = await loadZendesk();
+    expect((await getZendesk().fetchTicketPage({ startTimeSec: 1 })).endOfStream).toBe(false);
+  });
+});
+
+describe('工单增量快照分页（沙箱）', () => {
+  it('造两页再 endOfStream，游标推进后拿到不同工单', async () => {
+    const { getZendesk } = await loadZendesk();
+    const zd = getZendesk();
+    const p1 = await zd.fetchTicketPage({ startTimeSec: 1 });
+    expect(p1.endOfStream).toBe(false);
+    expect(p1.afterCursor).toBeTruthy();
+    const p2 = await zd.fetchTicketPage({ cursor: p1.afterCursor });
+    expect(p2.endOfStream).toBe(true);
+    expect(p2.afterCursor).toBeNull();
+    const ids1 = p1.tickets.map((t) => t.id);
+    const ids2 = p2.tickets.map((t) => t.id);
+    expect(ids1.some((id) => ids2.includes(id))).toBe(false);
   });
 });

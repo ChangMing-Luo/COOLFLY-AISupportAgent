@@ -18,6 +18,7 @@ for (const dir of [process.cwd(), join(here, '..'), join(here, '../..')]) {
 import { drainQueue, scanDrift } from './services/sync.js';
 import { runDailyBatch } from './services/mining.js';
 import { collectSignals } from './services/signals.js';
+import { syncTickets } from './services/tickets.js';
 import { scanReviewDue } from './services/entries.js';
 
 const PORT = Number(process.env.PORT ?? 3311);
@@ -35,6 +36,11 @@ async function main(): Promise<void> {
     // drift 扫描（建议值每小时）
     cron.schedule('0 * * * *', () => {
       scanDrift().catch((e) => app.log.error({ err: e }, 'drift 扫描失败'));
+    });
+    // 工单快照同步（每 15 分钟，只读；游标持久化，断点续传）——
+    // 排在信号采集之前，保证采集读到的是当轮最新快照
+    cron.schedule('*/15 * * * *', () => {
+      syncTickets().catch((e) => app.log.error({ err: e }, '工单快照同步失败'));
     });
     // 信号采集（每小时，四渠道；待核实档位如实标注不进达标判定）
     cron.schedule('30 * * * *', () => {

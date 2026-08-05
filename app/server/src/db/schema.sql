@@ -203,6 +203,40 @@ CREATE TABLE IF NOT EXISTS drift_records (
   resolved_at  TIMESTAMPTZ
 );
 
+-- 增量拉取游标：Zendesk 增量导出用 after_cursor 翻页、end_of_stream 判完（每页上限 1000）。
+-- 游标不落库就只能每次从 start_time 重拉——工单量超一页即静默丢数据，且频次统计随时间膨胀。
+CREATE TABLE IF NOT EXISTS sync_cursors (
+  source_key    TEXT PRIMARY KEY,
+  cursor        TEXT,
+  end_of_stream BOOLEAN NOT NULL DEFAULT FALSE,
+  last_run_at   TIMESTAMPTZ,
+  last_error    TEXT
+);
+
+-- 工单快照（原始层）：统计一律从本表算，不在拉取时直接写统计表。
+-- 增量导出只能向前推进、历史重拉代价极高，口径变更必须能靠重算 SQL 消化。
+-- custom_fields 整体存 JSONB：场景分类字段 id 尚未确定，存原始结构可免于重拉。
+CREATE TABLE IF NOT EXISTS zendesk_tickets (
+  ticket_id     BIGINT PRIMARY KEY,
+  status        TEXT NOT NULL,
+  channel       TEXT NOT NULL DEFAULT '',
+  subject       TEXT NOT NULL DEFAULT '',
+  tags          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  custom_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ticket_form_id BIGINT,
+  group_id      BIGINT,
+  satisfaction_score TEXT,
+  reopens       INT,
+  replies       INT,
+  full_resolution_min INT,
+  created_at    TIMESTAMPTZ,
+  updated_at    TIMESTAMPTZ,
+  solved_at     TIMESTAMPTZ,
+  snapshot_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_zd_tickets_created ON zendesk_tickets(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_zd_tickets_status ON zendesk_tickets(status);
+
 -- ============ 挖掘域 ============
 CREATE TABLE IF NOT EXISTS mining_batches (
   id             TEXT PRIMARY KEY,
