@@ -237,6 +237,12 @@ async function main(): Promise<void> {
 
   // 已同步条目：建立映射与哈希（drift 比对基准）+ 推入沙箱 Zendesk
   const zd = getZendesk();
+  // 演示数据禁止进真实帮助中心：seed 只在沙箱模式下推送（SEED_ALLOW_LIVE=1 显式解除）
+  if (zd.mode === 'live' && process.env.SEED_ALLOW_LIVE !== '1') {
+    throw new Error(
+      'Zendesk 处于 live 模式，seed 会把演示条目推送到真实帮助中心。请清空 Zendesk 凭据后再跑 seed；确需推送则设 SEED_ALLOW_LIVE=1',
+    );
+  }
   const { rows: published } = await query<{ id: string; code: string; title: string; body: { paragraphs: Array<{ id: string; text: string; internal: boolean; heading: boolean }> }; visibility: string; labels: string[]; chapter_id: string; ref: string | null }>(
     `SELECT e.id, e.code, e.title, e.body, e.visibility, e.labels, e.chapter_id, c.zendesk_section_ref AS ref
      FROM entries e JOIN chapters c ON c.id=e.chapter_id WHERE e.sync_status='synced'`,
