@@ -155,7 +155,11 @@ export function KbOverviewView() {
   }
 
   async function createChapter(): Promise<void> {
-    if (!libraryId || busy) return;
+    if (busy) return;
+    if (!libraryId) {
+      toast('知识库为空——目录与章节需挂在知识库下，请先恢复知识库');
+      return;
+    }
     if (!newName.trim()) {
       toast('名称必填');
       return;
@@ -299,10 +303,24 @@ export function KbOverviewView() {
 
           {canManage && (
             <div className="tree__toolbar">
-              <button type="button" className="btn btn--sm" onClick={() => openCreate(null)} data-testid="tree-new-root">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => openCreate(null)}
+                data-testid="tree-new-root"
+                disabled={!libraryId}
+                title={libraryId ? undefined : '知识库为空——目录需挂在知识库下，请先恢复知识库'}
+              >
                 新建目录
               </button>
-              <button type="button" className="btn btn--sm" onClick={() => openCreate(tree.data?.[0]?.id ?? '')} data-testid="tree-new-chapter">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => openCreate(tree.data?.[0]?.id ?? '')}
+                data-testid="tree-new-chapter"
+                disabled={!libraryId}
+                title={libraryId ? undefined : '知识库为空——章节需挂在目录下，请先恢复知识库'}
+              >
                 新建章节
               </button>
               <button type="button" className="btn btn--sm" onClick={() => setMoving({ id: '', name: '' })} data-testid="tree-move">
