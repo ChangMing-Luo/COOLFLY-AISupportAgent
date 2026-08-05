@@ -1,0 +1,892 @@
+
+<div style="width:1440px;min-height:960px;display:flex;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);--rp: {{ dz.rp }}; --mp: {{ dz.mp }}; --fs: {{ dz.fs }}">
+
+  <sc-if value="{{ sideNav }}" hint-placeholder-val="{{ true }}">
+  <aside style="width:236px;flex:none;border-right:1px solid var(--color-divider);background:var(--color-neutral-100);display:flex;flex-direction:column;position:sticky;top:0;height:960px">
+    <div style="padding:22px 20px 16px;border-bottom:1px solid var(--color-divider)">
+      <div style="font-family:var(--font-heading);font-size:19px;letter-spacing:.02em">COOLFLY</div>
+      <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent);margin-top:3px">知识运营中台</div>
+    </div>
+    <nav style="flex:1;overflow-y:auto;padding:10px 0 24px">
+      <sc-for list="{{ nav }}" as="g" hint-placeholder-count="10">
+        <div style="margin-bottom:2px">
+          <button sc-camel-on-click="{{ g.on }}" style="width:100%;display:flex;align-items:baseline;gap:9px;padding:8px 20px;background:transparent;border:0;cursor:pointer;text-align:left;font-family:var(--font-heading);font-weight:600;font-size:14.5px;color:inherit" style-hover="background:color-mix(in srgb, var(--color-text) 5%, transparent)">
+            <span style="font-size:10px;letter-spacing:.06em;font-feature-settings:'tnum';color:var(--color-neutral-500);width:14px;flex:none">{{ g.num }}</span>
+            <span style="flex:1;color: {{ g.col }}">{{ g.label }}</span>
+            <sc-if value="{{ g.badge }}"><span style="font-size:10px;font-feature-settings:'tnum';color:var(--color-accent-700);border:1px solid var(--color-accent-300);border-radius:2px;padding:0 4px">{{ g.badge }}</span></sc-if>
+          </button>
+          <sc-if value="{{ g.open }}">
+            <div style="padding:2px 0 8px 43px;display:flex;flex-direction:column">
+              <sc-for list="{{ g.children }}" as="c">
+                <button sc-camel-on-click="{{ c.on }}" style="display:flex;align-items:center;gap:7px;padding:5px 14px 5px 0;background:transparent;border:0;cursor:pointer;text-align:left;font-size:13px;font-family:var(--font-body);color:inherit" style-hover="color:var(--color-accent-700)">
+                  <span style="width:12px;height:1px;flex:none;background: {{ c.bar }}"></span>
+                  <span style="flex:1;color: {{ c.col }}">{{ c.label }}</span>
+                  <sc-if value="{{ c.badge }}"><span style="font-size:10px;font-feature-settings:'tnum';color:var(--color-neutral-600)">{{ c.badge }}</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="padding:14px 20px;border-top:1px solid var(--color-divider);font-size:11px;color:var(--color-neutral-600)">
+      <div style="display:flex;justify-content:space-between"><span>知识总量</span><span style="font-feature-settings:'tnum'">{{ stat.total }}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px"><span>今日发布</span><span style="font-feature-settings:'tnum'">{{ stat.pubToday }}</span></div>
+    </div>
+  </aside>
+  </sc-if>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <header style="display:flex;align-items:center;gap:18px;padding:14px 28px;border-bottom:1px solid var(--color-divider);background:var(--color-bg);position:sticky;top:0;z-index:20">
+      <sc-if value="{{ topNav }}">
+        <div style="display:flex;align-items:center;gap:18px;margin-right:6px">
+          <span style="font-family:var(--font-heading);font-size:17px">COOLFLY</span>
+          <div style="display:flex;gap:2px">
+            <sc-for list="{{ nav }}" as="g">
+              <button sc-camel-on-click="{{ g.on }}" style="padding:6px 11px;background:transparent;border:0;border-bottom:2px solid {{ g.bar }};cursor:pointer;font-family:var(--font-heading);font-weight:600;font-size:13.5px;color: {{ g.col }}">{{ g.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+      <div style="flex:1;max-width:400px;position:relative">
+        <input class="input" placeholder="搜索知识、场景、分类或知识 ID…" value="{{ query }}" sc-camel-on-change="{{ onQuery }}" style="padding-left:30px">
+        <span style="position:absolute;left:10px;top:8px;color:var(--color-neutral-500);font-size:13px">⌕</span>
+      </div>
+      <sc-if value="{{ hasQuery }}">
+        <div style="position:absolute;top:56px;left:28px;width:400px;background:var(--color-neutral-100);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md);z-index:40;padding:6px">
+          <sc-for list="{{ searchHits }}" as="h">
+            <button sc-camel-on-click="{{ h.on }}" style="display:block;width:100%;text-align:left;padding:7px 9px;background:transparent;border:0;cursor:pointer;font-family:var(--font-body);font-size:13px;color:inherit" style-hover="background:color-mix(in srgb, var(--color-accent) 10%, transparent)">
+              <div>{{ h.title }}</div>
+              <div style="font-size:11px;color:var(--color-neutral-600);margin-top:1px">{{ h.meta }}</div>
+            </button>
+          </sc-for>
+          <sc-if value="{{ noHits }}"><div style="padding:14px 9px;font-size:12.5px;color:var(--color-neutral-600)">未匹配到知识。可在反馈回流登记为未命中问题，进入采集闭环。</div></sc-if>
+        </div>
+      </sc-if>
+      <div style="flex:1"></div>
+      <button class="btn btn-secondary" sc-camel-on-click="{{ goTodo }}" style="font-size:13px">待办 <span style="font-feature-settings:'tnum';color:var(--color-accent-700);margin-left:4px">{{ stat.todo }}</span></button>
+      <div style="display:flex;align-items:center;gap:8px;padding-left:16px;border-left:1px solid var(--color-divider)">
+        <div style="text-align:right;line-height:1.25">
+          <div style="font-size:13px">{{ me.name }}</div>
+          <div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent)">{{ me.roleLabel }}</div>
+        </div>
+        <button class="btn btn-ghost" sc-camel-on-click="{{ switchRole }}" style="font-size:12px">切换</button>
+      </div>
+    </header>
+
+    <sc-if value="{{ topNav }}">
+      <div style="display:flex;align-items:center;gap:2px;padding:0 28px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+        <sc-for list="{{ subNav }}" as="c">
+          <button sc-camel-on-click="{{ c.on }}" style="padding:9px 13px;background:transparent;border:0;border-bottom:2px solid {{ c.bar }};cursor:pointer;font-family:var(--font-body);font-size:13px;color: {{ c.col }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <main style="flex:1;padding:var(--mp,26px) 28px 60px;min-width:0">
+
+      <sc-if value="{{ view.denied }}">
+        <div style="max-width:520px;margin:120px auto;text-align:center">
+          <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">403 · 权限不足</div>
+          <h2 style="margin:12px 0 10px">该模块仅超级管理员可见</h2>
+          <p style="font-size:13.5px;color:var(--color-neutral-700);text-wrap:pretty">当前登录角色为「知识运营」。系统管理下的用户与角色、权限矩阵、操作审计需要超管权限。如需查看，请联系管理员授权或切换角色。</p>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:18px">
+            <button class="btn btn-primary" sc-camel-on-click="{{ switchRole }}">切换为超管</button>
+            <button class="btn btn-secondary" sc-camel-on-click="{{ goHome }}">返回工作台</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.loading }}">
+        <div style="animation:shimmer 1.4s ease-in-out infinite">
+          <div style="height:14px;width:180px;background:var(--color-neutral-200);border-radius:2px"></div>
+          <div style="height:30px;width:340px;background:var(--color-neutral-200);border-radius:2px;margin-top:14px"></div>
+          <div style="height:1px;background:var(--color-divider);margin:22px 0"></div>
+          <sc-for list="{{ skeleton }}" as="s" hint-placeholder-count="7">
+            <div style="height:44px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:20px">
+              <div style="height:12px;width:38%;background:var(--color-neutral-200);border-radius:2px"></div>
+              <div style="height:12px;width:14%;background:var(--color-neutral-200);border-radius:2px"></div>
+              <div style="height:12px;width:9%;background:var(--color-neutral-200);border-radius:2px"></div>
+              <div style="height:12px;width:16%;background:var(--color-neutral-200);border-radius:2px"></div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.dash }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+          <div>
+            <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">工作台 · {{ today }}</div>
+            <h1 style="margin:8px 0 0;font-weight:400;font-size:38px">{{ greeting }}</h1>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ goCollect }}">查看抽取候选</button>
+            <button class="btn btn-primary" sc-camel-on-click="{{ newDraft }}">撰写新知识</button>
+          </div>
+        </div>
+        <hr class="hr">
+
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="5">
+            <div style="padding:16px 18px;border-right:1px solid var(--color-divider)">
+              <div style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--color-neutral-600)">{{ k.label }}</div>
+              <div style="font-family:var(--font-heading);font-size:32px;font-weight:400;font-feature-settings:'tnum';margin-top:6px;line-height:1">{{ k.value }}</div>
+              <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:5px">{{ k.delta }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 372px;gap:28px;margin-top:26px;align-items:start">
+          <div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <h4 style="margin:0">我的待办</h4>
+              <span style="font-size:11.5px;color:var(--color-neutral-600)">按知识生命周期归集，处理后自动流入下一环节</span>
+            </div>
+            <div style="margin-top:12px;border-top:1px solid var(--color-divider)">
+              <sc-for list="{{ todos }}" as="t" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:16px;padding:14px 2px;border-bottom:1px solid var(--color-divider)">
+                  <div style="width:78px;flex:none;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color: {{ t.stepCol }}">{{ t.step }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14px">{{ t.title }}</div>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:2px">{{ t.meta }}</div>
+                  </div>
+                  <span class="tag {{ t.tagCls }}">{{ t.tagText }}</span>
+                  <button class="btn btn-primary" sc-camel-on-click="{{ t.on }}" style="font-size:12.5px;padding:5px 12px">{{ t.cta }}</button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noTodos }}">
+                <div style="padding:46px 0;text-align:center">
+                  <div style="font-family:var(--font-heading);font-size:22px;color:var(--color-neutral-600)">待办已清空</div>
+                  <p style="font-size:13px;color:var(--color-neutral-600);margin-top:8px">审核与反馈队列均无积压。可前往反馈回流从 Zendesk 拉取最新客诉。</p>
+                  <button class="btn btn-secondary" sc-camel-on-click="{{ goFeedback }}">查看反馈回流</button>
+                </div>
+              </sc-if>
+            </div>
+
+            <h4 style="margin:30px 0 0">知识生命周期</h4>
+            <div style="display:flex;align-items:stretch;margin-top:12px;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+              <sc-for list="{{ lifecycle }}" as="s" hint-placeholder-count="6">
+                <button sc-camel-on-click="{{ s.on }}" style="flex:1;padding:14px 8px;background:transparent;border:0;border-right:1px solid var(--color-divider);cursor:pointer;text-align:center;font-family:var(--font-body);color:inherit" style-hover="background:color-mix(in srgb, var(--color-accent) 8%, transparent)">
+                  <div style="font-family:var(--font-heading);font-size:24px;font-weight:400;font-feature-settings:'tnum';color: {{ s.col }}">{{ s.n }}</div>
+                  <div style="font-size:11.5px;margin-top:4px">{{ s.label }}</div>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div>
+            <div class="card" style="background:var(--color-neutral-100)">
+              <div class="card-kicker">Zendesk 连接</div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+                <span style="font-family:var(--font-heading);font-size:19px">已连接</span>
+                <span class="tag tag-accent">正常</span>
+              </div>
+              <sc-for list="{{ zendesk }}" as="z" hint-placeholder-count="4">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-top:1px solid var(--color-divider);font-size:12.5px">
+                  <span style="color:var(--color-neutral-600)">{{ z.k }}</span>
+                  <span style="font-feature-settings:'tnum';color: {{ z.col }}">{{ z.v }}</span>
+                </div>
+              </sc-for>
+              <button class="btn btn-secondary btn-block" sc-camel-on-click="{{ goPull }}" style="margin-top:10px">从 Zendesk 拉取客诉</button>
+            </div>
+
+            <h4 style="margin:26px 0 0">最近动态</h4>
+            <div style="margin-top:10px;border-top:1px solid var(--color-divider)">
+              <sc-for list="{{ recentAudit }}" as="a" hint-placeholder-count="6">
+                <div style="padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:12.5px">
+                  <div style="display:flex;justify-content:space-between;gap:10px">
+                    <span>{{ a.who }} · {{ a.act }}</span>
+                    <span style="font-feature-settings:'tnum';color:var(--color-neutral-600);flex:none">{{ a.at }}</span>
+                  </div>
+                  <div style="color:var(--color-neutral-600);margin-top:1px">{{ a.obj }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.list }}">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px">
+          <div style="min-width:0">
+            <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">{{ page.kicker }}</div>
+            <h2 style="margin:8px 0 6px;font-weight:400">{{ page.title }}</h2>
+            <p style="margin:0;font-size:13px;color:var(--color-neutral-700);max-width:640px;text-wrap:pretty">{{ page.desc }}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex:none">
+            <sc-for list="{{ page.actions }}" as="a" hint-placeholder-count="2">
+              <button class="btn {{ a.cls }}" sc-camel-on-click="{{ a.on }}">{{ a.l }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <hr class="hr">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div class="seg">
+            <sc-for list="{{ page.filters }}" as="f" hint-placeholder-count="4">
+              <label class="seg-opt"><input type="radio" name="listfilter" checked="{{ f.on }}" sc-camel-on-change="{{ f.pick }}"><span>{{ f.l }}</span></label>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font-size:12px;color:var(--color-neutral-600);font-feature-settings:'tnum'">{{ page.count }}</span>
+        </div>
+        <sc-raw-table class="table">
+          <sc-raw-thead><sc-raw-tr>
+            <sc-raw-th style="width:34%">{{ page.h1 }}</sc-raw-th>
+            <sc-raw-th style="width:13%">{{ page.h2 }}</sc-raw-th>
+            <sc-raw-th style="width:11%">{{ page.h3 }}</sc-raw-th>
+            <sc-raw-th style="width:15%">{{ page.h4 }}</sc-raw-th>
+            <sc-raw-th style="width:11%;text-align:right">{{ page.h5 }}</sc-raw-th>
+            <sc-raw-th style="width:16%;text-align:right">操作</sc-raw-th>
+          </sc-raw-tr></sc-raw-thead>
+          <sc-raw-tbody>
+            <sc-for list="{{ page.rows }}" as="r" hint-placeholder-count="8">
+              <sc-raw-tr>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2)">
+                  <button sc-camel-on-click="{{ r.open }}" style="background:transparent;border:0;padding:0;cursor:pointer;text-align:left;font-family:var(--font-body);font-size:var(--fs,14px);color:inherit" style-hover="color:var(--color-accent-700)">{{ r.c1 }}</button>
+                  <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;font-feature-settings:'tnum'">{{ r.sub }}</div>
+                </sc-raw-td>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2);font-size:13px">{{ r.c2 }}</sc-raw-td>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2)">
+                  <sc-if value="{{ r.c3on }}"><button sc-camel-on-click="{{ r.c3click }}" class="tag {{ r.tagCls }}" style="border:0;cursor:pointer;font-family:var(--font-body)">{{ r.c3 }}</button></sc-if>
+                  <sc-if value="{{ r.c3plain }}"><span class="tag {{ r.tagCls }}">{{ r.c3 }}</span></sc-if>
+                </sc-raw-td>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2);font-size:12.5px;color:var(--color-neutral-700);font-feature-settings:'tnum'">{{ r.c4 }}</sc-raw-td>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2);text-align:right;font-size:13px;font-feature-settings:'tnum'">{{ r.c5 }}</sc-raw-td>
+                <sc-raw-td style="padding:var(--rp,11px) var(--space-2)">
+                  <div style="display:flex;gap:4px;justify-content:flex-end">
+                    <sc-for list="{{ r.acts }}" as="a">
+                      <button class="btn btn-ghost" sc-camel-on-click="{{ a.on }}" style="font-size:12px">{{ a.l }}</button>
+                    </sc-for>
+                  </div>
+                </sc-raw-td>
+              </sc-raw-tr>
+            </sc-for>
+          </sc-raw-tbody>
+        </sc-raw-table>
+        <sc-if value="{{ page.empty }}">
+          <div style="padding:70px 0;text-align:center;border-bottom:1px solid var(--color-divider)">
+            <div style="font-family:var(--font-heading);font-size:23px;color:var(--color-neutral-600)">{{ page.emptyTitle }}</div>
+            <p style="font-size:13px;color:var(--color-neutral-600);margin:8px auto 16px;max-width:420px;text-wrap:pretty">{{ page.emptyDesc }}</p>
+            <button class="btn btn-primary" sc-camel-on-click="{{ page.emptyOn }}">{{ page.emptyCta }}</button>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ view.extract }}">
+        <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">知识采集 · AI 抽取工作台</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:8px">
+          <div><h2 style="margin:0;font-weight:400">{{ ex.taskTitle }}</h2>
+            <p style="margin:6px 0 0;font-size:13px;color:var(--color-neutral-700)">{{ ex.taskMeta }}</p></div>
+        </div>
+        <hr class="hr">
+        <div style="display:grid;grid-template-columns:1fr 400px;gap:28px;align-items:start">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+              <h4 style="margin:0">抽取候选</h4>
+              <span style="font-size:12px;color:var(--color-neutral-600)">{{ ex.countText }}</span>
+            </div>
+            <sc-for list="{{ ex.cands }}" as="c" hint-placeholder-count="4">
+              <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:16px 18px;margin-bottom:10px">
+                <div style="display:flex;align-items:flex-start;gap:14px">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);font-feature-settings:'tnum'">{{ c.id }}</span>
+                      <span class="tag {{ c.tagCls }}">{{ c.state }}</span>
+                    </div>
+                    <div style="font-family:var(--font-heading);font-size:17px;margin-top:6px">{{ c.title }}</div>
+                    <p style="margin:6px 0 0;font-size:13px;color:var(--color-neutral-700);text-wrap:pretty">{{ c.answer }}</p>
+                    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+                      <span class="tag tag-neutral">场景 · {{ c.scene }}</span>
+                      <sc-for list="{{ c.tags }}" as="t"><span class="tag tag-outline">{{ t }}</span></sc-for>
+                    </div>
+                  </div>
+                  <div style="width:112px;flex:none;text-align:right">
+                    <div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600)">置信度</div>
+                    <div style="font-family:var(--font-heading);font-size:26px;font-feature-settings:'tnum';color: {{ c.confCol }}">{{ c.conf }}</div>
+                    <div style="height:2px;background:var(--color-neutral-200);margin-top:4px"><div style="height:2px;background:var(--color-accent);width: {{ c.confPct }}"></div></div>
+                  </div>
+                </div>
+                <sc-if value="{{ c.dup }}">
+                  <div style="margin-top:12px;padding:9px 12px;border-left:2px solid var(--color-accent);background:var(--color-accent-100);font-size:12.5px">
+                    查重命中：与 <a href="#" sc-camel-on-click="{{ c.openDup }}">{{ c.dupTitle }}</a> 相似度 {{ c.dupScore }}，生成草稿后会作为该知识的新版本处理。
+                  </div>
+                </sc-if>
+                <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--color-divider)">
+                  <button class="btn btn-ghost" sc-camel-on-click="{{ c.drop }}">丢弃</button>
+                  <button class="btn btn-primary" sc-camel-on-click="{{ c.accept }}">生成草稿</button>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ ex.empty }}">
+              <div style="padding:60px 0;text-align:center;border:1px dashed var(--color-divider);border-radius:var(--radius-md)">
+                <div style="font-family:var(--font-heading);font-size:22px;color:var(--color-neutral-600)">候选已全部处理</div>
+                <p style="font-size:13px;color:var(--color-neutral-600);margin:8px auto 16px;max-width:400px">本次抽取的候选已生成草稿或丢弃。下一步请到「我的草稿」补全内容并提交审核。</p>
+                <button class="btn btn-primary" sc-camel-on-click="{{ ex.toDrafts }}">前往我的草稿</button>
+              </div>
+            </sc-if>
+          </div>
+          <div>
+            <div class="card" style="background:var(--color-neutral-100)">
+              <div class="card-kicker">来源原文 · Zendesk</div>
+              <div style="font-size:12.5px;color:var(--color-neutral-700);line-height:1.75;max-height:300px;overflow-y:auto;text-align:justify">{{ ex.sourceText }}</div>
+              <div class="card-meta" style="border-top:1px solid var(--color-divider);padding-top:8px">{{ ex.sourceMeta }}</div>
+            </div>
+            <div class="card" style="margin-top:14px">
+              <div class="card-kicker">抽取配置</div>
+              <sc-for list="{{ ex.config }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--color-divider)">
+                  <span style="color:var(--color-neutral-600)">{{ c.k }}</span><span>{{ c.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.editor }}">
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--color-neutral-600)">
+          <button class="btn btn-ghost" sc-camel-on-click="{{ ed.back }}" style="font-size:12px;padding:0">← 返回</button>
+          <span>/ {{ ed.crumb }}</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:10px">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span class="tag {{ ed.tagCls }}">{{ ed.status }}</span>
+              <span style="font-size:12px;color:var(--color-neutral-600);font-feature-settings:'tnum'">{{ ed.id }} · {{ ed.ver }}</span>
+              <span class="tag {{ ed.transTagCls }}">{{ ed.transChip }}</span>
+              <span style="font-size:12px;color:var(--color-neutral-600)">{{ ed.saveHint }}</span>
+            </div>
+            <h2 style="margin:8px 0 0;font-weight:400">编辑知识</h2>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ ed.save }}">保存草稿</button>
+            <button class="btn btn-primary" sc-camel-on-click="{{ ed.submit }}">提交审核</button>
+          </div>
+        </div>
+        <hr class="hr">
+        <sc-if value="{{ ed.hasError }}">
+          <div style="border:1px solid var(--color-accent-600);border-radius:var(--radius-md);padding:12px 16px;margin-bottom:18px;background:var(--color-accent-100)">
+            <div style="font-family:var(--font-heading);font-size:14px;color:var(--color-accent-800)">提交前有 {{ ed.errCount }} 项未通过校验</div>
+            <ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--color-accent-800)">
+              <sc-for list="{{ ed.errors }}" as="e"><li>{{ e }}</li></sc-for>
+            </ul>
+          </div>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:1fr 372px;gap:28px;align-items:start">
+          <div>
+            <div class="field" style="margin-bottom:16px">
+              <label>标题（中文）</label>
+              <input class="input" value="{{ ed.title }}" sc-camel-on-change="{{ ed.setTitle }}" style="font-size:16px;min-height:42px">
+            </div>
+            <div class="field">
+              <label>正文（中文）· 富文本</label>
+              <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                <div style="display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+                  <sc-for list="{{ ed.tools }}" as="t">
+                    <button sc-camel-on-mouse-down="{{ ed.keep }}" sc-camel-on-click="{{ t.on }}" title="{{ t.tip }}" style="min-width:32px;height:28px;border:1px solid var(--color-divider);background:var(--color-bg);border-radius:var(--radius-sm);cursor:pointer;font-family: {{ t.ff }};font-size:13px;color:inherit" style-hover="border-color:var(--color-accent);color:var(--color-accent-700)">{{ t.l }}</button>
+                  </sc-for>
+                </div>
+                <div ref="{{ ed.refZh }}" data-ph="输入知识正文，可加粗、分小标题、加项目符号…" style="min-height:240px;padding:14px 16px;font-size:14.5px;line-height:1.85;text-align:justify"></div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:14px;margin:28px 0 12px;padding-top:22px;border-top:1px solid var(--color-divider)">
+              <div style="flex:1">
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent)">English 版本 · 大模型翻译</div>
+                <div style="font-size:12px;color:var(--color-neutral-600);margin-top:3px;text-wrap:pretty">{{ ed.transStatus }}</div>
+              </div>
+              <button class="btn {{ ed.transBtnCls }}" sc-camel-on-click="{{ ed.translate }}">{{ ed.transLabel }}</button>
+            </div>
+            <sc-if value="{{ ed.showEn }}">
+              <div class="field" style="margin-bottom:16px">
+                <label>Title (English) · 可编辑</label>
+                <input class="input" value="{{ ed.titleEn }}" sc-camel-on-change="{{ ed.setTitleEn }}" placeholder="Machine-translated, editable" style="font-size:15px;min-height:42px">
+              </div>
+              <div class="field">
+                <label>Body (English) · 可编辑</label>
+                <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                  <div style="display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+                    <sc-for list="{{ ed.tools }}" as="t">
+                      <button sc-camel-on-mouse-down="{{ ed.keep }}" sc-camel-on-click="{{ t.on }}" title="{{ t.tip }}" style="min-width:32px;height:28px;border:1px solid var(--color-divider);background:var(--color-bg);border-radius:var(--radius-sm);cursor:pointer;font-family: {{ t.ff }};font-size:13px;color:inherit" style-hover="border-color:var(--color-accent);color:var(--color-accent-700)">{{ t.l }}</button>
+                    </sc-for>
+                  </div>
+                  <div ref="{{ ed.refEn }}" data-ph="Click 翻译 to generate the English version, or type here…" style="min-height:200px;padding:14px 16px;font-size:14px;line-height:1.8;text-align:justify"></div>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ ed.noEn }}">
+              <div style="border:1px dashed var(--color-divider);border-radius:var(--radius-md);padding:26px;text-align:center;color:var(--color-neutral-600)">
+                <div style="font-size:13.5px">尚未生成英文版本</div>
+                <p style="font-size:12.5px;margin:6px auto 0;max-width:400px;text-wrap:pretty">用户以中文录入，系统调用大模型同步翻译为英文。Zendesk 同步的是英文版本，因此提交审核前必须先翻译。翻译结果可在此二次编辑。</p>
+              </div>
+            </sc-if>
+
+            <h4 style="margin:26px 0 8px">变更说明</h4>
+            <input class="input" placeholder="本次修改了什么？将写入版本历史，审核人可见" value="{{ ed.note }}" sc-camel-on-change="{{ ed.setNote }}">
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-kicker">目录归属 · 必填</div>
+              <div class="field">
+                <label>知识分类（一级）<span style="color:var(--color-accent-700)">*</span></label>
+                <sc-raw-select class="input" value="{{ ed.cat }}" sc-camel-on-change="{{ ed.setCat }}">
+                  <option value="">请选择一级分类</option>
+                  <sc-for list="{{ catOpts }}" as="c"><option value="{{ c.zh }}">{{ c.zh }}</option></sc-for>
+                </sc-raw-select>
+                <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:4px">EN · {{ ed.catEn }}</div>
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label>问题场景（二级）<span style="color:var(--color-accent-700)">*</span></label>
+                <sc-raw-select class="input" value="{{ ed.scene }}" sc-camel-on-change="{{ ed.setScene }}">
+                  <option value="">{{ ed.scenePh }}</option>
+                  <sc-for list="{{ ed.sceneOpts }}" as="s"><option value="{{ s.zh }}">{{ s.zh }}</option></sc-for>
+                </sc-raw-select>
+                <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:4px">EN · {{ ed.sceneEn }}</div>
+                <sc-if value="{{ ed.sceneErr }}"><div style="font-size:11.5px;color:var(--color-accent-700);margin-top:4px">未选择问题场景，无法进入审核队列</div></sc-if>
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label>知识标签（仅本地适配，不翻译）</label>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px">
+                  <sc-for list="{{ ed.tags }}" as="t">
+                    <button class="tag tag-accent" sc-camel-on-click="{{ t.remove }}" style="border:0;cursor:pointer;font-family:var(--font-body)">{{ t.l }} ×</button>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:5px;flex-wrap:wrap">
+                  <sc-for list="{{ ed.tagSug }}" as="t">
+                    <button class="tag tag-outline" sc-camel-on-click="{{ t.add }}" style="cursor:pointer;font-family:var(--font-body);background:transparent">+ {{ t.l }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-top:14px;background:var(--color-neutral-100)">
+              <div class="card-kicker">翻译控制台</div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-neutral-600)">翻译引擎</span><span>claude-sonnet</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-neutral-600)">中文 → 英文</span><span style="color: {{ ed.transDotCol }}">{{ ed.transState }}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--color-divider)"><span style="color:var(--color-neutral-600)">英文人工修订</span><span>{{ ed.enEdited }}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0"><span style="color:var(--color-neutral-600)">Zendesk 同步语言</span><span>English</span></div>
+            </div>
+            <sc-if value="{{ ed.showAi }}">
+              <div class="card" style="margin-top:14px;border-color:var(--color-accent-300);background:var(--color-accent-100)">
+                <div class="card-kicker">AI 编辑助手</div>
+                <sc-for list="{{ ed.aiSug }}" as="s" hint-placeholder-count="2">
+                  <div style="border-top:1px solid var(--color-accent-200);padding:9px 0">
+                    <div style="font-size:12.5px;color:var(--color-accent-900)">{{ s.text }}</div>
+                    <div style="display:flex;gap:6px;margin-top:6px">
+                      <button class="btn btn-primary" sc-camel-on-click="{{ s.apply }}" style="font-size:12px;padding:3px 10px">采纳</button>
+                      <button class="btn btn-ghost" sc-camel-on-click="{{ s.skip }}" style="font-size:12px">忽略</button>
+                    </div>
+                  </div>
+                </sc-for>
+                <sc-if value="{{ ed.aiDone }}"><div style="font-size:12.5px;color:var(--color-accent-800);padding-top:8px;border-top:1px solid var(--color-accent-200)">建议已全部处理。</div></sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.detail }}">
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--color-neutral-600)">
+          <button class="btn btn-ghost" sc-camel-on-click="{{ dt.back }}" style="font-size:12px;padding:0">← 返回</button>
+          <span>/ 知识库 / {{ dt.cat }} / {{ dt.scene }}</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-top:10px">
+          <div style="max-width:760px">
+            <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+              <span class="tag {{ dt.tagCls }}">{{ dt.status }}</span>
+              <span style="font-size:12px;color:var(--color-neutral-600);font-feature-settings:'tnum'">{{ dt.id }} · 当前 {{ dt.ver }} · 负责人 {{ dt.owner }}</span>
+              <span class="tag tag-outline">中 / EN 双语</span>
+            </div>
+            <h2 style="margin:10px 0 2px;font-weight:400">{{ dt.title }}</h2>
+            <div style="font-size:13px;color:var(--color-neutral-600);font-style:italic">{{ dt.titleEn }}</div>
+            <div style="font-size:12px;color:var(--color-neutral-600);margin-top:5px">状态：{{ dt.statusReadable }}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex:none">
+            <sc-for list="{{ dt.actions }}" as="a" hint-placeholder-count="2">
+              <button class="btn {{ a.cls }}" sc-camel-on-click="{{ a.on }}">{{ a.l }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <hr class="hr">
+        <div style="display:grid;grid-template-columns:1fr 372px;gap:28px;align-items:start">
+          <div>
+            <div style="display:flex;gap:2px;border-bottom:1px solid var(--color-divider);margin-bottom:18px">
+              <sc-for list="{{ dt.tabs }}" as="t" hint-placeholder-count="4">
+                <button sc-camel-on-click="{{ t.on }}" style="padding:8px 14px;background:transparent;border:0;border-bottom:2px solid {{ t.bar }};cursor:pointer;font-family:var(--font-heading);font-weight:600;font-size:14px;margin-bottom:-1px;color: {{ t.col }}">{{ t.l }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ dt.tabContent }}">
+              <div style="display:flex;gap:8px;margin-bottom:16px">
+                <sc-for list="{{ dt.langTabs }}" as="l"><button sc-camel-on-click="{{ l.on }}" class="tag {{ l.cls }}" style="cursor:pointer;font-family:var(--font-body);border:1px solid var(--color-divider)">{{ l.l }}</button></sc-for>
+              </div>
+              <div style="font-size:14.5px;line-height:1.9;text-align:justify;max-width:70ch">
+                <sc-for list="{{ dt.paras }}" as="p" hint-placeholder-count="4"><p>{{ p }}</p></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ dt.tabVersions }}">
+              <sc-if value="{{ dt.qualityWarn }}">
+                <div style="border:1px solid var(--color-accent-600);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:18px;background:var(--color-accent-100)">
+                  <div style="font-family:var(--font-heading);font-size:15px;color:var(--color-accent-800)">质量告警 · 建议回滚</div>
+                  <p style="margin:6px 0 10px;font-size:12.5px;color:var(--color-accent-900);text-wrap:pretty">{{ dt.qualityText }}</p>
+                  <button class="btn btn-primary" sc-camel-on-click="{{ dt.qualityRollback }}">回滚至 {{ dt.qualityTarget }}</button>
+                </div>
+              </sc-if>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+                <h4 style="margin:0">版本与质量</h4>
+                <span style="font-size:11.5px;color:var(--color-neutral-600)">采纳率 / 采纳数 = 该版本回答被采纳的比例与次数 · 命中数 = 被召回次数</span>
+              </div>
+              <div style="border-top:1px solid var(--color-divider)">
+                <sc-for list="{{ dt.versions }}" as="v" hint-placeholder-count="5">
+                  <div style="display:flex;gap:16px;padding:14px 2px;border-bottom:1px solid var(--color-divider);align-items:center">
+                    <div style="width:52px;flex:none;font-family:var(--font-heading);font-size:17px;font-feature-settings:'tnum';color: {{ v.col }}">{{ v.v }}</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px">{{ v.note }}</div>
+                      <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:3px;font-feature-settings:'tnum'">{{ v.by }} · {{ v.at }} · {{ v.act }}</div>
+                    </div>
+                    <div style="width:172px;flex:none">
+                      <div style="display:flex;justify-content:space-between;font-size:11.5px;font-feature-settings:'tnum'"><span style="color:var(--color-neutral-600)">采纳率</span><span style="color: {{ v.adoptCol }}">{{ v.adopt }}</span></div>
+                      <div style="height:3px;background:var(--color-neutral-200);margin:4px 0 6px"><div style="height:3px;background: {{ v.adoptCol }};width: {{ v.adoptPct }}"></div></div>
+                      <div style="display:flex;justify-content:space-between;font-size:11.5px;font-feature-settings:'tnum'"><span style="color:var(--color-neutral-600)">采纳数</span><span>{{ v.adoptN }}</span></div>
+                      <div style="display:flex;justify-content:space-between;font-size:11.5px;font-feature-settings:'tnum';margin-top:2px"><span style="color:var(--color-neutral-600)">命中数</span><span>{{ v.hits }}</span></div>
+                    </div>
+                    <div style="width:96px;flex:none;text-align:right">
+                      <sc-if value="{{ v.isCurrent }}"><span class="tag tag-accent">当前</span></sc-if>
+                      <sc-if value="{{ v.canRollback }}"><button class="btn btn-secondary" sc-camel-on-click="{{ v.rollback }}" style="font-size:12px;padding:4px 10px">回滚</button></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ dt.tabSync }}">
+              <div class="card" style="margin-bottom:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <div class="card-kicker">Zendesk 同步</div>
+                    <div style="font-size:13px;color:var(--color-neutral-700)">写入语言：English · 同步版本 {{ dt.syncVer }}</div>
+                  </div>
+                  <div style="text-align:right">
+                    <span class="tag {{ dt.syncTagCls }}">{{ dt.syncState }}</span>
+                    <div style="margin-top:8px"><button class="btn {{ dt.syncBtnCls }}" sc-camel-on-click="{{ dt.syncRetry }}" style="font-size:12px">{{ dt.syncCta }}</button></div>
+                  </div>
+                </div>
+                <sc-if value="{{ dt.syncFailed }}">
+                  <div style="margin-top:12px;border-left:2px solid var(--color-accent);background:var(--color-accent-100);padding:10px 14px;font-size:12.5px;color:var(--color-accent-900)">失败原因：Zendesk 目录字段校验未通过（缺少「生效日期 / Effective date」）。补齐英文版本后可重试。</div>
+                </sc-if>
+              </div>
+              <h4 style="margin:0 0 8px">Zendesk 采集 / 同步消息记录</h4>
+              <p style="font-size:12px;color:var(--color-neutral-600);margin:0 0 10px">该知识的用户反馈由下方 Zendesk 会话记录级联而来，点击可展开原始客诉。</p>
+              <div style="border-top:1px solid var(--color-divider)">
+                <sc-for list="{{ dt.zdMsgs }}" as="m" hint-placeholder-count="4">
+                  <div style="display:flex;gap:14px;padding:11px 2px;border-bottom:1px solid var(--color-divider);align-items:center">
+                    <span style="width:92px;flex:none;font-size:11px;font-feature-settings:'tnum';color:var(--color-neutral-600)">{{ m.id }}</span>
+                    <span class="tag {{ m.tagCls }}" style="flex:none">{{ m.type }}</span>
+                    <button sc-camel-on-click="{{ m.on }}" style="flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:0;cursor:pointer;font-family:var(--font-body);font-size:13px;color:inherit" style-hover="color:var(--color-accent-700)">{{ m.text }}</button>
+                    <span style="font-size:11.5px;color:var(--color-neutral-600);font-feature-settings:'tnum';flex:none">{{ m.at }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ dt.tabFeedback }}">
+              <sc-for list="{{ dt.feedback }}" as="f" hint-placeholder-count="3">
+                <div style="border-bottom:1px solid var(--color-divider);padding:14px 2px;display:flex;gap:16px;align-items:flex-start">
+                  <span class="tag {{ f.tagCls }}" style="flex:none">{{ f.type }}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px">{{ f.text }}</div>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:3px;font-feature-settings:'tnum'">{{ f.meta }}</div>
+                  </div>
+                  <button class="btn btn-secondary" sc-camel-on-click="{{ f.on }}" style="font-size:12px;padding:4px 10px">{{ f.cta }}</button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ dt.noFeedback }}">
+                <div style="padding:56px 0;text-align:center">
+                  <div style="font-family:var(--font-heading);font-size:21px;color:var(--color-neutral-600)">暂无反馈</div>
+                  <p style="font-size:13px;color:var(--color-neutral-600);margin-top:8px">该知识发布后尚未从 Zendesk 回流反馈。</p>
+                </div>
+              </sc-if>
+            </sc-if>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-kicker">元数据</div>
+              <sc-for list="{{ dt.meta }}" as="m" hint-placeholder-count="6">
+                <div style="display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--color-divider)">
+                  <span style="color:var(--color-neutral-600);flex:none">{{ m.k }}</span><span style="text-align:right">{{ m.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div class="card" style="margin-top:14px;background:var(--color-neutral-100)">
+              <div class="card-kicker">知识健康度</div>
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-family:var(--font-heading);font-size:40px;font-weight:400;font-feature-settings:'tnum'">{{ dt.health }}</span>
+                <span style="font-size:12px;color:var(--color-neutral-600)">{{ dt.healthNote }}</span>
+              </div>
+              <sc-for list="{{ dt.healthBars }}" as="b" hint-placeholder-count="4">
+                <div style="margin-top:8px">
+                  <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--color-neutral-700)"><span>{{ b.l }}</span><span style="font-feature-settings:'tnum'">{{ b.v }}</span></div>
+                  <div style="height:2px;background:var(--color-neutral-300);margin-top:3px"><div style="height:2px;background:var(--color-accent);width: {{ b.pct }}"></div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.reviewPage }}">
+        <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--color-neutral-600)">
+          <button class="btn btn-ghost" sc-camel-on-click="{{ rv.back }}" style="font-size:12px;padding:0">← 返回待审队列</button>
+          <span>/ 第 {{ rv.index }} 条，共 {{ rv.total }} 条</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-top:10px">
+          <div>
+            <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">审核 · {{ rv.id }}</div>
+            <h2 style="margin:8px 0 0;font-weight:400">{{ rv.title }}</h2>
+            <p style="margin:6px 0 0;font-size:12.5px;color:var(--color-neutral-600)">{{ rv.meta }}</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" sc-camel-on-click="{{ rv.reject }}">驳回</button>
+            <button class="btn btn-primary" sc-camel-on-click="{{ rv.approve }}">通过并发布</button>
+          </div>
+        </div>
+        <hr class="hr">
+        <div style="display:grid;grid-template-columns:1fr 372px;gap:28px;align-items:start">
+          <div>
+            <h4 style="margin:0 0 10px">内容对比 · {{ rv.diffLabel }}</h4>
+            <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+              <sc-for list="{{ rv.diff }}" as="d" hint-placeholder-count="5">
+                <div style="display:flex;gap:0;border-bottom:1px solid var(--color-divider)">
+                  <div style="width:34px;flex:none;text-align:center;padding:9px 0;font-size:11px;font-feature-settings:'tnum';color:var(--color-neutral-500);border-right:1px solid var(--color-divider);background: {{ d.gut }}">{{ d.n }}</div>
+                  <div style="flex:1;padding:9px 14px;font-size:13px;line-height:1.7;text-align:justify;background: {{ d.bg }};color: {{ d.col }}">{{ d.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <h4 style="margin:24px 0 10px">审核意见</h4>
+            <textarea class="input" style="min-height:90px" placeholder="驳回时必填，将回写至提交人的草稿并记入审核记录" value="{{ rv.comment }}" sc-camel-on-change="{{ rv.setComment }}"></textarea>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              <sc-for list="{{ rv.quick }}" as="q"><button class="tag tag-outline" sc-camel-on-click="{{ q.on }}" style="cursor:pointer;font-family:var(--font-body);background:transparent">{{ q.l }}</button></sc-for>
+            </div>
+          </div>
+          <div>
+            <div class="card" style="border-color:var(--color-accent-300);background:var(--color-accent-100)">
+              <div class="card-kicker">AI 审核预检</div>
+              <sc-for list="{{ rv.checks }}" as="c" hint-placeholder-count="5">
+                <div style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--color-accent-200)">
+                  <span style="font-size:13px;color: {{ c.col }};flex:none;width:14px">{{ c.mark }}</span>
+                  <div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--color-accent-900)">{{ c.l }}</div>
+                  <div style="font-size:11.5px;color:var(--color-accent-800);margin-top:1px">{{ c.detail }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="card" style="margin-top:14px">
+              <div class="card-kicker">提交信息</div>
+              <sc-for list="{{ rv.info }}" as="m" hint-placeholder-count="5">
+                <div style="display:flex;justify-content:space-between;gap:12px;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--color-divider)">
+                  <span style="color:var(--color-neutral-600);flex:none">{{ m.k }}</span><span style="text-align:right">{{ m.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ view.health }}">
+        <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--color-accent)">数据分析 · 知识健康度</div>
+        <h2 style="margin:8px 0 6px;font-weight:400">知识库体检</h2>
+        <p style="margin:0;font-size:13px;color:var(--color-neutral-700);max-width:640px;text-wrap:pretty">健康度由命中率、采纳率等指标加权得出。低分知识可一键建修订，走一遍编辑与审核闭环。</p>
+        <hr class="hr">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--color-divider);border-radius:var(--radius-md);margin-bottom:26px">
+          <sc-for list="{{ hl.kpis }}" as="k" hint-placeholder-count="4">
+            <div style="padding:16px 18px;border-right:1px solid var(--color-divider)">
+              <div style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--color-neutral-600)">{{ k.label }}</div>
+              <div style="font-family:var(--font-heading);font-size:32px;font-weight:400;font-feature-settings:'tnum';margin-top:6px;line-height:1">{{ k.value }}</div>
+              <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:5px">{{ k.delta }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <h4 style="margin:0 0 12px">知识状态分布</h4>
+        <div style="display:flex;gap:0;border:1px solid var(--color-divider);border-radius:var(--radius-md);margin-bottom:26px">
+          <sc-for list="{{ hl.dist }}" as="d" hint-placeholder-count="5">
+            <div style="flex:1;padding:12px 16px;border-right:1px solid var(--color-divider)">
+              <div style="font-family:var(--font-heading);font-size:26px;font-feature-settings:'tnum'">{{ d.n }}</div>
+              <div style="font-size:12px;color:var(--color-neutral-600);margin-top:2px">{{ d.l }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:start">
+          <div>
+            <h4 style="margin:0 0 12px">场景覆盖率</h4>
+            <sc-for list="{{ hl.scenes }}" as="s" hint-placeholder-count="6">
+              <div style="margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;font-size:13px"><span>{{ s.l }}</span><span style="font-feature-settings:'tnum';color:var(--color-neutral-700)">{{ s.v }}</span></div>
+                <div style="height:3px;background:var(--color-neutral-200);margin-top:5px"><div style="height:3px;background:var(--color-accent);width: {{ s.pct }}"></div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <h4 style="margin:0 0 12px">待修复知识</h4>
+            <div style="border-top:1px solid var(--color-divider)">
+              <sc-for list="{{ hl.risky }}" as="r" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:14px;padding:11px 2px;border-bottom:1px solid var(--color-divider)">
+                  <span style="font-family:var(--font-heading);font-size:19px;font-feature-settings:'tnum';width:34px;flex:none;color: {{ r.col }}">{{ r.score }}</span>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:13.5px">{{ r.title }}</div>
+                    <div style="font-size:11.5px;color:var(--color-neutral-600);margin-top:2px">{{ r.reason }}</div>
+                  </div>
+                  <button class="btn btn-secondary" sc-camel-on-click="{{ r.on }}" style="font-size:12px;padding:4px 10px">建修订</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <sc-if value="{{ drawer.open }}">
+    <div style="position:fixed;inset:0;z-index:60;display:flex;justify-content:flex-end">
+      <div sc-camel-on-click="{{ drawer.close }}" style="position:absolute;inset:0;background:color-mix(in srgb, var(--color-neutral-900) 42%, transparent)"></div>
+      <div style="position:relative;width:640px;height:100%;background:var(--color-bg);border-left:1px solid var(--color-divider);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:toastIn .22s ease-out">
+        <div style="padding:18px 24px;border-bottom:1px solid var(--color-divider);display:flex;align-items:flex-start;gap:16px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent)">{{ drawer.kicker }}</div>
+            <h4 style="margin:6px 0 0">{{ drawer.title }}</h4>
+            <div style="font-size:12px;color:var(--color-neutral-600);margin-top:3px;font-feature-settings:'tnum'">{{ drawer.meta }}</div>
+          </div>
+          <button class="btn btn-icon btn-secondary" sc-camel-on-click="{{ drawer.close }}">×</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:22px 24px">
+          <sc-if value="{{ drawer.isReview }}">
+            <div class="card" style="border-color:var(--color-accent-300);background:var(--color-accent-100);margin-bottom:18px">
+              <div class="card-kicker">AI 审核预检</div>
+              <sc-for list="{{ rv.checks }}" as="c">
+                <div style="display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--color-accent-200)">
+                  <span style="font-size:13px;color: {{ c.col }};flex:none;width:14px">{{ c.mark }}</span>
+                  <div style="flex:1"><div style="font-size:12.5px;color:var(--color-accent-900)">{{ c.l }}</div>
+                  <div style="font-size:11.5px;color:var(--color-accent-800)">{{ c.detail }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+            <h5 style="margin:0 0 8px">内容对比 · {{ rv.diffLabel }}</h5>
+            <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+              <sc-for list="{{ rv.diff }}" as="d">
+                <div style="display:flex;border-bottom:1px solid var(--color-divider)">
+                  <div style="width:30px;flex:none;text-align:center;padding:8px 0;font-size:11px;font-feature-settings:'tnum';color:var(--color-neutral-500);border-right:1px solid var(--color-divider);background: {{ d.gut }}">{{ d.n }}</div>
+                  <div style="flex:1;padding:8px 12px;font-size:12.5px;line-height:1.7;text-align:justify;background: {{ d.bg }};color: {{ d.col }}">{{ d.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <h5 style="margin:20px 0 8px">审核意见</h5>
+            <textarea class="input" style="min-height:80px" placeholder="驳回时必填" value="{{ rv.comment }}" sc-camel-on-change="{{ rv.setComment }}"></textarea>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              <sc-for list="{{ rv.quick }}" as="q"><button class="tag tag-outline" sc-camel-on-click="{{ q.on }}" style="cursor:pointer;font-family:var(--font-body);background:transparent">{{ q.l }}</button></sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ drawer.isMeta }}">
+            <div class="field"><label>{{ meta.zhLabel }}（中文）</label>
+              <input class="input" value="{{ meta.zh }}" sc-camel-on-change="{{ meta.setZh }}"></div>
+            <sc-if value="{{ meta.hasParent }}">
+              <div class="field" style="margin-top:12px"><label>上级分类</label>
+                <input class="input" value="{{ meta.parent }}" disabled=""></div>
+            </sc-if>
+            <sc-if value="{{ meta.isTag }}">
+              <div class="field" style="margin-top:12px"><label>标签类型</label>
+                <sc-raw-select class="input" value="{{ meta.type }}" sc-camel-on-change="{{ meta.setType }}">
+                  <option value="业务">业务</option><option value="属性">属性</option><option value="动作">动作</option><option value="人群">人群</option>
+                </sc-raw-select></div>
+            </sc-if>
+            <sc-if value="{{ meta.showEn }}">
+              <div style="display:flex;align-items:center;gap:12px;margin:18px 0 8px;padding-top:16px;border-top:1px solid var(--color-divider)">
+                <div style="flex:1"><div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--color-accent)">English · 大模型翻译</div>
+                  <div style="font-size:12px;color:var(--color-neutral-600);margin-top:2px">{{ meta.status }}</div></div>
+                <button class="btn btn-secondary" sc-camel-on-click="{{ meta.translate }}" style="font-size:12px">{{ meta.transLabel }}</button>
+              </div>
+              <div class="field"><label>English · 可二次编辑</label>
+                <input class="input" value="{{ meta.en }}" sc-camel-on-change="{{ meta.setEn }}" placeholder="翻译结果，可编辑"></div>
+            </sc-if>
+            <p style="font-size:12px;color:var(--color-neutral-600);margin-top:14px;text-wrap:pretty">{{ meta.note }}</p>
+          </sc-if>
+          <sc-if value="{{ drawer.isMiss }}">
+            <div style="border-left:2px solid var(--color-accent);background:var(--color-accent-100);padding:12px 14px;font-size:13px;color:var(--color-accent-900)">
+              未命中问题：{{ miss.q }}
+            </div>
+            <div style="display:flex;gap:14px;margin:14px 0 16px;font-size:12.5px;color:var(--color-neutral-700)">
+              <span>疑似场景 · {{ miss.scene }}</span><span style="font-feature-settings:'tnum'">近 7 日 {{ miss.n7 }} 次</span><span style="font-feature-settings:'tnum'">命中率 {{ miss.rate }}</span>
+            </div>
+            <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:18px">
+              <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--color-accent);margin-bottom:4px">AI 摘要 · 问题类型与场景</div>
+              <div style="font-size:12.5px;color:var(--color-neutral-700);line-height:1.7;text-wrap:pretty">{{ miss.summary }}</div>
+            </div>
+            <h5 style="margin:0 0 10px">处理流程</h5>
+            <div>
+              <sc-for list="{{ miss.steps }}" as="s">
+                <div style="display:flex;gap:12px;align-items:flex-start;padding-bottom:14px">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex:none;width:22px">
+                    <div style="width:22px;height:22px;border-radius:50%;border:1px solid {{ s.ring }};background: {{ s.fill }};color: {{ s.fg }};display:flex;align-items:center;justify-content:center;font-size:11px;font-feature-settings:'tnum'">{{ s.n }}</div>
+                    <sc-if value="{{ s.line }}"><div style="width:1px;flex:1;min-height:20px;background:var(--color-divider)"></div></sc-if>
+                  </div>
+                  <div style="flex:1;padding-bottom:4px">
+                    <div style="font-size:13.5px;color: {{ s.titleCol }}">{{ s.l }}</div>
+                    <div style="font-size:12px;color:var(--color-neutral-600);margin-top:1px;text-wrap:pretty">{{ s.d }}</div>
+                  </div>
+                  <sc-if value="{{ s.current }}"><span class="tag tag-accent" style="flex:none">当前</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ drawer.isInfo }}">
+            <sc-for list="{{ drawer.rows }}" as="r">
+              <div style="display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--color-divider);font-size:13px">
+                <span style="color:var(--color-neutral-600);flex:none">{{ r.k }}</span><span style="text-align:right">{{ r.v }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ drawer.body }}"><p style="margin-top:16px;font-size:13.5px;line-height:1.8;text-align:justify">{{ drawer.body }}</p></sc-if>
+          </sc-if>
+        </div>
+        <div style="padding:16px 24px;border-top:1px solid var(--color-divider);display:flex;gap:8px;justify-content:flex-end">
+          <sc-for list="{{ drawer.actions }}" as="a">
+            <button class="btn {{ a.cls }}" sc-camel-on-click="{{ a.on }}">{{ a.l }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ modal.open }}">
+    <div class="dialog-backdrop" style="z-index:70">
+      <div class="dialog">
+        <div class="dialog-title">{{ modal.title }}</div>
+        <div class="dialog-body" style="text-wrap:pretty">{{ modal.body }}</div>
+        <sc-if value="{{ modal.hasInput }}">
+          <input class="input" placeholder="{{ modal.placeholder }}" value="{{ modal.value }}" sc-camel-on-change="{{ modal.setValue }}">
+        </sc-if>
+        <sc-if value="{{ modal.warn }}">
+          <div style="border-left:2px solid var(--color-accent);background:var(--color-accent-100);padding:10px 14px;font-size:12.5px;color:var(--color-accent-900)">{{ modal.warn }}</div>
+        </sc-if>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" sc-camel-on-click="{{ modal.cancel }}">取消</button>
+          <button class="btn btn-primary" sc-camel-on-click="{{ modal.confirm }}">{{ modal.confirmLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="position:fixed;right:24px;bottom:24px;z-index:80;display:flex;flex-direction:column;gap:10px;align-items:flex-end">
+    <sc-for list="{{ toasts }}" as="t">
+      <div style="width:392px;background:var(--color-neutral-100);border:1px solid var(--color-divider);border-left:2px solid var(--color-accent);border-radius:var(--radius-md);box-shadow:var(--shadow-md);padding:14px 16px;animation:toastIn .2s ease-out">
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-family:var(--font-heading);font-weight:600;font-size:14px">{{ t.title }}</div>
+            <div style="font-size:12.5px;color:var(--color-neutral-700);margin-top:3px;text-wrap:pretty">{{ t.detail }}</div>
+          </div>
+          <button class="btn btn-ghost" sc-camel-on-click="{{ t.close }}" style="font-size:13px;padding:0 4px">×</button>
+        </div>
+        <sc-if value="{{ t.nextLabel }}">
+          <div style="display:flex;justify-content:flex-end;margin-top:9px;padding-top:9px;border-top:1px solid var(--color-divider)">
+            <button class="btn btn-primary" sc-camel-on-click="{{ t.next }}" style="font-size:12.5px;padding:4px 12px">{{ t.nextLabel }} →</button>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
