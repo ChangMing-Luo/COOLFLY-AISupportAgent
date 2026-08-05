@@ -147,11 +147,13 @@ export function BilingualEditor({
     const next = [...paragraphs];
     [next[i], next[t]] = [next[t]!, next[i]!];
     onChange(next);
-    setActive(null);
+    // 焦点跟着段落走：置空会让工具条在移动后整条失活，用户得再点一次才能继续操作
+    setActive({ index: t, editor: active.editor });
   };
   const remove = (): void => {
     if (!active || paragraphs.length <= 1) return;
-    onChange(paragraphs.filter((_, idx) => idx !== active.index));
+    const i = active.index;
+    onChange(paragraphs.filter((_, idx) => idx !== i));
     setActive(null);
   };
   const add = (): void => {

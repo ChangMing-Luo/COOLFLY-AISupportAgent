@@ -45,6 +45,32 @@ describe('内部段落剥离（RULE-04 数据泄漏级零容忍）', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
+  it('富文本段落：对外正文保留 html 标记，内部段落整段不进对外产物', () => {
+    const rich = {
+      paragraphs: [
+        { id: 'p0', text: '夜视模糊排查', html: '<h2>夜视模糊排查</h2>', internal: false, heading: true },
+        { id: 'p1', text: '先擦净镜头保护罩。', html: '<p>先<strong>擦净</strong>镜头保护罩。</p>', internal: false, heading: false },
+        { id: 'p2', text: '内部：第三次返修走整机换新。', html: '<p>内部：第三次返修走整机换新。</p>', internal: true, heading: false },
+      ],
+    };
+    const pub = toPublicHtml(rich);
+    expect(pub, '富文本标记须原样保留，否则加粗/标题在 Zendesk 端会丢').toContain('<strong>擦净</strong>');
+    expect(pub).toContain('<h2>夜视模糊排查</h2>');
+    expect(pub, '内部段落原文不得出现在对外正文（RULE-04 零容忍）').not.toContain('整机换新');
+    // 内部渠道保留全部段落并标注 internal
+    const inner = toInternalHtml(rich);
+    expect(inner).toContain('整机换新');
+    expect(inner).toContain('class="internal"');
+  });
+
+  it('html 为空的机器产出段落仍走转义回退（导入/drift 拉回/挖掘起草）', () => {
+    const pub = toPublicHtml({
+      paragraphs: [{ id: 'p0', text: '<img src=x onerror=alert(1)>', html: '', internal: false, heading: false }],
+    });
+    expect(pub).not.toContain('<img');
+    expect(pub).toContain('&lt;img');
+  });
+
   it('hasInternal 识别混合条目', () => {
     expect(hasInternal(body)).toBe(true);
     expect(hasInternal({ paragraphs: [{ id: 'a', text: 'x', html: '', internal: false, heading: false }] })).toBe(false);

@@ -1215,16 +1215,6 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
                 </span>
               </div>
 
-              {!isNew && entry && (
-                <EnTitleCard
-                  entryId={entry.id}
-                  zhTitle={entry.title}
-                  enTitle={entry.enTitle}
-                  canWrite={canWrite}
-                  onDone={reloadAll}
-                />
-              )}
-
               {/* 英文标题：PR#1 把「英文标题缺失」做成了同步阻断条件，双语改版后仍须保留 */}
               {!isNew && entry && (
                 <EnTitleCard
