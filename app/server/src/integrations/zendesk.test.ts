@@ -32,6 +32,7 @@ function stubFetch(
     expiresIn?: number;
     sectionArticleCount?: number;
     categorySectionCount?: number;
+    sourceLocale?: string;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -66,6 +67,17 @@ function stubFetch(
     // 同一 URL 双语义：GET=查计数（删除防护依据），POST=建文章
     if (/\/help_center\/sections\/[^/]+\/articles\.json$/.test(url) && method === 'GET') {
       return respond(200, { count: opts.sectionArticleCount ?? 0, articles: [] });
+    }
+    // 改名走 translations（名字存在翻译里，对象上的 name 是只读投影）
+    if (/\/help_center\/(categories|sections)\/[^/]+\/translations\/[^/]+\.json$/.test(url) && method === 'PUT') {
+      return respond(200, { translation: { title: 'ok' } });
+    }
+    // 读对象：拿 source_locale（改名前置）
+    if (/\/help_center\/categories\/[^/]+\.json$/.test(url) && method === 'GET') {
+      return respond(200, { category: { id: 9001, source_locale: opts.sourceLocale ?? 'en-us' } });
+    }
+    if (/\/help_center\/sections\/[^/]+\.json$/.test(url) && method === 'GET') {
+      return respond(200, { section: { id: 9002, source_locale: opts.sourceLocale ?? 'en-us' } });
     }
     if (/\/help_center\/(categories|sections)\/[^/]+\.json$/.test(url) && method === 'PUT') {
       return respond(200, {});
@@ -297,14 +309,31 @@ describe('结构维护（live：目录→Category、章节→Section）', () => 
     expect(calls.some((c) => c.url.endsWith(`/help_center/categories/${cat.id}/sections.json`))).toBe(true);
   });
 
-  it('renameSection / moveSection 用 PUT 更新名称与 category_id', async () => {
+  it('renameSection 走 translations 端点改 title（对象上的 name 是只读投影，PUT 对象改名无效）', async () => {
     const calls = stubFetch();
     const { getZendesk } = await loadZendesk();
     await getZendesk().renameSection('777', '新名字');
+    const put = calls.find((c) => c.url.endsWith('/help_center/sections/777/translations/en-us.json'))!;
+    expect(put.body).toEqual({ translation: { title: '新名字' } });
+    // 防回归：绝不能把改名打到对象端点上（Zendesk 会返 200 但静默不生效）
+    expect(calls.some((c) => c.url.endsWith('/help_center/sections/777.json') && c.body !== null)).toBe(false);
+  });
+
+  it('renameCategory 同理走 translations，并按对象的 source_locale 定位', async () => {
+    const calls = stubFetch({ sourceLocale: 'zh-cn' });
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().renameCategory('9001', '新目录名');
+    const put = calls.find((c) => c.url.includes('/help_center/categories/9001/translations/'))!;
+    expect(put.url.endsWith('/translations/zh-cn.json')).toBe(true);
+    expect(put.body).toEqual({ translation: { title: '新目录名' } });
+  });
+
+  it('moveSection 改 category_id 走对象端点（属元数据，非翻译）', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
     await getZendesk().moveSection('777', '9001');
-    const puts = calls.filter((c) => c.url.endsWith('/help_center/sections/777.json'));
-    expect(puts[0]!.body).toEqual({ section: { name: '新名字' } });
-    expect(puts[1]!.body).toEqual({ section: { category_id: 9001 } });
+    const put = calls.find((c) => c.url.endsWith('/help_center/sections/777.json') && c.body !== null)!;
+    expect(put.body).toEqual({ section: { category_id: 9001 } });
   });
 
   it('deleteSection 兼容 204 空响应；计数端点读 count 字段', async () => {

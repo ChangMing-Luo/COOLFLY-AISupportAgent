@@ -473,11 +473,25 @@ class LiveZendesk implements ZendeskClient {
     return { id: String(data.category.id) };
   }
 
-  async renameCategory(categoryRef: string, name: string): Promise<void> {
-    await this.call(`/help_center/categories/${categoryRef}.json`, {
+  /**
+   * Category/Section 的名字存在 **translation 的 title** 里，对象上的 `name` 只是按请求 locale 的只读投影。
+   * `PUT /help_center/{categories|sections}/{id}.json` 只改元数据（排序位等），改名会静默无效——
+   * 必须走 translations 端点，且 locale 取该对象的 source_locale（创建时即存在，避免 PUT 不存在的翻译报 404）。
+   */
+  private async renameTranslated(kind: 'categories' | 'sections', ref: string, title: string): Promise<void> {
+    const data = await this.call<{
+      category?: { source_locale?: string };
+      section?: { source_locale?: string };
+    }>(`/help_center/${kind}/${ref}.json`);
+    const locale = (data.category ?? data.section)?.source_locale ?? this.locale;
+    await this.call(`/help_center/${kind}/${ref}/translations/${locale.toLowerCase()}.json`, {
       method: 'PUT',
-      body: JSON.stringify({ category: { name } }),
+      body: JSON.stringify({ translation: { title } }),
     });
+  }
+
+  async renameCategory(categoryRef: string, name: string): Promise<void> {
+    await this.renameTranslated('categories', categoryRef, name);
   }
 
   async deleteCategory(categoryRef: string): Promise<void> {
@@ -500,10 +514,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async renameSection(sectionRef: string, name: string): Promise<void> {
-    await this.call(`/help_center/sections/${sectionRef}.json`, {
-      method: 'PUT',
-      body: JSON.stringify({ section: { name } }),
-    });
+    await this.renameTranslated('sections', sectionRef, name);
   }
 
   async moveSection(sectionRef: string, categoryRef: string): Promise<void> {
