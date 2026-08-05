@@ -161,10 +161,10 @@ async function main(): Promise<void> {
       })),
     };
     await query(
-      `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
+      `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
          labels, body, status, en_status, sync_status, ai_summary, summary_source, summary_at,
          current_version, owner_id, submitter_id, submitted_at, review_source, review_due_at, reject_reason, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
+       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
                CASE WHEN $16 = 'none' THEN NULL ELSE now() END,
                $17,$18,$18,
                CASE WHEN $12 = 'pending_review' THEN now() ELSE NULL END,
@@ -177,6 +177,8 @@ async function main(): Promise<void> {
         e.version, e.owner, String(e.dueDays),
         e.status === 'rejected' ? '计费周期与财务口径不符，请附财务确认截图' : null,
         String(entries.indexOf(e) * 3),
+        // 英文标题与逐段译文同批产生：英文状态到「待人工校验」及之后才有
+        e.enStatus === 'synced' || e.enStatus === 'pending_human' ? EN_TITLES[e.code] ?? null : null,
       ],
     );
 
@@ -232,6 +234,12 @@ async function main(): Promise<void> {
 
   // 已同步条目：建立映射与哈希（drift 比对基准）+ 推入沙箱 Zendesk
   const zd = getZendesk();
+  // 演示数据禁止进真实帮助中心：seed 只在沙箱模式下推送（SEED_ALLOW_LIVE=1 显式解除）
+  if (zd.mode === 'live' && process.env.SEED_ALLOW_LIVE !== '1') {
+    throw new Error(
+      'Zendesk 处于 live 模式，seed 会把演示条目推送到真实帮助中心。请清空 Zendesk 凭据后再跑 seed；确需推送则设 SEED_ALLOW_LIVE=1',
+    );
+  }
   const { rows: published } = await query<{ id: string; code: string; title: string; body: { paragraphs: Array<{ id: string; text: string; internal: boolean; heading: boolean }> }; visibility: string; labels: string[]; chapter_id: string; ref: string | null }>(
     `SELECT e.id, e.code, e.title, e.body, e.visibility, e.labels, e.chapter_id, c.zendesk_section_ref AS ref
      FROM entries e JOIN chapters c ON c.id=e.chapter_id WHERE e.sync_status='synced'`,
@@ -402,6 +410,16 @@ async function main(): Promise<void> {
   console.log(`  Zendesk 沙箱已推送 ${published.length} 篇文章（drift 比对基准就位）`);
   await pool.end();
 }
+
+/** 英文标题（人工校验后的定稿；缺失会让英文读者看到中文标题） */
+const EN_TITLES: Record<string, string> = {
+  'KB-0155': 'Solar panel not charging fully on cloudy days',
+  'KB-0188': 'Warranty period and proof of purchase',
+  'KB-0201': 'Refund policy',
+  'KB-0212': 'Who pays return shipping',
+  'KB-0233': 'Changing the delivery address after shipment',
+  'KB-0240': 'Membership cancellation and billing cycle',
+};
 
 function englishOf(zh: string): string {
   const map: Record<string, string> = {

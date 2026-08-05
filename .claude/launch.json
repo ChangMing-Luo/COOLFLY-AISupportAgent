@@ -6,6 +6,18 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8935", "--directory", "COOLFLY智能客服/output/pages"],
       "port": 8935
+    },
+    {
+      "name": "kb-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "app", "--filter", "@kb/server", "dev"],
+      "port": 3311
+    },
+    {
+      "name": "kb-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "app", "--filter", "@kb/web", "dev"],
+      "port": 5311
     }
   ]
 }

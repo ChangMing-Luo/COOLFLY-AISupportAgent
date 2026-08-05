@@ -76,6 +76,7 @@ describe('发布门禁三查（AC-P-12 rev6：08-05-2026 由四查收敛）', ()
     labels: ['退款'],
     body,
     enStatus: 'confirmed' as const,
+    enTitle: 'Refund policy',
   };
 
   it('三项全过才 passed，且门禁不再产出任何检索代理指标', () => {
@@ -90,6 +91,16 @@ describe('发布门禁三查（AC-P-12 rev6：08-05-2026 由四查收敛）', ()
     const r = runPublishGate({ ...base, enStatus: 'pending_human' });
     expect(r.passed).toBe(false);
     expect(r.checks.find((c) => c.key === 'english')?.passed).toBe(false);
+  });
+
+  it('英文标题缺失 → 阻断（英文读者会看到中文标题）', () => {
+    for (const enTitle of [null, '', '   ']) {
+      const r = runPublishGate({ ...base, enTitle });
+      expect(r.passed).toBe(false);
+      const en = r.checks.find((c) => c.key === 'english');
+      expect(en?.passed).toBe(false);
+      expect(en?.detail).toContain('英文标题缺失');
+    }
   });
 
   it('字段缺失 → 阻断', () => {

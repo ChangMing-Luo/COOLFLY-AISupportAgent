@@ -23,6 +23,7 @@ async function main(): Promise<void> {
 
   // 存量库补列（schema.sql 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表加列）
   await pool.query(`
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS en_title TEXT;
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS ai_summary TEXT NOT NULL DEFAULT '';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_source TEXT NOT NULL DEFAULT 'none';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_at TIMESTAMPTZ;

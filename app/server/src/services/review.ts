@@ -19,6 +19,7 @@ interface ReviewRow {
   id: string;
   code: string;
   title: string;
+  en_title: string | null;
   status: string;
   visibility: Visibility;
   labels: string[];
@@ -273,6 +274,7 @@ export async function previewGate(entryId: string): Promise<GateResult> {
     labels: e.labels ?? [],
     body: e.body,
     enStatus: e.en_status,
+    enTitle: e.en_title,
   });
 }
 
@@ -297,6 +299,7 @@ export async function publishEntry(
       labels: e.labels ?? [],
       body: e.body,
       enStatus: e.en_status,
+      enTitle: e.en_title,
     });
 
     if (!gate.passed) {

@@ -32,6 +32,7 @@ import {
 
 type EntryDetailRow = EntryRow & {
   body: EntryBody;
+  enTitle: string | null;
   deviceModels: string[];
   ownerId: string | null;
   reviewCycleDays: number;
@@ -544,6 +545,8 @@ function EnglishPanel({
   entryId,
   pairs,
   enStatus,
+  zhTitle,
+  enTitle,
   canWrite,
   canPublish,
   onDone,
@@ -551,12 +554,15 @@ function EnglishPanel({
   entryId: string;
   pairs: PairRow[];
   enStatus: string;
+  zhTitle: string;
+  enTitle: string | null;
   canWrite: boolean;
   canPublish: boolean;
   onDone: () => void;
 }) {
   const { toast } = useApp();
   const [drafts, setDrafts] = useState<Record<string, { en: string; note: string }>>({});
+  const [titleDraft, setTitleDraft] = useState<{ en: string; note: string } | null>(null);
   const [busy, setBusy] = useState('');
 
   const draftOf = (p: PairRow): { en: string; note: string } => drafts[p.id] ?? { en: p.en ?? '', note: '' };
@@ -570,6 +576,7 @@ function EnglishPanel({
       await fn();
       toast(okMsg);
       setDrafts({});
+      setTitleDraft(null);
       onDone();
     } catch (err) {
       toast((err as Error).message);
@@ -614,6 +621,65 @@ function EnglishPanel({
           reason={busy !== '' ? '处理中，请稍候' : syncReason}
           testId="en-sync"
         />
+      </div>
+
+      {/* 标题对照：英文标题缺失会让英文读者看到中文标题，故与正文同属人工校验范围 */}
+      <div className="card" style={{ padding: 12, marginBottom: 10 }}>
+        <div className="btn-row" style={{ marginBottom: 6 }}>
+          <span className="meta mono">标题</span>
+          {!enTitle?.trim() && <StatusPill kind="warn" text="英文标题缺失 · 同步阻断" />}
+        </div>
+        <div className="grid grid--2">
+          <div>
+            <div className="field__label">中文（权威源）</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{zhTitle}</div>
+          </div>
+          <div>
+            <div className="field__label">英文标题（同步 Zendesk）</div>
+            <input
+              className="input"
+              value={titleDraft?.en ?? enTitle ?? ''}
+              readOnly={!canWrite}
+              placeholder="English title"
+              onChange={(e) => setTitleDraft({ en: e.target.value, note: titleDraft?.note ?? '' })}
+              data-testid="en-title-input"
+            />
+            <input
+              className="input"
+              style={{ marginTop: 6 }}
+              value={titleDraft?.note ?? ''}
+              readOnly={!canWrite}
+              placeholder="修订说明（可留空）"
+              onChange={(e) => setTitleDraft({ en: titleDraft?.en ?? enTitle ?? '', note: e.target.value })}
+            />
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              <GatedButton
+                label="保存英文标题"
+                size="sm"
+                onClick={() =>
+                  void run(
+                    'en-title',
+                    () =>
+                      api.put(`/api/kb/entries/${entryId}/translation/title`, {
+                        enTitle: titleDraft?.en ?? '',
+                        note: titleDraft?.note ?? '',
+                      }),
+                    '已保存英文标题并留痕',
+                  )
+                }
+                disabled={!canWrite || (titleDraft?.en ?? '').trim() === '' || busy !== ''}
+                reason={
+                  !canWrite
+                    ? zhCN.ironLaw.readOnlyEditor
+                    : (titleDraft?.en ?? '').trim() === ''
+                      ? '英文标题不能为空'
+                      : '处理中，请稍候'
+                }
+                testId="en-title-save"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {pairs.length === 0 ? (
@@ -1375,6 +1441,8 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
                   entryId={entry.id}
                   pairs={detail.data?.pairs ?? []}
                   enStatus={entry.enStatus}
+                  zhTitle={entry.title}
+                  enTitle={entry.enTitle}
                   canWrite={canWrite}
                   canPublish={canPublish}
                   onDone={reloadAll}
