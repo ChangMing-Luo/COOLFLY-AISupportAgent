@@ -1,4 +1,4 @@
-import { canTransitionEn, zhCN, type EnStatus, type EntryBody, type SessionUser } from '@kb/contracts';
+import { canTransitionEn, TUNABLES, zhCN, type EnStatus, type EntryBody, type SessionUser } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
 import { getLlm } from '../integrations/llm.js';
@@ -72,6 +72,7 @@ export async function translate(user: SessionUser, entryId: string): Promise<{ e
       seq += 1;
     }
     await setEnStatus(entryId, 'translating', 'pending_human');
+  await query('UPDATE entries SET translate_fail_count = 0 WHERE id=$1', [entryId]);
     await writeAudit(user, {
       objectType: 'entry', objectId: entryId, objectLabel: `${e.code} ${e.title}`,
       action: 'AI 翻译', category: 'content', field: '英文状态', before: e.en_status, after: 'pending_human',
@@ -80,6 +81,21 @@ export async function translate(user: SessionUser, entryId: string): Promise<{ e
     return { enStatus: 'pending_human' };
   } catch (err) {
     await setEnStatus(entryId, 'translating', 'failed');
+    // 连续失败计数（缺口 2，08-05-2026 补齐）：原来只置 failed + 留痕，
+    // TUNABLES.translateFailAlert 定义了却全仓零引用，PRD 承诺的「连续 3 次告警」从没实现
+    const { rows: cnt } = await query<{ n: string }>(
+      `UPDATE entries SET translate_fail_count = translate_fail_count + 1
+        WHERE id=$1 RETURNING translate_fail_count::text AS n`,
+      [entryId],
+    );
+    const fails = Number(cnt[0]?.n ?? 0);
+    if (fails >= TUNABLES.translateFailAlert) {
+      await query(
+        `INSERT INTO signal_events (id, entry_id, topic, channel, signal_type, certainty, excerpt, occurred_at)
+         VALUES ($1,$2,NULL,'本台','翻译连续失败告警','必得',$3,now())`,
+        [newId('sig'), entryId, `翻译已连续失败 ${fails} 次（阈值 ${TUNABLES.translateFailAlert}）——LLM 上游异常，英文保留上一次内容且同步阻断`],
+      );
+    }
     await writeAudit(user, {
       objectType: 'entry', objectId: entryId, objectLabel: `${e.code} ${e.title}`,
       action: '翻译失败', category: 'content', field: '英文状态', before: 'translating', after: 'failed',

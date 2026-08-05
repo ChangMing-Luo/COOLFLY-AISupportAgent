@@ -105,6 +105,11 @@ CREATE TABLE IF NOT EXISTS entries (
   current_version INT NOT NULL DEFAULT 0,
   lock_version   INT NOT NULL DEFAULT 0,
   blocked_reason TEXT,
+  translate_fail_count INT NOT NULL DEFAULT 0,
+  summary_failed_at TIMESTAMPTZ,
+  summary_fail_reason TEXT,
+  review_started_at TIMESTAMPTZ,
+  review_claimed_by TEXT REFERENCES users(id),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -300,3 +305,6 @@ CREATE TABLE IF NOT EXISTS no_result_keywords (
   verdict  TEXT NOT NULL,
   level    TEXT NOT NULL DEFAULT 'warn'
 );
+CREATE UNIQUE INDEX IF NOT EXISTS no_result_keywords_keyword_key ON no_result_keywords (keyword);
+CREATE UNIQUE INDEX IF NOT EXISTS coverage_scenes_name_key ON coverage_scenes (name);
+CREATE UNIQUE INDEX IF NOT EXISTS knowledge_gaps_topic_key ON knowledge_gaps (topic);

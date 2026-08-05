@@ -344,8 +344,11 @@ export async function submitForReview(
 
 /** 条目 AI 摘要（技术方案 §6.2）：读取供工作台面板与挖掘查重使用 */
 export async function getSummary(entryId: string): Promise<EntrySummary> {
-  const { rows } = await query<{ ai_summary: string; summary_source: string; summary_at: Date | null }>(
-    'SELECT ai_summary, summary_source, summary_at FROM entries WHERE id=$1',
+  const { rows } = await query<{
+    ai_summary: string; summary_source: string; summary_at: Date | null;
+    summary_failed_at: Date | null; summary_fail_reason: string | null;
+  }>(
+    'SELECT ai_summary, summary_source, summary_at, summary_failed_at, summary_fail_reason FROM entries WHERE id=$1',
     [entryId],
   );
   const e = rows[0];
@@ -354,6 +357,9 @@ export async function getSummary(entryId: string): Promise<EntrySummary> {
     text: e.ai_summary,
     source: e.summary_source as EntrySummary['source'],
     generatedAt: e.summary_at ? e.summary_at.toISOString() : null,
+    // 生成失败要如实回传，否则界面只能看到「上一次摘要」却不知道本次没更新（缺口 3）
+    failedAt: e.summary_failed_at ? e.summary_failed_at.toISOString() : null,
+    failReason: e.summary_fail_reason,
   };
 }
 
@@ -379,4 +385,41 @@ export async function updateSummary(user: SessionUser, entryId: string, payload:
     note: '后续发布不再被 AI 结果覆盖',
   });
   return getSummary(entryId);
+}
+
+/**
+ * 复核到期扫描（缺口 4，08-05-2026 补齐）——原来只有查询时被动算 dueLevel，
+ * 没有任何主动扫描，PRD §4.1「到期提醒」这半句从没落地。
+ * 每日 cron 调用：把到期与临期条目写成信号事件，看板与反馈回流据此提醒。
+ */
+export async function scanReviewDue(): Promise<{ overdue: number; dueSoon: number }> {
+  const { rows } = await query<{ id: string; code: string; title: string; days: string }>(
+    `SELECT id, code, title,
+            EXTRACT(DAY FROM (review_due_at - now()))::text AS days
+       FROM entries
+      WHERE status IN ('published','offline')
+        AND review_due_at IS NOT NULL
+        AND review_due_at < now() + ($1 || ' days')::interval`,
+    [String(TUNABLES.reviewDueSoonDays)],
+  );
+  let overdue = 0;
+  let dueSoon = 0;
+  for (const r of rows) {
+    const days = Number(r.days);
+    const isOverdue = days < 0;
+    if (isOverdue) overdue += 1;
+    else dueSoon += 1;
+    await query(
+      `INSERT INTO signal_events (id, entry_id, topic, channel, signal_type, certainty, excerpt, occurred_at)
+       VALUES ($1,$2,NULL,'本台','复核到期','必得',$3,now())`,
+      [
+        newId('sig'),
+        r.id,
+        isOverdue
+          ? `${zhCN.dash.reviewOverdue} ${Math.abs(days)} 天：${r.code} ${r.title}`
+          : `${zhCN.dash.reviewDueSoon}（剩 ${days} 天）：${r.code} ${r.title}`,
+      ],
+    );
+  }
+  return { overdue, dueSoon };
 }

@@ -246,6 +246,15 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
 });
 
 describe('FLOW-08 条目下线：归档不裸删、可重新上架（08-05-2026 补齐）', () => {
+  // 本组会把 ent_0188 依次改成 offline → editing；不重置的话重跑第二次就撞 409。
+  // 测试必须自包含，不能依赖「seed 刚跑完」这个隐含前提。
+  beforeAll(async () => {
+    await query(
+      `UPDATE entries SET status='published', sync_status='synced', review_claimed_by=NULL, review_started_at=NULL
+        WHERE id='ent_0188'`,
+    );
+  });
+
   it('知识管理员无下线权限 → 403', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/review/ent_0188/offline', headers: as('manager') });
     expect(res.statusCode).toBe(403);

@@ -28,6 +28,12 @@ interface ParsedEntry {
   internalCount: number;
   chapterName: string;
   visibility: Visibility;
+  /** AI 整理建议回填（建议态，可改可忽略） */
+  labels?: string[];
+  sceneL1?: string;
+  sceneL2?: string;
+  suggestReason?: string;
+  suggestDegraded?: boolean;
 }
 
 const INTERNAL_PREFIX = /^(内部[：:]|【内部】)/;
@@ -102,6 +108,8 @@ export function ImportPanel({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState('');
 
   const defaultChapter = chapters[0]?.name ?? '';
   const overLimit = (entries?.length ?? 0) > TUNABLES.importMaxRows;
@@ -143,6 +151,51 @@ export function ImportPanel({
 
   const patch = (key: string, p: Partial<ParsedEntry>): void => {
     setEntries((list) => (list ?? []).map((e) => (e.key === key ? { ...e, ...p } : e)));
+  };
+
+  /**
+   * AI 整理建议（缺口 6）：一次把预览里的条目交给 LLM，回填标签/两级场景/章节归类。
+   * 建议态——只填进预览表，运营可逐条改或直接忽略，采纳与否都由人决定。
+   */
+  const askSuggest = async (): Promise<void> => {
+    if (!entries) return;
+    setSuggesting(true);
+    try {
+      const r = await api.post<{
+        suggestions: Array<{ key: string; labels: string[]; sceneL1: string; sceneL2: string; chapterName: string; reason: string; degraded: boolean }>;
+        provider: string;
+      }>('/api/kb/organize-suggest', {
+        libraryId,
+        items: entries.map((e) => ({ key: e.key, title: e.title, body: e.paragraphs.join('\n') })),
+      });
+      const byKey = new Map(r.suggestions.map((s) => [s.key, s]));
+      setEntries((list) =>
+        (list ?? []).map((e) => {
+          const s = byKey.get(e.key);
+          if (!s) return e;
+          return {
+            ...e,
+            chapterName: chapters.some((c) => c.name === s.chapterName) ? s.chapterName : e.chapterName,
+            labels: s.labels,
+            sceneL1: s.sceneL1,
+            sceneL2: s.sceneL2,
+            suggestReason: s.reason,
+            suggestDegraded: s.degraded,
+          };
+        }),
+      );
+      const bad = r.suggestions.filter((s) => s.degraded).length;
+      setSuggestNote(
+        bad === 0
+          ? `已按 ${r.provider === 'qwen' ? '千问' : '本地模式'} 回填 ${r.suggestions.length} 条建议——建议态，可逐条修改或忽略`
+          : `${r.suggestions.length} 条中 ${bad} 条未走真实模型（AI 建议未生效），请人工确认`,
+      );
+      toast('AI 整理建议已回填');
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setSuggesting(false);
+    }
   };
 
   const doImport = async (): Promise<void> => {
@@ -234,6 +287,7 @@ export function ImportPanel({
                     <th>标题</th>
                     <th>落到章节</th>
                     <th>可见性</th>
+                    <th>AI 建议（标签 / 场景）</th>
                     <th>段落</th>
                   </tr>
                 </thead>
@@ -270,6 +324,17 @@ export function ImportPanel({
                           ))}
                         </select>
                       </td>
+                      <td className="meta" style={{ maxWidth: 220 }}>
+                        {e.labels?.length ? (
+                          <>
+                            <div>{e.labels.join('、')}</div>
+                            <div>{[e.sceneL1, e.sceneL2].filter(Boolean).join(' / ') || '—'}</div>
+                            {e.suggestDegraded && <StatusPill kind="warn" text="AI 建议未生效" />}
+                          </>
+                        ) : (
+                          <span className="meta">未生成</span>
+                        )}
+                      </td>
                       <td className="meta">
                         {e.paragraphs.length} 段
                         {e.internalCount > 0 && (
@@ -291,7 +356,17 @@ export function ImportPanel({
               >
                 {busy ? '导入中…' : `一键导入 ${stats.total} 条`}
               </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={suggesting || busy}
+                onClick={() => void askSuggest()}
+                data-testid="import-suggest"
+              >
+                {suggesting ? 'AI 整理中…' : 'AI 整理建议（标签 / 场景 / 章节）'}
+              </button>
               <button type="button" className="btn" onClick={() => setEntries(null)}>返回修改</button>
+              {suggestNote && <span className="meta">{suggestNote}</span>}
             </div>
           </>
         )}

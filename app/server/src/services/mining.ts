@@ -67,7 +67,9 @@ export async function runDailyBatch(batchDate: string): Promise<{ batchId: strin
   const batchId = newId('batch');
   try {
     const conv = await zd.fetchConversations(`${batchDate}T00:00:00Z`);
-    const topics = await deriveTopics(conv.email + conv.chat);
+    // 会话正文先脱敏再进 LLM 与落库（NFR-004 数据治理：原文不出本机）
+    const corpus = conv.items.map((t) => desensitize(t)).filter((t) => t.trim().length >= 8);
+    const topics = await deriveTopics(corpus, conv.email, conv.chat);
     if (topics.length === 0) {
       await query(
         `INSERT INTO mining_batches (id, batch_date, email_count, chat_count, candidate_count, status)
@@ -134,13 +136,17 @@ interface DerivedTopic {
   targetEntryCode: string | null;
 }
 
-async function deriveTopics(convCount: number): Promise<DerivedTopic[]> {
-  // 语料：本轮以 Zendesk 会话计数驱动的主题集合（真实拉取内容在 live 模式下替换此处）
-  const pool = [
-    { topic: '喂鸟器在极寒天气下自动关机', summary: '17 会话 · 工单 12 / 聊天 5，用户反馈 -15°C 以下夜间自动关机' },
-    { topic: '跨境订单退款起算日', summary: '13 会话 · 工单 11 / 聊天 2，用户问清关后何时起算退款' },
-    { topic: '太阳能板阴天充不满电', summary: '14 会话 · 工单 5 / 聊天 9，固件 2.4 后充电阈值变化' },
-  ];
+/**
+ * 从**真实会话正文**提炼主题（08-05-2026 修复：原实现只取会话计数、主题恒为写死的 3 条，
+ * 即使配上 Zendesk 凭据也永远产出同样的假数据——视图④核心功能形同虚设）。
+ */
+async function deriveTopics(corpus: string[], emailCount: number, chatCount: number): Promise<DerivedTopic[]> {
+  const llm0 = getLlm();
+  const pool = (await llm0.extractTopics(corpus)).map((t) => ({
+    topic: t.topic,
+    summary: `${t.count} 会话 · 工单 ${emailCount} / 聊天 ${chatCount}｜${t.summary}`,
+    count: t.count,
+  }));
   const out: DerivedTopic[] = [];
   const { rows: entries } = await query<{ code: string; title: string; ai_summary: string }>(
     `SELECT code, title, ai_summary FROM entries WHERE status IN ('published','approved')`,
@@ -148,8 +154,9 @@ async function deriveTopics(convCount: number): Promise<DerivedTopic[]> {
   const llm = getLlm();
 
   for (const p of pool) {
-    const frequency = 10 + (convCount % 9);
-    if (frequency < TUNABLES.frequencyThreshold) continue; // 三重准入①频次
+    // 三重准入①频次：用该主题真实命中的会话数，不再是计数派生的伪随机值
+    const frequency = p.count;
+    if (frequency < TUNABLES.frequencyThreshold) continue;
 
     // 三重准入② LLM 语义查重（两段式，技术方案 §6.2）
     // 第一段：字面粗筛 Top-N，把 LLM 调用量与库规模脱钩

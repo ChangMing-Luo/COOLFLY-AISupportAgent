@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
-import { approveEntry, entryDiff, offlineEntry, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
+import { approveEntry, claimReview, entryDiff, offlineEntry, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
 import { drainQueue } from '../services/sync.js';
 
 export async function registerReviewRoutes(app: FastifyInstance): Promise<void> {
@@ -34,6 +34,12 @@ export async function registerReviewRoutes(app: FastifyInstance): Promise<void> 
     const result = await publishEntry(req.currentUser!, id);
     if (result.status === 'published') await drainQueue();
     return result;
+  });
+
+  /** 认领审核：打开待审详情即 pending_review → reviewing（缺口 1，让「审核中」态真正可达） */
+  app.post('/api/review/:id/claim', { preHandler: [requireLogin, requirePermission('review.decide')] }, async (req) => {
+    const { id } = req.params as { id: string };
+    return claimReview(req.currentUser!, id);
   });
 
   /** 条目下线：published → offline + Zendesk 归档（不物理删除；仅知识审核员） */

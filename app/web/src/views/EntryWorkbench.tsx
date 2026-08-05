@@ -379,6 +379,12 @@ function SummaryPanel({
         <StatusPill kind={source === 'human' ? 'accent' : source === 'ai' ? 'ok' : 'info'} text={SUMMARY_SOURCE_LABELS[source]} />
       </div>
       <p className="meta" style={{ margin: '0 0 10px' }}>用途：{SUMMARY_PURPOSE}</p>
+      {summary?.failedAt && (
+        <div className="note note--warn" style={{ marginBottom: 10 }} data-testid="summary-failed">
+          {zhCN.summary.generateFailed}
+          {summary.failReason && <div className="meta" style={{ marginTop: 4 }}>原因：{summary.failReason}</div>}
+        </div>
+      )}
       {editing ? (
         <>
           <textarea

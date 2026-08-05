@@ -241,6 +241,9 @@ export const entrySummarySchema = z.object({
   text: z.string(),
   source: summarySourceSchema,
   generatedAt: z.string().nullable(),
+  /** 本次生成失败的时间；非空 = 界面须如实标注「摘要生成失败，保留上一次」（缺口 3） */
+  failedAt: z.string().nullable().default(null),
+  failReason: z.string().nullable().default(null),
 });
 export type EntrySummary = z.infer<typeof entrySummarySchema>;
 
