@@ -241,7 +241,6 @@
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>问题场景（二级）：全部</option><option>退款时限</option><option>退货运费</option><option>保修换新</option><option>Wi-Fi 配对</option><option>太阳能供电</option><option>会员计费</option><option>地址修改</option></select>
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>标签：全部</option><option>退款</option><option>退货</option><option>运费</option><option>保修</option><option>会员</option><option>太阳能</option><option>改地址</option></select>
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>状态：全部</option><option>草稿</option><option>待审核</option><option>已发布</option><option>已驳回</option><option>已下线</option></select>
-              <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>向量状态：全部</option><option>已向量化</option><option>待重建</option><option>向量化中</option><option>向量失败</option><option>未向量化</option></select>
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>英文状态：全部</option><option>未生成</option><option>待重新翻译</option><option>已确认</option><option>已同步</option></select>
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>可见性：全部</option><option>对外公开</option><option>仅客服内部</option></select>
               <select style="min-height:34px;padding:6px 10px;border:1.5px solid #CBE2E9;border-radius:10px;font-size:13px;background:#fff;color:#13252B"><option>复核：全部</option><option>已到期</option><option>30 天内到期</option></select>
@@ -252,8 +251,7 @@
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9">条目 / 场景 · 标签</th>
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">当前版本</th>
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">状态</th>
-                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">向量</th>
-                  <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">英文</th>
+                                    <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">英文</th>
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">同步</th>
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">解决率</th>
                   <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">更新</th>
@@ -264,8 +262,7 @@
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="font-weight:600;color:#13252B">{{ e.title }}</span><br><span style="color:#5A737B">{{ e.scene }}</span><br><span style="color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ e.tags }}</span></td>
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:#31474E">{{ e.ver }}</td>
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.stBd }};background:{{ e.stBg }};color:{{ e.stFg }};white-space:nowrap">{{ e.status }}</span></td>
-                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.vBd }};background:{{ e.vBg }};color:{{ e.vFg }};white-space:nowrap">{{ e.vec }}</span></td>
-                      <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.enBd }};background:{{ e.enBg }};color:{{ e.enFg }};white-space:nowrap">{{ e.en }}</span></td>
+                                            <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ e.enBd }};background:{{ e.enBg }};color:{{ e.enFg }};white-space:nowrap">{{ e.en }}</span></td>
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;color:{{ e.syFg }}">{{ e.sync }}</td>
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:{{ e.rateFg }};font-weight:{{ e.rateW }}">{{ e.rate }}</td>
                       <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-family:ui-monospace,Menlo,monospace;color:#5A737B">{{ e.updated }}</td>
@@ -296,7 +293,7 @@
                   <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">{{ cur.vis }}</span>
                   <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">{{ cur.scene1 }} · {{ cur.scene2 }}</span>
                   <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B;font-family:ui-monospace,Menlo,monospace">{{ cur.tags }}</span>
-                  <span style="padding:2px 8px;border-radius:9999px;border:1px solid {{ vecBd }};background:{{ vecBg }};font-size:13px;color:{{ vecFg }};font-weight:600">向量 {{ vecStatus }}</span>
+                  
                   <span style="padding:2px 8px;border-radius:9999px;border:1px solid #DFEEF3;background:#E0F1F6;font-size:13px;color:#5A737B">当前发布版本 {{ liveVer }}</span>
                   <span style="padding:2px 8px;border-radius:9999px;border:1px solid {{ dueBd }};background:{{ dueBg }};font-size:13px;color:{{ dueFg }}">{{ cur.due }}</span>
                 </div>
@@ -422,19 +419,19 @@
               <div style="display:flex;flex-direction:column;gap:16px">
                 <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-                    <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">向量化状态</span>
-                    <span style="padding:2px 10px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ vecBd }};background:{{ vecBg }};color:{{ vecFg }}">{{ vecStatus }}</span>
+                    <span style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B">AI 摘要</span>
+                    <span style="padding:2px 10px;border-radius:9999px;font-size:13px;font-weight:600;border:1px solid {{ sumBd }};background:{{ sumBg }};color:{{ sumFg }}">{{ sumSource }}</span>
                   </div>
                   <div style="display:flex;flex-direction:column;gap:5px">
-                    <sc-for list="{{ vecRows }}" as="vr" hint-placeholder-count="6">
+                    <sc-for list="{{ sumRows }}" as="vr" hint-placeholder-count="4">
                       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:13px">
                         <span style="color:#5A737B;flex:none">{{ vr.k }}</span>
                         <span style="color:#13252B;text-align:right;font-family:ui-monospace,Menlo,monospace">{{ vr.v }}</span>
                       </div>
                     </sc-for>
                   </div>
-                  <button type="button" onClick="{{ rebuildVec }}" disabled="{{ vecBtnDis }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 12px;border-radius:10px;border:1.5px solid {{ vecBtnBd }};background:{{ vecBtnBg }};color:{{ vecBtnFg }};font-size:13px;font-weight:600;cursor:{{ vecBtnCur }}"><i class="ph ph-cube" aria-hidden="true"></i>{{ vecBtnLabel }}</button>
-                  <p style="font-size:13px;color:#5A737B;margin:0">{{ vecNote }}</p>
+                  <button type="button" onClick="{{ editSummary }}" disabled="{{ sumBtnDis }}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 12px;border-radius:10px;border:1.5px solid {{ sumBtnBd }};background:{{ sumBtnBg }};color:{{ sumBtnFg }};font-size:13px;font-weight:600;cursor:{{ sumBtnCur }}"><i class="ph ph-cube" aria-hidden="true"></i>{{ sumBtnLabel }}</button>
+                  <p style="font-size:13px;color:#5A737B;margin:0">{{ sumNote }}</p>
                 </div>
 
                 <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
@@ -635,7 +632,7 @@
             <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px">
               <div style="display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px">
                 <div style="display:flex;flex-direction:column;gap:2px">
-                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">沉淀判断三重准入：①频次达阈值 ②语义查重 ③缺口判定</p>
+                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">沉淀判断三重准入：①频次达阈值 ②LLM 语义查重 ③缺口判定</p>
                   <h2 style="font-size:20px;font-weight:700;margin:0">08-04 候选清单</h2>
                 </div>
               </div>
@@ -653,6 +650,10 @@
                     <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">① 频次</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700">{{ c.freq }}</span></div>
                     <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">② 查重</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;color:{{ c.dupFg }}">{{ c.dup }}</span></div>
                     <div style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px;background:#F7FCFD;border:1px solid #DFEEF3"><span style="font-size:13px;color:#5A737B">③ 缺口判定</span><span style="font-size:13px;font-weight:700;color:{{ c.gapFg }}">{{ c.gap }}</span></div>
+                  </div>
+                  <div style="display:flex;align-items:flex-start;gap:6px;padding:8px 10px;border-radius:10px;background:#F7FCFD;border:1px solid #DFEEF3">
+                    <i class="ph ph-scales" aria-hidden="true" style="font-size:13px;color:#5A737B;margin-top:2px;flex:none"></i>
+                    <span style="font-size:13px;color:#31474E;text-wrap:pretty"><span style="font-weight:600">查重判定理由：</span>{{ c.dupWhy }}</span>
                   </div>
                   <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                     <button type="button" onClick="{{ c.act }}" disabled="{{ c.disabled }}" title="{{ c.title }}" style="min-height:32px;padding:0 12px;border-radius:10px;border:1.5px solid {{ c.btnBd }};background:{{ c.btnBg }};color:{{ c.btnFg }};font-size:13px;font-weight:600;cursor:{{ c.btnCur }}">{{ c.actLabel }}</button>
@@ -717,16 +718,38 @@
                   <p style="font-size:15px;color:#13252B;margin:0;line-height:1.6;white-space:pre-line">{{ rev.body }}</p>
                 </div>
 
-                <div style="display:flex;flex-direction:column;gap:6px">
-                  <span style="font-size:13px;font-weight:600;color:#31474E">修改记录（字段级）</span>
-                  <sc-for list="{{ rev.changes }}" as="c" hint-placeholder-count="2">
-                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid #DFEEF3;font-size:13px">
-                      <span style="font-weight:600;color:#13252B">{{ c.f }}</span>
-                      <span style="font-family:ui-monospace,Menlo,monospace;background:#F8EEEC;border-radius:6px;padding:0 6px">{{ c.b }}</span>
-                      <i class="ph ph-arrow-right" aria-hidden="true" style="color:#5A737B"></i>
-                      <span style="font-family:ui-monospace,Menlo,monospace;background:#EAF4F0;border-radius:6px;padding:0 6px">{{ c.a }}</span>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                      <span style="font-size:13px;font-weight:600;color:#31474E">变更摘要</span>
+                      <span style="padding:2px 8px;border-radius:9999px;border:1px solid #BCDDE8;background:#E4F1F6;font-size:13px;color:#0D7594;font-weight:600">{{ rev.diffTotal }}</span>
+                    </div>
+                    <button type="button" onClick="{{ rev.toggleDiff }}" style="min-height:30px;padding:0 12px;border-radius:10px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#0D7594;color:#0D7594"><i class="ph {{ rev.diffIcon }}" aria-hidden="true"></i> {{ rev.diffBtn }}</button>
+                  </div>
+                  <sc-for list="{{ rev.summary }}" as="c" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:flex-start;gap:6px;padding:6px 10px;border-radius:10px;border:1px solid #DFEEF3;font-size:13px">
+                      <i class="ph {{ c.icon }}" aria-hidden="true" style="color:{{ c.fg }};margin-top:2px;flex:none"></i>
+                      <span style="color:#31474E;text-wrap:pretty">{{ c.text }}</span>
                     </div>
                   </sc-for>
+
+                  <sc-if value="{{ rev.showDiff }}">
+                  <div style="display:flex;flex-direction:column;gap:0;border:1px solid #CBE2E9;border-radius:12px;overflow:hidden;background:#fff">
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F7FCFD;border-bottom:1px solid #DFEEF3">
+                      <i class="ph ph-git-diff" aria-hidden="true" style="color:#0D7594"></i>
+                      <span style="font-size:13px;font-weight:600;color:#31474E">具体变更 · {{ rev.diffHead }}</span>
+                    </div>
+                    <sc-for list="{{ rev.hunks }}" as="h" hint-placeholder-count="6">
+                      <div style="display:flex;align-items:flex-start;gap:0;background:{{ h.bg }};border-bottom:1px solid #F0F7F9">
+                        <span style="flex:none;width:38px;padding:3px 6px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8FA6AD;user-select:none">{{ h.ln }}</span>
+                        <span style="flex:none;width:38px;padding:3px 6px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#8FA6AD;user-select:none">{{ h.rn }}</span>
+                        <span style="flex:none;width:16px;padding:3px 0;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:{{ h.fg }}">{{ h.sign }}</span>
+                        <span style="flex:1;min-width:0;padding:3px 8px 3px 2px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:{{ h.fg }};white-space:pre-wrap;word-break:break-word">{{ h.t }}</span>
+                      </div>
+                    </sc-for>
+                    <div style="padding:6px 12px;background:#F7FCFD"><span style="font-size:13px;color:#5A737B">未变更上下文默认折叠（前后各留 1 行）；红底 - 为删除、绿底 + 为新增。</span></div>
+                  </div>
+                  </sc-if>
                 </div>
               </div>
 
@@ -899,17 +922,7 @@
                   <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;color:#31474E">68%</span><span style="font-size:13px;color:#5A737B">工单口径 solved 未 reopen</span></div>
                   <p style="font-size:13px;color:#5A737B;margin:0">两口径不合并、不取平均；条目级为近似归因，样本 &lt; 10 次不出数。</p>
                 </div>
-                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
-                  <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 向量索引健康度</p>
-                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700">88%</span><span style="font-size:13px;color:#5A737B">条目向量覆盖率（84 / 96）</span></div>
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">待重建（内容已变更）</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#8A5F1A">7</span></div>
-                    <div style="display:flex;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #DFEEF3"><span style="font-size:13px;color:#31474E">向量失败（已告警）</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;color:#B2453A">2</span></div>
-                    <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;color:#31474E">分片总数 / 维度</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700">1,142 / 3072</span></div>
-                  </div>
-                  <p style="font-size:13px;color:#5A737B;margin:0">向量服务本台内部：挖掘查重、缺口聚类、发布门禁代理评测。失败与待重建条目不参与查重，会漏判重复建条。</p>
-                </div>
-                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
+                                <div style="background:#fff;border:1px solid #CBE2E9;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:10px">
                   <p style="font-size:13px;font-weight:600;letter-spacing:.04em;color:#5A737B;margin:0">指标卡 · 版本健康度</p>
                   <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:ui-monospace,Menlo,monospace;font-size:20px;font-weight:700;color:#B2453A">3</span><span style="font-size:13px;color:#5A737B">发布后解决率下降的版本</span></div>
                   <p style="font-size:13px;color:#31474E;margin:0">新版本上线两周内解决率跌破上一版本 10pp 触发红线告警，直接给出「回滚」入口。</p>
@@ -934,8 +947,7 @@
                       <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">踩</th>
                       <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">客服 flag</th>
                       <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">解决率</th>
-                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9;white-space:nowrap">向量</th>
-                      <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
+                                            <th style="text-align:left;padding:8px 12px;font-size:13px;font-weight:600;color:#5A737B;border-bottom:1px solid #CBE2E9"></th>
                     </tr></thead>
                     <tbody>
                       <sc-for list="{{ effect }}" as="ef" hint-placeholder-count="5">
@@ -946,8 +958,7 @@
                           <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.down }}</td>
                           <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#31474E;border-bottom:1px solid #DFEEF3;vertical-align:top">{{ ef.flag }}</td>
                           <td style="padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top;font-weight:{{ ef.w }};color:{{ ef.fg }}">{{ ef.rate }}</td>
-                          <td style="padding:10px 12px;font-size:13px;border-bottom:1px solid #DFEEF3;vertical-align:top"><span style="padding:1px 8px;border-radius:9999px;font-size:13px;border:1px solid {{ ef.vBd }};background:{{ ef.vBg }};color:{{ ef.vFg }};white-space:nowrap">{{ ef.vec }}</span></td>
-                          <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top"><button type="button" onClick="{{ ef.open }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="border-color:#0D7594;color:#0D7594">打开条目</button></td>
+                                                    <td style="padding:10px 12px;border-bottom:1px solid #DFEEF3;vertical-align:top"><button type="button" onClick="{{ ef.open }}" style="min-height:28px;padding:0 10px;border-radius:8px;border:1.5px solid #CBE2E9;background:#fff;color:#13252B;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap" style-hover="border-color:#0D7594;color:#0D7594">打开条目</button></td>
                         </tr>
                       </sc-for>
                     </tbody>
@@ -1294,7 +1305,7 @@ class Component extends DCLogic {
   state = {
     role: 'admin', view: 'work', workTab: 'draft', lib: 'policy',
     open: { '售后政策': true, '退款与退货': true, '产品介绍': false, '使用指南': false },
-    sel: 0, tab: 'body', lang: 'zh', vec: '已向量化',
+    sel: 0, tab: 'body', lang: 'zh', sumSrc: 'AI 生成', reviewDiff: false,
     entryStatus: '已发布', zhDirty: false, enStatus: '已同步 Zendesk',
     versions: null, diffPick: ['v1', 'v2'], showDiff: false,
     reviewSel: 0, decided: {}, promoted: 0, sync: {},
@@ -1305,7 +1316,7 @@ class Component extends DCLogic {
   ROLES = {
     admin: { name: '知识管理员', user: '王雯', note: '可创建、编辑、提交审核、管理知识库结构、查看数据；不能审核通过、不能直接发布、不能回滚——无绕过审核的路径。',
       perms: { create: 1, edit: 1, submit: 1, review: 0, publish: 0, rollback: 0, sync: 0, manageKb: 1, viewData: 1, manageUser: 0, suggest: 1 } },
-    reviewer: { name: '知识审核员', user: '李骁', note: '审核、发布、回滚、触发同步的唯一角色；也可编辑与提交，但自己提交的条目需另一名审核员通过（四眼原则）。',
+    reviewer: { name: '知识审核员', user: '李骁', note: '审核、发布、回滚、触发同步的唯一角色；也可编辑与提交，且可审核自己提交的条目（08-05-2026 取消四眼原则，制衡改为事后审计留痕）。',
       perms: { create: 1, edit: 1, submit: 1, review: 1, publish: 1, rollback: 1, sync: 1, manageKb: 1, viewData: 1, manageUser: 0, suggest: 1 } },
     aiops: { name: 'AI 运营', user: '陈迪', note: '只读效果数据与未命中缺口，可提交优化建议进审核队列；禁止审核、发布、回滚，编辑器为只读。',
       perms: { create: 0, edit: 0, submit: 0, review: 0, publish: 0, rollback: 0, sync: 0, manageKb: 0, viewData: 1, manageUser: 0, suggest: 1 } },
@@ -1359,12 +1370,12 @@ class Component extends DCLogic {
   SCENE2 = { '售后与退款': ['退款时限', '退货运费', '保修换新'], '安装与配网': ['Wi-Fi 配对', '支架安装', '太阳能供电'], '设备使用': ['画质与录像', '夜视', '固件升级'], '会员与账户': ['会员计费', '账号绑定'], '订单与物流': ['发货与签收', '地址修改'] };
 
   ENTRIES = [
-    { id: 'KB-0201', title: '退款政策', path: '政策与售后 / 售后政策 / 退款与退货', type: 'FAQ 政策型', vis: '对外公开 + 内部段落', ver: 'v2', status: '已发布', en: '已同步', sync: '已同步', rate: '70%', low: true, updated: '07-30 18:02', due: '复核到期 2026-11-26（剩 114 天）', dueLevel: 'ok', scene1: '售后与退款', scene2: '退款时限', tags: '退款 / 退货 / 运费', vec: '已向量化' },
-    { id: 'KB-0212', title: '退货运费承担规则', path: '政策与售后 / 售后政策 / 退款与退货', type: '内部口径', vis: '仅客服内部', ver: 'v1', status: '待审核', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 10:22', due: '首次发布后起算', dueLevel: 'ok', scene1: '售后与退款', scene2: '退货运费', tags: '运费 / 预付面单', vec: '未向量化' },
-    { id: 'KB-0188', title: '保修期与凭证要求', path: '政策与售后 / 售后政策 / 保修与换新', type: 'FAQ 政策型', vis: '对外公开', ver: 'v3', status: '已发布', en: '已同步', sync: '已同步', rate: '84%', updated: '07-18 09:40', due: '复核到期 2026-09-20（剩 47 天）', dueLevel: 'warn', scene1: '售后与退款', scene2: '保修换新', tags: '保修 / 凭证', vec: '已向量化' },
-    { id: 'KB-0233', title: '订单发出后能否改地址', path: '政策与售后 / 订单与物流 / 发货与签收', type: 'FAQ 型', vis: '对外公开', ver: 'v1', status: '草稿', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 06:00', due: '首次发布后起算', dueLevel: 'ok', scene1: '订单与物流', scene2: '地址修改', tags: '改地址 / 发货', vec: '未向量化' },
-    { id: 'KB-0240', title: '会员退订与计费周期', path: '政策与售后 / 会员与账户 / 会员计费', type: 'FAQ 型', vis: '对外公开', ver: 'v2', status: '已驳回', en: '待人工校验', sync: '待同步', rate: '58%', low: true, updated: '08-03 16:10', due: '复核已到期 12 天', dueLevel: 'bad', scene1: '会员与账户', scene2: '会员计费', tags: '会员 / 退订 / 计费', vec: '待重建' },
-    { id: 'KB-0155', title: '太阳能板阴天充不满电', path: '产品与使用 / 供电 / 太阳能', type: '操作流程型', vis: '对外公开', ver: 'v4', status: '已下线', en: '已确认', sync: '已归档', rate: '41%', low: true, updated: '08-02 11:25', due: '复核已到期 47 天', dueLevel: 'bad', scene1: '安装与配网', scene2: '太阳能供电', tags: '太阳能 / 充电', vec: '向量失败' }
+    { id: 'KB-0201', title: '退款政策', path: '政策与售后 / 售后政策 / 退款与退货', type: 'FAQ 政策型', vis: '对外公开 + 内部段落', ver: 'v2', status: '已发布', en: '已同步', sync: '已同步', rate: '70%', low: true, updated: '07-30 18:02', due: '复核到期 2026-11-26（剩 114 天）', dueLevel: 'ok', scene1: '售后与退款', scene2: '退款时限', tags: '退款 / 退货 / 运费' },
+    { id: 'KB-0212', title: '退货运费承担规则', path: '政策与售后 / 售后政策 / 退款与退货', type: '内部口径', vis: '仅客服内部', ver: 'v1', status: '待审核', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 10:22', due: '首次发布后起算', dueLevel: 'ok', scene1: '售后与退款', scene2: '退货运费', tags: '运费 / 预付面单' },
+    { id: 'KB-0188', title: '保修期与凭证要求', path: '政策与售后 / 售后政策 / 保修与换新', type: 'FAQ 政策型', vis: '对外公开', ver: 'v3', status: '已发布', en: '已同步', sync: '已同步', rate: '84%', updated: '07-18 09:40', due: '复核到期 2026-09-20（剩 47 天）', dueLevel: 'warn', scene1: '售后与退款', scene2: '保修换新', tags: '保修 / 凭证' },
+    { id: 'KB-0233', title: '订单发出后能否改地址', path: '政策与售后 / 订单与物流 / 发货与签收', type: 'FAQ 型', vis: '对外公开', ver: 'v1', status: '草稿', en: '未生成', sync: '未同步', rate: '—', updated: '08-04 06:00', due: '首次发布后起算', dueLevel: 'ok', scene1: '订单与物流', scene2: '地址修改', tags: '改地址 / 发货' },
+    { id: 'KB-0240', title: '会员退订与计费周期', path: '政策与售后 / 会员与账户 / 会员计费', type: 'FAQ 型', vis: '对外公开', ver: 'v2', status: '已驳回', en: '待人工校验', sync: '待同步', rate: '58%', low: true, updated: '08-03 16:10', due: '复核已到期 12 天', dueLevel: 'bad', scene1: '会员与账户', scene2: '会员计费', tags: '会员 / 退订 / 计费' },
+    { id: 'KB-0155', title: '太阳能板阴天充不满电', path: '产品与使用 / 供电 / 太阳能', type: '操作流程型', vis: '对外公开', ver: 'v4', status: '已下线', en: '已确认', sync: '已归档', rate: '41%', low: true, updated: '08-02 11:25', due: '复核已到期 47 天', dueLevel: 'bad', scene1: '安装与配网', scene2: '太阳能供电', tags: '太阳能 / 充电' }
   ];
 
   VERSIONS = [
@@ -1453,13 +1464,44 @@ class Component extends DCLogic {
 
   QUEUE = [
     { id: 'q1', src: 'AI 挖掘 · 新增', title: '喂鸟器在极寒天气下自动关机', freq: '17 次', meta: '产品与使用 / 供电 / 太阳能 · 建议对外公开', ver: 'v1（新建）', submitter: '系统 · AI 挖掘', at: '08-04 06:00',
-      body: '为什么低温天气下喂鸟器会自动关机？\n\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。', changes: [{ f: '新建条目', b: '—', a: '3 步骤 + 型号说明' }] },
+      body: '为什么低温天气下喂鸟器会自动关机？\n\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。', diffTotal: '新建条目 · 3 个段落',
+      summary: [{ text: '新建条目：低温自动关机的现象说明与处理步骤', kind: 'add' }, { text: '新增段落：低温保护阈值与恢复条件', kind: 'add' }, { text: '新增段落：保温罩与低温型号电池建议', kind: 'add' }],
+      hunks: [
+        { ln: '', rn: '1', sign: '+', t: '为什么低温天气下喂鸟器会自动关机？', kind: 'add' },
+        { ln: '', rn: '2', sign: '+', t: '1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。', kind: 'add' },
+        { ln: '', rn: '3', sign: '+', t: '2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。', kind: 'add' },
+        { ln: '', rn: '4', sign: '+', t: '3. 关机期间录像中断，历史录像不受影响。', kind: 'add' }
+      ] },
     { id: 'q2', src: '人工录入', title: '退货运费承担规则', freq: '人工', meta: '政策与售后 / 售后政策 / 退款与退货 · 仅客服内部', ver: 'v1（新建）', submitter: '王雯 · 知识管理员', at: '08-04 10:22',
-      body: '质量问题退货：运费由公司承担，客服直接发预付面单。\n非质量问题 7 天无理由：运费由用户承担。\n超 30 天：走个案审批，需主管确认。', changes: [{ f: '新建条目', b: '—', a: '三档运费口径' }] },
+      body: '质量问题退货：运费由公司承担，客服直接发预付面单。\n非质量问题 7 天无理由：运费由用户承担。\n超 30 天：走个案审批，需主管确认。', diffTotal: '新建条目 · 3 个段落',
+      summary: [{ text: '新建条目：退货运费的三档承担口径（仅客服内部）', kind: 'add' }, { text: '新增段落：质量问题 / 非质量问题 / 超 30 天 三档', kind: 'add' }],
+      hunks: [
+        { ln: '', rn: '1', sign: '+', t: '质量问题退货：运费由公司承担，客服直接发预付面单。', kind: 'add' },
+        { ln: '', rn: '2', sign: '+', t: '非质量问题 7 天无理由：运费由用户承担。', kind: 'add' },
+        { ln: '', rn: '3', sign: '+', t: '超 30 天：走个案审批，需主管确认。', kind: 'add' }
+      ] },
     { id: 'q3', src: '版本修订', title: '退款政策 v3 · 补充跨境订单与例外通道', freq: 'v3', meta: '政策与售后 / 售后政策 / 退款与退货 · 对外 + 内部段', ver: 'v3（修订 v2）', submitter: '王雯 · 知识管理员', at: '08-04 09:12',
-      body: '在「退款时限」后新增：跨境订单以清关完成日起算 5 天。\n内部段落补充例外通道审批人与额度。', changes: [{ f: '退款时限', b: '签收日起算', a: '跨境订单按清关日起算' }, { f: '内部段落', b: '仅额度上限', a: '补审批人 + 记录要求' }] },
+      body: '在「退款时限」后新增：跨境订单以清关完成日起算 5 天。\n内部段落补充例外通道审批人与额度。', diffTotal: '正文 2 处改动 · 字段 1 处改动',
+      summary: [{ text: '退款时限：签收日起算 → 跨境订单按清关日起算', kind: 'mod' }, { text: '内部段落：仅额度上限 → 补审批人与记录要求', kind: 'mod' }, { text: '新增段落：跨境订单说明', kind: 'add' }],
+      hunks: [
+        { ln: '4', rn: '4', sign: ' ', t: '二、非质量问题退款', kind: 'ctx' },
+        { ln: '5', rn: '', sign: '-', t: '签收后 5 天内可申请，退款时限自签收日起算。', kind: 'del' },
+        { ln: '', rn: '5', sign: '+', t: '签收后 5 天内可申请；跨境订单以清关完成日起算。', kind: 'add' },
+        { ln: '', rn: '6', sign: '+', t: '跨境订单说明：清关信息以物流方回传为准，缺失时按签收日兜底。', kind: 'add' },
+        { ln: '6', rn: '7', sign: ' ', t: '三、内部口径（内部段落，不进对外文章）', kind: 'ctx' },
+        { ln: '7', rn: '', sign: '-', t: '例外退款额度上限 $200。', kind: 'del' },
+        { ln: '', rn: '8', sign: '+', t: '例外退款额度上限 $200；超额需主管审批并在工单内记录审批人与理由。', kind: 'add' }
+      ] },
     { id: 'q4', src: '反馈修订', title: '会员退订与计费周期（驳回后重新提交）', freq: '重提', meta: '政策与售后 / 会员与账户 · 对外公开', ver: 'v3（修订 v2）', submitter: '王雯 · 知识管理员', at: '08-04 11:05',
-      body: '已按驳回意见补充财务确认截图与计费示例（含跨月退订算法）。', changes: [{ f: '计费周期', b: '按自然月', a: '按自然月 + 跨月示例' }] }
+      body: '已按驳回意见补充财务确认截图与计费示例（含跨月退订算法）。', diffTotal: '正文 1 处改动 · 新增 1 段',
+      summary: [{ text: '计费周期：按自然月 → 按自然月 + 跨月退订示例', kind: 'mod' }, { text: '新增段落：财务确认口径与截图留档要求', kind: 'add' }],
+      hunks: [
+        { ln: '2', rn: '2', sign: ' ', t: '一、会员计费周期', kind: 'ctx' },
+        { ln: '3', rn: '', sign: '-', t: '会员费按自然月计费，退订于当期结束后生效。', kind: 'del' },
+        { ln: '', rn: '3', sign: '+', t: '会员费按自然月计费，退订于当期结束后生效；跨月退订按整月计，不折算天数。', kind: 'add' },
+        { ln: '', rn: '4', sign: '+', t: '示例：08-20 退订，08-31 结束当期，09-01 起停止计费。', kind: 'add' },
+        { ln: '4', rn: '5', sign: ' ', t: '二、退款方式', kind: 'ctx' }
+      ] }
   ];
 
   BATCHES = [
@@ -1469,11 +1511,11 @@ class Component extends DCLogic {
     { head: '08-01 批次：拉取失败', meta: 'Zendesk API 429 限流 · 次日照常拉取', state: '失败' }
   ];
   CANDIDATES = [
-    { type: '新增', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: '17 次 / 周', dup: '0.42', gap: '未覆盖', note: '三重准入通过 → 建议立新条', actLabel: '起草并提交审核',
+    { type: '新增', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: '17 次 / 周', dup: '0.42', dupWhy: '与 KB-0155「太阳能板阴天充不满电」最接近但主题不同（低温关机 vs 弱光充电），无既有条目覆盖', gap: '未覆盖', note: '三重准入通过 → 建议立新条', actLabel: '起草并提交审核',
       summary: '用户反馈 -15°C 以下设备夜间自动关机、白天回温恢复。客服口径已趋一致，但知识库无对应条目，每次手写。' },
-    { type: '修订', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: '14 次 / 周', dup: '0.88', gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', actLabel: '挂为 KB-0155 修订建议',
+    { type: '修订', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: '14 次 / 周', dup: '0.88', dupWhy: '均在描述阴天/弱光下太阳能板充电不足，KB-0155 已覆盖同一现象与处理步骤，差异仅在固件 2.4 后的阈值', gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', actLabel: '挂为 KB-0155 修订建议',
       summary: '现有条目只写「检查遮挡」，未覆盖固件 2.4 后的充电阈值变化；客服 flag 3 次「步骤过时」。' },
-    { type: '合并', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: '—', dup: '0.91', gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', actLabel: '发起合并（进审核）',
+    { type: '合并', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: '—', dup: '0.91', dupWhy: '两条条目回答同一个 Wi-Fi 配对失败问题，步骤与结论高度一致，属重复建条', gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', actLabel: '发起合并（进审核）',
       summary: '两条回答同一问题，bot 引用被分流导致都拿不满样本量。' }
   ];
 
@@ -1502,11 +1544,11 @@ class Component extends DCLogic {
     { name: '配件兼容', n: 6, pct: '19%', color: '#B2453A' }
   ];
   EFFECT = [
-    { title: '太阳能板阴天充不满电', ver: 'v4', chapter: '安装与配网 / 太阳能供电', bot: 58, agent: 21, down: 9, flag: 3, rate: '41%', low: true, vec: '向量失败' },
-    { title: '会员退订与计费周期', ver: 'v2', chapter: '会员与账户 / 会员计费', bot: 44, agent: 12, down: 6, flag: 2, rate: '58%', low: true, vec: '待重建' },
-    { title: '退款政策', ver: 'v2', chapter: '售后与退款 / 退款时限', bot: 132, agent: 47, down: 11, flag: 1, rate: '70%', low: false, vec: '已向量化' },
-    { title: '保修期与凭证要求', ver: 'v3', chapter: '售后与退款 / 保修换新', bot: 96, agent: 33, down: 3, flag: 0, rate: '84%', vec: '已向量化' },
-    { title: '退货运费承担规则', ver: 'v1', chapter: '售后与退款 / 退货运费', bot: 0, agent: 6, down: 0, flag: 0, rate: '样本积累中', sample: true, vec: '未向量化' }
+    { title: '太阳能板阴天充不满电', ver: 'v4', chapter: '安装与配网 / 太阳能供电', bot: 58, agent: 21, down: 9, flag: 3, rate: '41%', low: true },
+    { title: '会员退订与计费周期', ver: 'v2', chapter: '会员与账户 / 会员计费', bot: 44, agent: 12, down: 6, flag: 2, rate: '58%', low: true },
+    { title: '退款政策', ver: 'v2', chapter: '售后与退款 / 退款时限', bot: 132, agent: 47, down: 11, flag: 1, rate: '70%', low: false },
+    { title: '保修期与凭证要求', ver: 'v3', chapter: '售后与退款 / 保修换新', bot: 96, agent: 33, down: 3, flag: 0, rate: '84%' },
+    { title: '退货运费承担规则', ver: 'v1', chapter: '售后与退款 / 退货运费', bot: 0, agent: 6, down: 0, flag: 0, rate: '样本积累中', sample: true }
   ];
   GAP = [
     { topic: '喂鸟器极寒天气自动关机', n: '17 次 / 周', src: '工单 12 · 聊天 5', cover: '未覆盖 → 立新条', act: '新增' },
@@ -1587,14 +1629,14 @@ class Component extends DCLogic {
     if (!this.state.zhDirty) {
       const en = this.state.enStatus;
       const next = (en === '未生成' || en === '翻译失败') ? en : '待重新翻译';
-      this.setState({ zhDirty: true, enStatus: next, vec: '待重建', entryStatus: this.state.entryStatus === '已发布' ? '编辑中' : this.state.entryStatus });
+      this.setState({ zhDirty: true, enStatus: next, entryStatus: this.state.entryStatus === '已发布' ? '编辑中' : this.state.entryStatus });
     }
   }
-  rebuildVec = () => {
-    if (!this.perms().edit) return this.say('当前角色不可触发向量化。');
-    this.setState({ vec: '向量化中' });
-    this.log({ obj: 'KB-0201 退款政策', action: '重建向量索引', note: '模型 text-embedding-3-large · 分片 512 token / 重叠 64' });
-    setTimeout(() => { this.setState({ vec: '已向量化' }); this.say('向量索引已重建（12 个分片，用于查重与代理评测）'); }, 1500);
+  editSummary = () => {
+    if (!this.perms().edit) return this.say('当前角色对编辑器只读，不可修改 AI 摘要。');
+    this.setState({ sumSrc: '人工校正' });
+    this.log({ obj: 'KB-0201 退款政策', action: '人工校正 AI 摘要', note: '来源：AI 生成 → 人工校正；后续发布不再被 AI 覆盖' });
+    this.say('摘要已标记为「人工校正」：后续发布不会用 AI 结果覆盖');
   };
 
   saveZh = () => {
@@ -1764,13 +1806,10 @@ class Component extends DCLogic {
             }) : [] };
         }) : [] };
     });
-    const vecKindOf = (v) => v === '已向量化' ? 'ok' : v === '向量失败' ? 'bad' : v === '向量化中' ? 'accent' : 'warn';
     const entryRows = entries.map((e, i) => {
       const st = this.pill(this.statusKind(e.id === 'KB-0201' ? curStatus : e.status));
       const en = this.pill(this.enKind(e.id === 'KB-0201' ? s.enStatus : e.en));
-      const vp = this.pill(vecKindOf(e.id === 'KB-0201' ? s.vec : e.vec));
       return { ...e, status: e.id === 'KB-0201' ? curStatus : e.status, en: e.id === 'KB-0201' ? s.enStatus : e.en,
-        vec: e.id === 'KB-0201' ? s.vec : e.vec, vBg: vp.bg, vBd: vp.bd, vFg: vp.fg,
         scene: e.scene1 + ' · ' + e.scene2,
         sync: e.id === 'KB-0201' ? (s.sync['KB-0201'] || e.sync) : e.sync,
         stBg: st.bg, stBd: st.bd, stFg: st.fg, enBg: en.bg, enBd: en.bd, enFg: en.fg,
@@ -1801,13 +1840,11 @@ class Component extends DCLogic {
       return { ...a, bg: b.bg, bd: b.bd, fg: b.fg, cursor: b.cursor, disabled: a.disabled ? true : false };
     });
     const enBad = s.enStatus !== '已确认' && s.enStatus !== '已同步 Zendesk';
-    const vecBad = s.vec !== '已向量化';
     const gateMsg = !P.publish
       ? '统一过审铁律：' + R.name + '不能直接发布，必须由知识审核员在审核中心通过后发布。'
       : enBad ? '英文版本为「' + s.enStatus + '」，发布会被同步门禁阻断——先完成英文确认。'
-        : vecBad ? '向量状态为「' + s.vec + '」，需先重建向量索引再发布（查重与代理评测依赖它）。'
-          : '门禁通过：正文已保存、英文已确认、向量已就绪，可发布并同步。';
-    const gateFg = !P.publish ? '#8A5F1A' : (enBad || vecBad) ? '#B2453A' : '#177A57';
+        : '门禁通过：正文已保存、英文已确认，可发布并同步。';
+    const gateFg = !P.publish ? '#8A5F1A' : enBad ? '#B2453A' : '#177A57';
 
     const entryTabs = [['body', '知识正文'], ['ver', '版本与回滚'], ['metric', '效果指标'], ['log', '操作日志']].map(([k, label]) => {
       const on = s.tab === k;
@@ -1844,16 +1881,13 @@ class Component extends DCLogic {
       { k: '负责人', isText: true, v: '王雯（知识管理员）' }
     ].map(f => ({ ...f, isSelect: !!f.isSelect, isText: !!f.isText, locked: !P.edit, bg: lockedBg, hasHint: !!f.hint, hint: f.hint || '', options: f.options || [], v: f.v || '' }));
 
-    const vecKind = s.vec === '已向量化' ? 'ok' : s.vec === '向量失败' ? 'bad' : s.vec === '向量化中' ? 'accent' : 'warn';
-    const vecK = this.pill(vecKind);
-    const vb = this.btn('primary', !P.edit || s.vec === '向量化中');
-    const vecRows = [
-      { k: '向量状态', v: s.vec },
-      { k: 'Embedding 模型', v: 'text-embedding-3-large' },
-      { k: '分片策略', v: '512 token / 重叠 64' },
-      { k: '分片数 / 维度', v: s.vec === '未向量化' ? '— / 3072' : '12 / 3072' },
-      { k: '最后向量化', v: s.vec === '未向量化' ? '—' : s.vec === '待重建' ? '07-30 18:05（内容已变更）' : '08-04 11:20' },
-      { k: '用途', v: '挖掘查重 · 缺口聚类 · 发布门禁代理评测' }
+    const sumK = this.pill(s.sumSrc === '人工校正' ? 'accent' : 'ok');
+    const vb = this.btn('primary', !P.edit);
+    const sumRows = [
+      { k: '摘要正文', v: '退款分质量问题与非质量问题两档：质量问题全程免运费；非质量问题签收后 5 天内可退、运费自理。跨境订单按清关日起算。' },
+      { k: '生成时间', v: '08-04 11:20（发布 v2 时生成）' },
+      { k: '来源', v: s.sumSrc },
+      { k: '用途', v: '只服务本台内部：AI 对话挖掘语义查重的比对基准' }
     ];
 
     const enK = this.pill(this.enKind(s.enStatus));
@@ -1939,21 +1973,26 @@ class Component extends DCLogic {
       const kind = q.src.indexOf('AI') === 0 ? 'accent' : q.src === '人工录入' ? 'plain' : q.src === '版本修订' ? 'warn' : 'info';
       const sk = this.pill(kind);
       return { ...q, bg: on ? '#E0F1F6' : '#fff', bd: on ? '#0D7594' : '#DFEEF3',
-        srcBg: sk.bg, srcBd: sk.bd, srcFg: sk.fg, open: () => this.setState({ reviewSel: i }) };
+        srcBg: sk.bg, srcBd: sk.bd, srcFg: sk.fg, open: () => this.setState({ reviewSel: i, reviewDiff: false }) };
     });
     const revSrc = live[Math.min(s.reviewSel, Math.max(live.length - 1, 0))];
     const okb = priB(!P.review), nob = this.btn('danger', !P.review);
-    const rev = revSrc ? { ...revSrc, changes: revSrc.changes,
+    const rev = revSrc ? { ...revSrc,
       disabled: !P.review ? true : false, title2: P.review ? '' : '审核权限仅知识审核员',
       okBg: okb.bg, okBd: okb.bd, okFg: okb.fg, okCur: okb.cursor, noBg: nob.bg, noBd: nob.bd, noFg: nob.fg,
-      gate: P.review ? '通过后自动跑发布门禁：静态检查 + 英文校验状态 + 代理评测，全过才入同步队列。' : '当前身份为' + R.name + '，只能查看，不能通过或驳回。',
+      gate: P.review ? '通过后自动跑发布门禁：静态检查 + 英文校验状态，全过才入同步队列。' : '当前身份为' + R.name + '，只能查看，不能通过或驳回。',
       gateFg: P.review ? '#177A57' : '#8A5F1A',
+      diffTotal: revSrc.diffTotal,
+      summary: (revSrc.summary || []).map(x => ({ text: x.text, icon: x.kind === 'add' ? 'ph-plus-circle' : x.kind === 'del' ? 'ph-minus-circle' : 'ph-pencil-simple', fg: x.kind === 'add' ? '#177A57' : x.kind === 'del' ? '#B2453A' : '#0D7594' })),
+      hunks: (revSrc.hunks || []).map(h => ({ ...h, bg: h.kind === 'add' ? '#EAF4F0' : h.kind === 'del' ? '#F8EEEC' : '#fff', fg: h.kind === 'add' ? '#177A57' : h.kind === 'del' ? '#B2453A' : '#5A737B' })),
+      showDiff: s.reviewDiff, diffHead: revSrc.title,
+      diffBtn: s.reviewDiff ? '收起' : '查看具体变更', diffIcon: s.reviewDiff ? 'ph-caret-up' : 'ph-git-diff',
+      toggleDiff: () => this.setState({ reviewDiff: !s.reviewDiff }),
       pass: this.reviewPass(revSrc), reject: this.askReject(revSrc) } : null;
     const gateRows = [
       { k: '格式与字段完整性', v: '标题 / 章节 / 可见性 / 锚点 / 标签均已填。', ok: true },
       { k: '敏感信息与内部口径', v: '内部段落已标记，不会进对外文章。', ok: true },
-      { k: '英文版本状态', v: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' ? '英文已确认，可同步。' : '英文为「' + s.enStatus + '」——同步会被阻断，先完成校验。', ok: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' },
-      { k: '代理评测（pgvector）', v: '38 / 41 召回通过；代理指标不等于 Zendesk AI 真实表现，如实标注。', ok: false }
+      { k: '英文版本状态', v: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' ? '英文已确认，可同步。' : '英文为「' + s.enStatus + '」——同步会被阻断，先完成校验。', ok: s.enStatus === '已确认' || s.enStatus === '已同步 Zendesk' }
     ].map(g => { const kk = this.pill(g.ok ? 'ok' : 'warn'); return { ...g, bg: kk.bg, bd: kk.bd, fg: kk.fg, icon: g.ok ? 'ph-check-circle' : 'ph-warning-circle' }; });
     const reviewHistory = [
       { who: '李骁（知识审核员）', act: '驳回', t: '08-03 16:10', note: '计费周期与财务口径不符，请附财务确认截图。' },
@@ -1993,9 +2032,6 @@ class Component extends DCLogic {
       return { label, on: on ? 'true' : 'false', bg: on ? '#E0F1F6' : 'transparent', fg: on ? '#0D7594' : '#4E6870', go: () => this.setState({ dash: k }) };
     });
     const effect = this.EFFECT.map(e => ({ ...e, rowBg: e.low ? '#FBF6EC' : 'transparent',
-      vBg: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').bg,
-      vBd: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').bd,
-      vFg: this.pill(e.vec === '已向量化' ? 'ok' : e.vec === '向量失败' ? 'bad' : 'warn').fg,
       fg: e.low ? '#B2453A' : e.sample ? '#5A737B' : '#31474E', w: e.low ? '700' : '400',
       open: () => { const i = entries.findIndex(x => e.title.indexOf(x.title) >= 0 || x.title.indexOf(e.title) >= 0); this.setState({ view: 'entry', sel: i >= 0 ? i : 0, tab: 'metric' }); } }));
     const gsub = priB(!P.submit && !P.suggest);
@@ -2053,7 +2089,7 @@ class Component extends DCLogic {
     const matrix = s.matrix || this.MATRIX;
     const roleCards = [
       { name: '知识管理员', count: 4, allow: ['新建 / 编辑', '提交审核', '管理目录章节', '查看数据'], deny: ['审核', '发布', '回滚'], note: '知识生产主力；所有产出必须过审，无直接发布路径。' },
-      { name: '知识审核员', count: 2, allow: ['审核通过 / 驳回', '发布与同步', '版本回滚', '编辑'], deny: ['用户管理'], note: '质量与发布唯一执行者；不能审核自己提交的版本（四眼原则硬约束）。' },
+      { name: '知识审核员', count: 2, allow: ['审核通过 / 驳回', '发布与同步', '版本回滚', '编辑'], deny: ['用户管理'], note: '质量与发布唯一执行者；可审核自己提交的版本（四眼原则已取消），全部动作写审计日志。' },
       { name: 'AI 运营', count: 3, allow: ['查看效果与缺口', '查看 AI 调用数据', '提交优化建议'], deny: ['编辑内容', '审核', '发布', '回滚'], note: '只读 + 建议角色：把数据洞察变成审核队列里的建议，不直接改库。' },
       { name: '系统管理员', count: 1, allow: ['用户管理', '角色与权限', '查看审计日志'], deny: ['审核', '发布', '编辑内容'], note: '职责分离：管人不管内容，避免既配权限又改知识。' }
     ].map(r => ({ ...r, bd: r.name === R.name ? '#BCDDE8' : '#CBE2E9', allow: r.allow.map(t => ({ t })), deny: r.deny.map(t => ({ t })) }));
@@ -2114,15 +2150,12 @@ class Component extends DCLogic {
         { label: '同步到 Zendesk', icon: 'ph-cloud-arrow-up', go: this.syncEn, dis: !P.sync || s.enStatus !== '已确认' },
         { label: '模拟翻译失败', icon: 'ph-warning', go: this.failTranslate, dis: false }
       ].map(a => { const b = this.btn('sec', a.dis); return { ...a, bg: b.bg, bd: b.bd, fg: b.fg, cursor: b.cursor, disabled: a.dis ? true : false, title: a.dis ? (P.edit ? '当前状态不可执行该动作' : '当前角色只读') : '' }; }),
-      vecStatus: s.vec, vecBg: vecK.bg, vecBd: vecK.bd, vecFg: vecK.fg, vecRows,
-      vecBtnBg: vb.bg, vecBtnBd: vb.bd, vecBtnFg: vb.fg, vecBtnCur: vb.cursor,
-      vecBtnDis: (!P.edit || s.vec === '向量化中') ? true : false,
-      vecBtnLabel: s.vec === '向量化中' ? '向量化中…' : s.vec === '向量失败' ? '重试向量化' : '重建向量索引',
+      sumSource: s.sumSrc, sumBg: sumK.bg, sumBd: sumK.bd, sumFg: sumK.fg, sumRows,
+      sumBtnBg: vb.bg, sumBtnBd: vb.bd, sumBtnFg: vb.fg, sumBtnCur: vb.cursor,
+      sumBtnDis: !P.edit ? true : false,
+      sumBtnLabel: '编辑摘要',
       rebuildVec: this.rebuildVec,
-      vecNote: s.vec === '待重建' ? '内容已变更，向量落后于正文——发布前必须重建，否则查重与代理评测跑的是旧内容。'
-        : s.vec === '向量失败' ? '向量化失败（Embedding 服务超时）：保留上一次向量，已告警；失败条目不参与查重与代理评测。'
-        : s.vec === '未向量化' ? '尚未向量化：首次过审入库时自动触发，也可手动执行。'
-        : '向量与当前正文一致。向量只服务本台内部（查重 / 聚类 / 代理评测），Zendesk AI 有自己的索引。',
+      sumNote: s.sumSrc === '人工校正' ? '摘要已人工校正：后续发布不会用 AI 结果覆盖。' : '摘要在条目发布时由 LLM 依标题与正文生成；可人工改写，改写后不再被 AI 覆盖。LLM 不可用时保留上次摘要并如实标注，不阻塞发布。',
       onDocInput: () => this.markDirty(),
       dirtyLabel: !P.edit ? '只读模式（' + R.name + '）' : s.zhDirty ? '● 有未保存改动' : '已保存',
       dirtyFg: !P.edit ? '#8FA5AC' : s.zhDirty ? '#B2453A' : '#177A57',
@@ -2139,8 +2172,7 @@ class Component extends DCLogic {
         { k: '当前版本调用次数', v: pubV ? pubV.calls : '—', note: '近 30 天 · bot + 人工引用合计', fg: '#13252B' },
         { k: '命中率', v: pubV ? pubV.hit : '—', note: '检索到本条目 / 相关提问', fg: '#13252B' },
         { k: '解决率', v: pubV ? pubV.solve : '—', note: '引用后会话判解决（近似归因）', fg: pubV && pubV.solveNum < 80 ? '#B2453A' : '#177A57' },
-        { k: '采纳率', v: pubV ? pubV.adopt : '—', note: 'bot 引用后真正写进回答', fg: '#13252B' },
-        { k: '向量状态', v: s.vec, note: s.vec === '已向量化' ? '12 分片 / 3072 维 · 与正文一致' : '向量落后于正文，影响查重与代理评测', fg: s.vec === '已向量化' ? '#177A57' : '#B2453A' }
+        { k: '采纳率', v: pubV ? pubV.adopt : '—', note: 'bot 引用后真正写进回答', fg: '#13252B' }
       ], verBars,
       entryFeedback: [
         { src: '文章被踩', ver: 'v2', text: '「5 天太短，和商品页写的 7 天不一致」——口径冲突投诉', n: '11 踩' },
