@@ -44,6 +44,19 @@ export interface ZendeskClient {
   getArticle(articleRef: string): Promise<ZendeskArticle | null>;
   listSections(): Promise<Array<{ id: string; name: string }>>;
   fetchConversations(sinceIso: string): Promise<{ email: number; chat: number; items: string[] }>;
+  /**
+   * 结构维护（08-05-2026 拍板：结构只在本台维护并同步 Zendesk）——
+   * 目录→Category、章节→Section；删除带防护由调用方先查计数。
+   */
+  createCategory(name: string): Promise<{ id: string }>;
+  renameCategory(categoryRef: string, name: string): Promise<void>;
+  deleteCategory(categoryRef: string): Promise<void>;
+  categorySectionCount(categoryRef: string): Promise<number>;
+  createSection(categoryRef: string, name: string): Promise<{ id: string }>;
+  renameSection(sectionRef: string, name: string): Promise<void>;
+  moveSection(sectionRef: string, categoryRef: string): Promise<void>;
+  deleteSection(sectionRef: string): Promise<void>;
+  sectionArticleCount(sectionRef: string): Promise<number>;
 }
 
 export class ZendeskApiError extends Error {
@@ -66,16 +79,17 @@ class SandboxZendesk implements ZendeskClient {
   readonly mode = 'sandbox' as const;
   private stateFile = process.env.ZENDESK_SANDBOX_FILE ?? join(process.cwd(), '.sandbox-zendesk.json');
   private articles = new Map<string, ZendeskArticle>();
-  private sections = new Map<string, string>([
-    ['Sec 5101', '退款与退货'],
-    ['Sec 5102', '保修与换新'],
-    ['Sec 5110', '发货与签收'],
-    ['Sec 5120', '会员计费'],
-    ['Sec 5130', 'Wi-Fi 配对'],
-    ['Sec 5140', '太阳能'],
-    ['Sec 5201', '退款沟通话术（内部）'],
+  private categories = new Map<string, string>([['cat_general', 'General']]);
+  private sections = new Map<string, { name: string; categoryRef: string }>([
+    ['Sec 5101', { name: '退款与退货', categoryRef: 'cat_general' }],
+    ['Sec 5102', { name: '保修与换新', categoryRef: 'cat_general' }],
+    ['Sec 5110', { name: '发货与签收', categoryRef: 'cat_general' }],
+    ['Sec 5120', { name: '会员计费', categoryRef: 'cat_general' }],
+    ['Sec 5130', { name: 'Wi-Fi 配对', categoryRef: 'cat_general' }],
+    ['Sec 5140', { name: '太阳能', categoryRef: 'cat_general' }],
+    ['Sec 5201', { name: '退款沟通话术（内部）', categoryRef: 'cat_general' }],
   ]);
-  /** 注入型故障：供 RULE-06 构造同步失败与 429 限流 */
+  /** 注入型故障：供 RULE-06 构造同步失败与 429 限流（结构操作用 key `__structure__`） */
   failNext = new Map<string, { status: number; retryAfterSec?: number; times: number }>();
 
   constructor() {
@@ -85,22 +99,46 @@ class SandboxZendesk implements ZendeskClient {
   private load(): void {
     if (!existsSync(this.stateFile)) return;
     try {
-      const raw = JSON.parse(readFileSync(this.stateFile, 'utf8')) as Record<string, ZendeskArticle>;
-      this.articles = new Map(Object.entries(raw));
+      const raw = JSON.parse(readFileSync(this.stateFile, 'utf8')) as {
+        articles?: Record<string, ZendeskArticle>;
+        categories?: Record<string, string>;
+        sections?: Record<string, { name: string; categoryRef: string }>;
+      } & Record<string, ZendeskArticle>;
+      if (raw.articles) {
+        // 新格式：{articles, categories, sections}
+        this.articles = new Map(Object.entries(raw.articles));
+        if (raw.categories) this.categories = new Map(Object.entries(raw.categories));
+        if (raw.sections) this.sections = new Map(Object.entries(raw.sections));
+      } else {
+        // 旧格式（仅文章平铺）：结构沿用内置默认
+        this.articles = new Map(Object.entries(raw as Record<string, ZendeskArticle>));
+      }
     } catch {
       this.articles = new Map();
     }
   }
 
   private persist(): void {
-    writeFileSync(this.stateFile, JSON.stringify(Object.fromEntries(this.articles), null, 2), 'utf8');
+    writeFileSync(
+      this.stateFile,
+      JSON.stringify(
+        {
+          articles: Object.fromEntries(this.articles),
+          categories: Object.fromEntries(this.categories),
+          sections: Object.fromEntries(this.sections),
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
   }
 
   async upsertArticle(input: PushInput): Promise<ZendeskArticle> {
     this.maybeFail(input.entryCode);
     if (!this.sections.has(input.sectionRef)) {
       throw new ZendeskApiError(
-        `目标 Section 不存在（${input.sectionRef}）——请先在章节管理修复映射，本台不自动创建未经确认的 Zendesk 结构`,
+        `目标 Section 不存在（${input.sectionRef}）——请先在章节管理修复映射（结构由本台维护并同步）`,
         404,
       );
     }
@@ -142,7 +180,69 @@ class SandboxZendesk implements ZendeskClient {
   }
 
   async listSections(): Promise<Array<{ id: string; name: string }>> {
-    return [...this.sections.entries()].map(([id, name]) => ({ id, name }));
+    return [...this.sections.entries()].map(([id, s]) => ({ id, name: s.name }));
+  }
+
+  async createCategory(name: string): Promise<{ id: string }> {
+    this.maybeFail('__structure__');
+    const id = `cat_${Math.random().toString(36).slice(2, 10)}`;
+    this.categories.set(id, name);
+    this.persist();
+    return { id };
+  }
+
+  async renameCategory(categoryRef: string, name: string): Promise<void> {
+    this.maybeFail('__structure__');
+    if (!this.categories.has(categoryRef)) throw new ZendeskApiError(`Category 不存在（${categoryRef}）`, 404);
+    this.categories.set(categoryRef, name);
+    this.persist();
+  }
+
+  async deleteCategory(categoryRef: string): Promise<void> {
+    this.maybeFail('__structure__');
+    this.categories.delete(categoryRef);
+    this.persist();
+  }
+
+  async categorySectionCount(categoryRef: string): Promise<number> {
+    return [...this.sections.values()].filter((s) => s.categoryRef === categoryRef).length;
+  }
+
+  async createSection(categoryRef: string, name: string): Promise<{ id: string }> {
+    this.maybeFail('__structure__');
+    if (!this.categories.has(categoryRef)) throw new ZendeskApiError(`Category 不存在（${categoryRef}）`, 404);
+    const id = `sec_${Math.random().toString(36).slice(2, 10)}`;
+    this.sections.set(id, { name, categoryRef });
+    this.persist();
+    return { id };
+  }
+
+  async renameSection(sectionRef: string, name: string): Promise<void> {
+    this.maybeFail('__structure__');
+    const s = this.sections.get(sectionRef);
+    if (!s) throw new ZendeskApiError(`Section 不存在（${sectionRef}）`, 404);
+    this.sections.set(sectionRef, { ...s, name });
+    this.persist();
+  }
+
+  async moveSection(sectionRef: string, categoryRef: string): Promise<void> {
+    this.maybeFail('__structure__');
+    const s = this.sections.get(sectionRef);
+    if (!s) throw new ZendeskApiError(`Section 不存在（${sectionRef}）`, 404);
+    if (!this.categories.has(categoryRef)) throw new ZendeskApiError(`Category 不存在（${categoryRef}）`, 404);
+    this.sections.set(sectionRef, { ...s, categoryRef });
+    this.persist();
+  }
+
+  async deleteSection(sectionRef: string): Promise<void> {
+    this.maybeFail('__structure__');
+    this.sections.delete(sectionRef);
+    this.persist();
+  }
+
+  async sectionArticleCount(sectionRef: string): Promise<number> {
+    this.load();
+    return [...this.articles.values()].filter((a) => a.sectionId === sectionRef).length;
   }
 
   async fetchConversations(sinceIso: string): Promise<{ email: number; chat: number; items: string[] }> {
@@ -272,7 +372,10 @@ class LiveZendesk implements ZendeskClient {
     if (!res.ok) {
       throw new ZendeskApiError(`Zendesk 接口错误（HTTP ${res.status}）`, res.status);
     }
-    return (await res.json()) as T;
+    // DELETE 返回 204 无正文；统一按空文本容错
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   async upsertArticle(input: PushInput): Promise<ZendeskArticle> {
@@ -359,6 +462,77 @@ class LiveZendesk implements ZendeskClient {
       '/help_center/sections.json',
     );
     return data.sections.map((s) => ({ id: String(s.id), name: s.name }));
+  }
+
+  async createCategory(name: string): Promise<{ id: string }> {
+    // 不显式传 locale：跟随帮助中心默认源语言（en-us），中文名先原样落源语言、翻译后续在 Guide 补
+    const data = await this.call<{ category: { id: number } }>('/help_center/categories.json', {
+      method: 'POST',
+      body: JSON.stringify({ category: { name } }),
+    });
+    return { id: String(data.category.id) };
+  }
+
+  /**
+   * Category/Section 的名字存在 **translation 的 title** 里，对象上的 `name` 只是按请求 locale 的只读投影。
+   * `PUT /help_center/{categories|sections}/{id}.json` 只改元数据（排序位等），改名会静默无效——
+   * 必须走 translations 端点，且 locale 取该对象的 source_locale（创建时即存在，避免 PUT 不存在的翻译报 404）。
+   */
+  private async renameTranslated(kind: 'categories' | 'sections', ref: string, title: string): Promise<void> {
+    const data = await this.call<{
+      category?: { source_locale?: string };
+      section?: { source_locale?: string };
+    }>(`/help_center/${kind}/${ref}.json`);
+    const locale = (data.category ?? data.section)?.source_locale ?? this.locale;
+    await this.call(`/help_center/${kind}/${ref}/translations/${locale.toLowerCase()}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ translation: { title } }),
+    });
+  }
+
+  async renameCategory(categoryRef: string, name: string): Promise<void> {
+    await this.renameTranslated('categories', categoryRef, name);
+  }
+
+  async deleteCategory(categoryRef: string): Promise<void> {
+    await this.call(`/help_center/categories/${categoryRef}.json`, { method: 'DELETE' });
+  }
+
+  async categorySectionCount(categoryRef: string): Promise<number> {
+    const data = await this.call<{ count: number }>(
+      `/help_center/categories/${categoryRef}/sections.json`,
+    );
+    return data.count;
+  }
+
+  async createSection(categoryRef: string, name: string): Promise<{ id: string }> {
+    const data = await this.call<{ section: { id: number } }>(
+      `/help_center/categories/${categoryRef}/sections.json`,
+      { method: 'POST', body: JSON.stringify({ section: { name } }) },
+    );
+    return { id: String(data.section.id) };
+  }
+
+  async renameSection(sectionRef: string, name: string): Promise<void> {
+    await this.renameTranslated('sections', sectionRef, name);
+  }
+
+  async moveSection(sectionRef: string, categoryRef: string): Promise<void> {
+    await this.call(`/help_center/sections/${sectionRef}.json`, {
+      method: 'PUT',
+      body: JSON.stringify({ section: { category_id: Number(categoryRef) } }),
+    });
+  }
+
+  async deleteSection(sectionRef: string): Promise<void> {
+    await this.call(`/help_center/sections/${sectionRef}.json`, { method: 'DELETE' });
+  }
+
+  async sectionArticleCount(sectionRef: string): Promise<number> {
+    const data = await this.call<{ count: number }>(
+      `/help_center/sections/${sectionRef}/articles.json`,
+    );
+    return data.count;
   }
 
   async fetchConversations(sinceIso: string): Promise<{ email: number; chat: number; items: string[] }> {

@@ -1,3 +1,4 @@
+import { existsSync, unlinkSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -23,33 +24,67 @@ interface Call {
   body: Record<string, unknown> | null;
 }
 
-/** 桩 fetch：记录每次调用，按 url 返回对应假响应；oauthStatus/articleStatus 供失败路径构造 */
-function stubFetch(opts: { articleStatus?: number[]; token?: string; expiresIn?: number } = {}) {
+/** 桩 fetch：记录每次调用，按 url 路由假响应；articleStatus 供失败路径构造 */
+function stubFetch(
+  opts: {
+    articleStatus?: number[];
+    token?: string;
+    expiresIn?: number;
+    sectionArticleCount?: number;
+    categorySectionCount?: number;
+    sourceLocale?: string;
+  } = {},
+) {
   const calls: Call[] = [];
   const articleStatus = [...(opts.articleStatus ?? [])];
+  const respond = (status: number, payload: unknown) => ({
+    ok: status < 400,
+    status,
+    headers: { get: () => null },
+    json: async () => payload,
+    text: async () => (status === 204 ? '' : JSON.stringify(payload)),
+  });
   const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => {
     const headers = (init.headers ?? {}) as Record<string, string>;
+    const method = (init.method ?? 'GET').toUpperCase();
     calls.push({
       url,
       auth: headers.Authorization ?? '',
       body: init.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : null,
     });
-    const nullHeaders = { get: () => null };
     if (url.endsWith('/oauth/tokens')) {
-      return {
-        ok: true,
-        status: 200,
-        headers: nullHeaders,
-        json: async () => ({ access_token: opts.token ?? 'tok_1', expires_in: opts.expiresIn ?? 1800 }),
-      };
+      return respond(200, { access_token: opts.token ?? 'tok_1', expires_in: opts.expiresIn ?? 1800 });
     }
+    if (method === 'DELETE') return respond(204, undefined);
+    // 结构端点
+    if (/\/help_center\/categories\.json$/.test(url) && method === 'POST') {
+      return respond(201, { category: { id: 9001 } });
+    }
+    if (/\/help_center\/categories\/[^/]+\/sections\.json$/.test(url)) {
+      if (method === 'POST') return respond(201, { section: { id: 9002 } });
+      return respond(200, { count: opts.categorySectionCount ?? 0, sections: [] });
+    }
+    // 同一 URL 双语义：GET=查计数（删除防护依据），POST=建文章
+    if (/\/help_center\/sections\/[^/]+\/articles\.json$/.test(url) && method === 'GET') {
+      return respond(200, { count: opts.sectionArticleCount ?? 0, articles: [] });
+    }
+    // 改名走 translations（名字存在翻译里，对象上的 name 是只读投影）
+    if (/\/help_center\/(categories|sections)\/[^/]+\/translations\/[^/]+\.json$/.test(url) && method === 'PUT') {
+      return respond(200, { translation: { title: 'ok' } });
+    }
+    // 读对象：拿 source_locale（改名前置）
+    if (/\/help_center\/categories\/[^/]+\.json$/.test(url) && method === 'GET') {
+      return respond(200, { category: { id: 9001, source_locale: opts.sourceLocale ?? 'en-us' } });
+    }
+    if (/\/help_center\/sections\/[^/]+\.json$/.test(url) && method === 'GET') {
+      return respond(200, { section: { id: 9002, source_locale: opts.sourceLocale ?? 'en-us' } });
+    }
+    if (/\/help_center\/(categories|sections)\/[^/]+\.json$/.test(url) && method === 'PUT') {
+      return respond(200, {});
+    }
+    // 文章端点（既有用例）
     const status = articleStatus.shift() ?? 201;
-    return {
-      ok: status < 400,
-      status,
-      headers: nullHeaders,
-      json: async () => ({ article: { id: 907, updated_at: '2026-08-05T02:00:00Z' } }),
-    };
+    return respond(status, { article: { id: 907, updated_at: '2026-08-05T02:00:00Z' } });
   });
   vi.stubGlobal('fetch', fetchMock);
   return calls;
@@ -251,5 +286,105 @@ describe('locale 配置', () => {
     const { getZendesk } = await loadZendesk();
     await getZendesk().upsertArticle(PUSH);
     expect(calls.filter((c) => c.url.includes('/articles.json'))).toHaveLength(1);
+  });
+});
+
+describe('结构维护（live：目录→Category、章节→Section）', () => {
+  beforeEach(() => {
+    process.env.ZENDESK_SUBDOMAIN = 'ourcoolfly-48181';
+    process.env.ZENDESK_OAUTH_CLIENT_ID = 'knowledge_system';
+    process.env.ZENDESK_OAUTH_CLIENT_SECRET = 'secret_value';
+  });
+
+  it('createCategory / createSection 走正确端点并回传 id', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    const zd = getZendesk();
+    const cat = await zd.createCategory('产品与使用');
+    expect(cat.id).toBe('9001');
+    const create = calls.find((c) => c.url.endsWith('/help_center/categories.json'))!;
+    expect(create.body).toEqual({ category: { name: '产品与使用' } });
+    const sec = await zd.createSection(cat.id, '固件升级');
+    expect(sec.id).toBe('9002');
+    expect(calls.some((c) => c.url.endsWith(`/help_center/categories/${cat.id}/sections.json`))).toBe(true);
+  });
+
+  it('renameSection 走 translations 端点改 title（对象上的 name 是只读投影，PUT 对象改名无效）', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().renameSection('777', '新名字');
+    const put = calls.find((c) => c.url.endsWith('/help_center/sections/777/translations/en-us.json'))!;
+    expect(put.body).toEqual({ translation: { title: '新名字' } });
+    // 防回归：绝不能把改名打到对象端点上（Zendesk 会返 200 但静默不生效）
+    expect(calls.some((c) => c.url.endsWith('/help_center/sections/777.json') && c.body !== null)).toBe(false);
+  });
+
+  it('renameCategory 同理走 translations，并按对象的 source_locale 定位', async () => {
+    const calls = stubFetch({ sourceLocale: 'zh-cn' });
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().renameCategory('9001', '新目录名');
+    const put = calls.find((c) => c.url.includes('/help_center/categories/9001/translations/'))!;
+    expect(put.url.endsWith('/translations/zh-cn.json')).toBe(true);
+    expect(put.body).toEqual({ translation: { title: '新目录名' } });
+  });
+
+  it('moveSection 改 category_id 走对象端点（属元数据，非翻译）', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().moveSection('777', '9001');
+    const put = calls.find((c) => c.url.endsWith('/help_center/sections/777.json') && c.body !== null)!;
+    expect(put.body).toEqual({ section: { category_id: 9001 } });
+  });
+
+  it('deleteSection 兼容 204 空响应；计数端点读 count 字段', async () => {
+    const calls = stubFetch({ sectionArticleCount: 3, categorySectionCount: 2 });
+    const { getZendesk } = await loadZendesk();
+    const zd = getZendesk();
+    expect(await zd.sectionArticleCount('777')).toBe(3);
+    expect(await zd.categorySectionCount('9001')).toBe(2);
+    await expect(zd.deleteSection('777')).resolves.toBeUndefined();
+    expect(calls.some((c) => c.url.endsWith('/help_center/sections/777.json'))).toBe(true);
+  });
+});
+
+describe('结构维护（沙箱：与真实契约同形）', () => {
+  beforeEach(() => {
+    process.env.ZENDESK_SANDBOX_FILE = `zendesk-sandbox-test-${Math.random().toString(36).slice(2)}.json`;
+  });
+
+  afterEach(() => {
+    const f = process.env.ZENDESK_SANDBOX_FILE;
+    if (f && existsSync(f)) unlinkSync(f);
+  });
+
+  it('建目录→建章节→改名→移动→删除 全链路', async () => {
+    const { getZendesk } = await loadZendesk();
+    const zd = getZendesk();
+    expect(zd.mode).toBe('sandbox');
+    const cat = await zd.createCategory('测试目录');
+    const sec = await zd.createSection(cat.id, '测试章节');
+    await zd.renameSection(sec.id, '测试章节改');
+    expect((await zd.listSections()).find((s) => s.id === sec.id)?.name).toBe('测试章节改');
+    const cat2 = await zd.createCategory('目标目录');
+    await zd.moveSection(sec.id, cat2.id);
+    expect(await zd.categorySectionCount(cat2.id)).toBe(1);
+    expect(await zd.categorySectionCount(cat.id)).toBe(0);
+    await zd.deleteSection(sec.id);
+    await zd.deleteCategory(cat2.id);
+    expect(await zd.categorySectionCount(cat2.id)).toBe(0);
+  });
+
+  it('Section 内有文章时 sectionArticleCount 如实计数（删除防护的依据）', async () => {
+    const { getZendesk } = await loadZendesk();
+    const zd = getZendesk();
+    const cat = await zd.createCategory('目录');
+    const sec = await zd.createSection(cat.id, '章节');
+    await zd.upsertArticle({ ...PUSH, sectionRef: sec.id });
+    expect(await zd.sectionArticleCount(sec.id)).toBe(1);
+  });
+
+  it('不存在的 Category 下建 Section 报 404（与真实 API 同语义）', async () => {
+    const { getZendesk, ZendeskApiError } = await loadZendesk();
+    await expect(getZendesk().createSection('cat_ghost', 'x')).rejects.toThrow(ZendeskApiError);
   });
 });
