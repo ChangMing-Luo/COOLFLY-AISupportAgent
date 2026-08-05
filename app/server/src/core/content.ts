@@ -13,21 +13,26 @@ export function hasInternal(body: EntryBody): boolean {
   return body.paragraphs.some((p) => p.internal);
 }
 
+/** 单段落渲染：编辑器产出的富文本 html 优先，无 html 时回退为转义纯文本 */
+function blockHtml(p: Paragraph, cls = ''): string {
+  const attr = cls ? ` class="${cls}"` : '';
+  if (p.html && p.html.trim()) {
+    // 富文本块自带标签结构；仅在需要标注内部段落时包一层
+    return cls ? `<div${attr}>${p.html}</div>` : p.html;
+  }
+  return p.heading ? `<h2${attr}>${escapeHtml(p.text)}</h2>` : `<p${attr}>${escapeHtml(p.text)}</p>`;
+}
+
 /** 对外 HTML：仅由非内部段落生成 */
 export function toPublicHtml(body: EntryBody): string {
   return stripInternal(body)
-    .map((p) => (p.heading ? `<h2>${escapeHtml(p.text)}</h2>` : `<p>${escapeHtml(p.text)}</p>`))
+    .map((p) => blockHtml(p))
     .join('\n');
 }
 
 /** 全量 HTML（仅内部渠道使用：仅客服 segment） */
 export function toInternalHtml(body: EntryBody): string {
-  return body.paragraphs
-    .map((p) => {
-      const cls = p.internal ? ' class="internal"' : '';
-      return p.heading ? `<h2${cls}>${escapeHtml(p.text)}</h2>` : `<p${cls}>${escapeHtml(p.text)}</p>`;
-    })
-    .join('\n');
+  return body.paragraphs.map((p) => blockHtml(p, p.internal ? 'internal' : '')).join('\n');
 }
 
 export function escapeHtml(text: string): string {

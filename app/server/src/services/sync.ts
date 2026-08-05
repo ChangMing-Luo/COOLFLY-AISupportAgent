@@ -113,6 +113,37 @@ export async function runSyncTask(taskId: string): Promise<{ status: string; rea
   await query(`UPDATE sync_tasks SET status='running', updated_at=now() WHERE id=$1`, [taskId]);
 
   const zd = getZendesk();
+
+  // 归档任务（条目下线）：只把 Zendesk 端文章置归档，不推正文——裸删会在帮助中心留死链
+  if (t.action.includes('归档')) {
+    const { rows: map } = await query<{ zendesk_ref: string }>(
+      'SELECT zendesk_ref FROM sync_mappings WHERE entry_id=$1',
+      [t.entry_id],
+    );
+    const ref = map[0]?.zendesk_ref;
+    if (!ref) {
+      await query(
+        `UPDATE sync_tasks SET status='failed', fail_reason=$2, updated_at=now() WHERE id=$1`,
+        [taskId, '该条目从未同步到 Zendesk，无可归档的文章'],
+      );
+      await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
+      return { status: 'failed', reason: '无 Zendesk 映射' };
+    }
+    try {
+      await zd.archiveArticle(ref);
+      await query(`UPDATE sync_tasks SET status='archived', fail_reason=NULL, updated_at=now() WHERE id=$1`, [taskId]);
+      await query(`UPDATE entries SET sync_status='archived', blocked_reason=NULL WHERE id=$1`, [t.entry_id]);
+      return { status: 'archived' };
+    } catch (err) {
+      const reason = (err as Error).message ?? '归档失败';
+      await query(
+        `UPDATE sync_tasks SET status='failed', retry_count=$2, fail_reason=$3, updated_at=now() WHERE id=$1`,
+        [taskId, t.retry_count + 1, reason],
+      );
+      await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
+      return { status: 'failed', reason };
+    }
+  }
   const internalOnly = t.visibility === 'internal';
   // 数据泄漏级零容忍：对外正文只由 stripInternal 产物生成
   const publicHtml = internalOnly ? toInternalHtml(t.body) : toPublicHtml(t.body);
@@ -317,7 +348,7 @@ export async function resolveDrift(
     await query(
       `UPDATE entries SET body=$2::jsonb, status='pending_review', review_source='feedback',
          submitter_id=$3, submitted_at=now(), updated_at=now() WHERE id=$1`,
-      [d.entry_id, JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_pull_0', text: '（Zendesk 端内容为空）', internal: false, heading: false }] }), user.id],
+      [d.entry_id, JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_pull_0', text: '（Zendesk 端内容为空）', html: '', internal: false, heading: false }] }), user.id],
     );
   }
 

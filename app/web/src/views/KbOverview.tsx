@@ -7,6 +7,7 @@ import {
   type EntryRow,
 } from '@kb/contracts';
 import { api } from '../api';
+import { ImportPanel, type ChapterOption } from '../import';
 import {
   ConfirmModal,
   L,
@@ -80,6 +81,7 @@ export function KbOverviewView() {
   const [creating, setCreating] = useState<{ parentId: string | null } | null>(null);
   const [moving, setMoving] = useState<{ id: string; name: string } | null>(null);
   const [moveTarget, setMoveTarget] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const libs = useAsync<Library[]>(() => api.get<Library[]>('/api/kb/libraries'), []);
   const tree = useAsync<TreeRoot[]>(
@@ -131,6 +133,10 @@ export function KbOverviewView() {
   );
   const selectedChapter = tree.data?.flatMap((t) => t.children).find((c) => c.id === chapterId) ?? null;
   const allChapters = (tree.data ?? []).flatMap((t) => t.children);
+  // 导入落点只能是章节（叶级），带上目录名便于用户分辨同名章节
+  const chapterOptions: ChapterOption[] = (tree.data ?? []).flatMap((root) =>
+    root.children.map((c) => ({ id: c.id, name: c.name, label: `${root.name} → ${c.name}` })),
+  );
 
   function openCreate(parentId: string | null): void {
     setNewParentId(parentId ?? '');
@@ -240,7 +246,21 @@ export function KbOverviewView() {
     <div className="grid" style={{ gridTemplateColumns: 'minmax(240px, 260px) minmax(0, 1fr)', alignItems: 'start' }}>
       <div>
         <div className="card">
-          <h2 className="card__title">知识库（多库并行）</h2>
+          <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+            <h2 className="card__title" style={{ margin: 0 }}>知识库（多库并行）</h2>
+            {can('entry.write') && (
+              <button
+                type="button"
+                className="btn btn--sm btn--primary"
+                onClick={() => setImporting(true)}
+                disabled={!libraryId}
+                title={libraryId ? '把历史知识库文档一次性切成多条条目导入' : '请先选择一个知识库'}
+                data-testid="open-import"
+              >
+                一键批量导入
+              </button>
+            )}
+          </div>
           {libs.loading && <div className="empty">加载中…</div>}
           <div className="grid">
             {(libs.data ?? []).map((lib) => (
@@ -591,6 +611,16 @@ export function KbOverviewView() {
             </select>
           </div>
         </ConfirmModal>
+      )}
+
+      {importing && currentLib && (
+        <ImportPanel
+          libraryId={currentLib.id}
+          libraryName={currentLib.name}
+          chapters={chapterOptions}
+          onClose={() => setImporting(false)}
+          onDone={() => { entries.reload(); tree.reload(); }}
+        />
       )}
 
       {deleting && (

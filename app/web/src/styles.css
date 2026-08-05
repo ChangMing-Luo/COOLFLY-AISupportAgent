@@ -82,6 +82,8 @@ a { color: var(--accent); }
 /* 卡片与表格 */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; }
 .card + .card { margin-top: 16px; }
+/* 上面的堆叠外边距只对「上下排列」成立；grid 里相邻卡片是左右分栏，加了会把右列顶下去 */
+.grid > .card + .card { margin-top: 0; }
 .card__title { font-size: 15px; font-weight: 700; margin: 0 0 12px; }
 .grid { display: grid; gap: 16px; }
 .grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -187,6 +189,61 @@ tr.row--warn td { background: var(--warn-bg); }
 .tree__op { border: 0; background: transparent; padding: 0 2px; font-size: 11px; color: var(--accent); }
 .tree__op--danger { color: var(--bad-fg); }
 .tree__op:disabled { color: var(--meta); }
+
+/* 双语富文本编辑器（左中文 / 右英文，逐行对齐） */
+.bi { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.bi__toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  padding: 6px 8px; background: var(--surface-2); border-bottom: 1px solid var(--line-2);
+  position: sticky; top: 0; z-index: 2;
+}
+.bi__tool {
+  min-height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: var(--fg-2); font-size: 12px;
+}
+.bi__tool:hover:not(:disabled) { background: var(--surface); border-color: var(--line); }
+.bi__tool--on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); font-weight: 600; }
+.bi__tool:disabled { color: var(--meta); opacity: .5; }
+.bi__sep { width: 1px; height: 16px; background: var(--line); margin: 0 4px; }
+.bi__hint { font-size: 11px; color: var(--meta); }
+.bi__head {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  background: var(--surface-2); border-bottom: 1px solid var(--line-2);
+  font-size: 11px; font-weight: 600; color: var(--meta);
+}
+.bi__head > div { padding: 6px 12px; }
+.bi__head > div + div { border-left: 1px solid var(--line-2); }
+/* 每行 = 一个段落：左右两格严格同高，天然对齐 */
+.bi__row { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; border-bottom: 1px solid var(--line-2); }
+.bi__row:last-child { border-bottom: 0; }
+.bi__row--internal { background: var(--warn-bg); }
+.bi__row--focus { box-shadow: inset 3px 0 0 var(--accent); }
+.bi__zh, .bi__en { padding: 8px 12px; min-width: 0; }
+.bi__en { border-left: 1px solid var(--line-2); background: var(--surface-2); }
+.bi__row--internal .bi__en { background: transparent; }
+.bi__flag {
+  display: inline-block; margin-bottom: 4px; padding: 0 6px; border-radius: 999px;
+  background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-fg); font-size: 11px;
+}
+.bi__flag--accent { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); margin: 4px 0 0; }
+.bi__placeholder { font-size: 12px; color: var(--meta); padding: 4px 0; }
+.bi__enbox { min-height: 60px; font-family: var(--font); font-size: 13px; border-color: transparent; background: transparent; padding: 0; }
+.bi__enbox:focus { border-color: var(--accent); background: var(--surface); padding: 6px 8px; }
+/* TipTap 正文排版 */
+.bi__prose { outline: none; font-size: 13px; line-height: 1.7; }
+.bi__prose:focus { outline: none; }
+.bi__prose p { margin: 0 0 4px; }
+.bi__prose p:last-child { margin-bottom: 0; }
+.bi__prose h2 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+.bi__prose h3 { font-size: 14px; font-weight: 700; margin: 0 0 4px; }
+.bi__prose ul, .bi__prose ol { margin: 0 0 4px; padding-left: 20px; }
+.bi__prose blockquote { margin: 0 0 4px; padding-left: 10px; border-left: 3px solid var(--accent-line); color: var(--muted); }
+.bi__prose img { max-width: 100%; border-radius: 6px; }
+.bi__prose code { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+.bi__prose p.is-editor-empty:first-child::before {
+  content: '段落正文（选中文字后用上方工具条设置样式）';
+  color: var(--meta); float: left; height: 0; pointer-events: none;
+}
 
 /* 审核中心变更摘要（第一层） */
 .change-summary { margin: 0; padding: 0; list-style: none; }

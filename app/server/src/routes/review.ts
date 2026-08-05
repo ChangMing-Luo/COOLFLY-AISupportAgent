@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
-import { approveEntry, entryDiff, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
+import { approveEntry, entryDiff, offlineEntry, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
 import { drainQueue } from '../services/sync.js';
 
 export async function registerReviewRoutes(app: FastifyInstance): Promise<void> {
@@ -33,6 +33,14 @@ export async function registerReviewRoutes(app: FastifyInstance): Promise<void> 
     const { id } = req.params as { id: string };
     const result = await publishEntry(req.currentUser!, id);
     if (result.status === 'published') await drainQueue();
+    return result;
+  });
+
+  /** 条目下线：published → offline + Zendesk 归档（不物理删除；仅知识审核员） */
+  app.post('/api/review/:id/offline', { preHandler: [requireLogin, requirePermission('publish')] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const result = await offlineEntry(req.currentUser!, id);
+    await drainQueue();
     return result;
   });
 

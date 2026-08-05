@@ -193,8 +193,14 @@ export async function saveEntry(
           { currentLockVersion: before.lock_version },
         );
       }
+      // offline 也要能回 editing——状态机允许 offline→editing，但这里不覆盖的话
+      // 下线后任何保存都会撞非法流转 409，下线就成了单向陷阱（无法重新上架）
       const nextStatus: EntryStatus =
-        before.status === 'published' || before.status === 'approved' ? 'editing' : before.status === 'rejected' ? 'rejected' : before.status;
+        before.status === 'published' || before.status === 'approved' || before.status === 'offline'
+          ? 'editing'
+          : before.status === 'rejected'
+            ? 'rejected'
+            : before.status;
       if (!canTransitionEntry(before.status, nextStatus === before.status ? before.status : nextStatus)) {
         throw new DomainError(`非法状态流转：${before.status} → ${nextStatus}`, 409);
       }

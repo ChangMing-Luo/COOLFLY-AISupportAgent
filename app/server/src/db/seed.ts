@@ -9,9 +9,12 @@ const INITIAL_PASSWORD = process.env.SEED_PASSWORD ?? 'Coolfly@2026';
 async function seedMatrix(): Promise<void> {
   for (const p of PERMISSIONS) {
     for (const r of ROLES) {
+      // DO UPDATE 而非 DO NOTHING：种子必须把矩阵**重置**回基线。
+      // 原来是 DO NOTHING —— 只要有人（或一次改矩阵的测试）把某个权限打开过，
+      // 重跑种子也回不去，之后所有 RBAC 验收都在被污染的矩阵上跑且看不出来。
       await query(
         `INSERT INTO permission_matrix (permission, role, allowed) VALUES ($1,$2,$3)
-         ON CONFLICT (permission, role) DO NOTHING`,
+         ON CONFLICT (permission, role) DO UPDATE SET allowed = EXCLUDED.allowed`,
         [p, r, DEFAULT_PERMISSION_MATRIX[p][r]],
       );
     }
@@ -84,7 +87,7 @@ async function main(): Promise<void> {
     version: number; sceneL1: string; sceneL2: string; labels: string[];
     /** 已发布条目的 AI 摘要（发布时生成的产物；种子直接给出，供挖掘语义查重比对） */
     aiSummary?: string;
-    dueDays: number; paragraphs: Array<{ text: string; internal?: boolean; heading?: boolean }>;
+    dueDays: number; paragraphs: Array<{ text: string; html?: string; internal?: boolean; heading?: boolean }>;
     owner: string;
   }
   const entries: SeedEntry[] = [
@@ -157,7 +160,7 @@ async function main(): Promise<void> {
   for (const e of entries) {
     const body = {
       paragraphs: e.paragraphs.map((p, i) => ({
-        id: `p_${i}`, text: p.text, internal: p.internal ?? false, heading: p.heading ?? false,
+        id: `p_${i}`, text: p.text, html: '', internal: p.internal ?? false, heading: p.heading ?? false,
       })),
     };
     await query(
@@ -240,7 +243,7 @@ async function main(): Promise<void> {
       'Zendesk 处于 live 模式，seed 会把演示条目推送到真实帮助中心。请清空 Zendesk 凭据后再跑 seed；确需推送则设 SEED_ALLOW_LIVE=1',
     );
   }
-  const { rows: published } = await query<{ id: string; code: string; title: string; body: { paragraphs: Array<{ id: string; text: string; internal: boolean; heading: boolean }> }; visibility: string; labels: string[]; chapter_id: string; ref: string | null }>(
+  const { rows: published } = await query<{ id: string; code: string; title: string; body: { paragraphs: Array<{ id: string; text: string; html: string; internal: boolean; heading: boolean }> }; visibility: string; labels: string[]; chapter_id: string; ref: string | null }>(
     `SELECT e.id, e.code, e.title, e.body, e.visibility, e.labels, e.chapter_id, c.zendesk_section_ref AS ref
      FROM entries e JOIN chapters c ON c.id=e.chapter_id WHERE e.sync_status='synced'`,
   );

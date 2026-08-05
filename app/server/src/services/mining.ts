@@ -229,7 +229,7 @@ export async function disposeCandidate(
     [
       entryId, code, c.title, libs[0]!.id, chaps[0]!.id,
       JSON.stringify(['AI 挖掘', c.type === 'revision' ? '修订建议' : '新增']),
-      JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_0', text: c.ai_summary, internal: false, heading: false }] }),
+      JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_0', text: c.ai_summary, html: '', internal: false, heading: false }] }),
       sourceLabel, user.id,
     ],
   );

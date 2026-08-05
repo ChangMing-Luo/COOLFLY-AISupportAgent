@@ -140,7 +140,7 @@ export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
         [
           entryId, code, c.topic, libs[0]!.id, chaps[0]!.id,
           JSON.stringify(['反馈修订']),
-          JSON.stringify({ paragraphs: [{ id: 'p_0', text: c.signal_note, internal: false, heading: false }] }),
+          JSON.stringify({ paragraphs: [{ id: 'p_0', text: c.signal_note, html: '', internal: false, heading: false }] }),
           req.currentUser!.id,
         ],
       );
