@@ -102,12 +102,19 @@ export function KbOverviewView() {
     if (first && !libraryId) setLibraryId(first.id);
   }, [libs.data, libraryId]);
 
-  // 结构树默认展开首个目录，其余折叠（与 v3 原型一致）
+  // 结构树默认展开首个目录及其首个章节，使三级结构一眼可见（与 v3 原型一致）
   useEffect(() => {
     const roots = tree.data;
     if (!roots) return;
-    setExpanded(roots[0] ? new Set([roots[0].id]) : new Set());
-    setNewParentId(roots[0]?.id ?? '');
+    const first = roots[0];
+    const open = new Set<string>();
+    if (first) {
+      open.add(first.id);
+      const firstChild = first.children[0];
+      if (firstChild) open.add(firstChild.id);
+    }
+    setExpanded(open);
+    setNewParentId(first?.id ?? '');
   }, [tree.data]);
 
   useEffect(() => {
