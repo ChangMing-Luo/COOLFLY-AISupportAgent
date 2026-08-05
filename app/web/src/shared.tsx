@@ -32,7 +32,7 @@ export interface NavCounts {
 }
 
 export type ViewKey =
-  | 'work' | 'kb' | 'entry' | 'mine' | 'review' | 'sync' | 'dash' | 'feedback' | 'logs' | 'rbac';
+  | 'work' | 'kb' | 'entry' | 'mine' | 'review' | 'sync' | 'dash' | 'feedback' | 'logs' | 'rbac' | 'meta';
 
 export const AppContext = createContext<AppCtx | null>(null);
 

@@ -30,6 +30,14 @@ interface Library {
   count: number;
 }
 
+/** 元数据场景字典（GET /api/meta/scenes 树结构） */
+interface SceneDictNode {
+  id: string;
+  name: string;
+  refs: number;
+  children: Array<{ id: string; name: string; refs: number }>;
+}
+
 interface TreeLeaf {
   id: string;
   code: string;
@@ -86,6 +94,8 @@ export function KbOverviewView() {
   const [helpOpen, setHelpOpen] = useState<null | 'tree' | 'list'>(null);
 
   const libs = useAsync<Library[]>(() => api.get<Library[]>('/api/kb/libraries'), []);
+  // 问题场景筛选选项来自元数据场景字典（08-05-2026 字典化，不随条目数据派生）
+  const sceneDict = useAsync<SceneDictNode[]>(() => api.get<SceneDictNode[]>('/api/meta/scenes'), []);
   const tree = useAsync<TreeRoot[]>(
     () => (libraryId ? api.get<TreeRoot[]>(`/api/kb/tree?libraryId=${encodeURIComponent(libraryId)}`) : Promise.resolve([])),
     [libraryId],
@@ -130,7 +140,7 @@ export function KbOverviewView() {
   // 单知识库（08-05-2026 拍板）：库名不进入界面，固定使用唯一知识库
   const currentLib = libs.data?.[0] ?? null;
   const allRows = entries.data ?? [];
-  const sceneOptions = [...new Set(allRows.map((r) => r.sceneL1))].sort();
+  const sceneOptions = (sceneDict.data ?? []).map((r) => r.name);
   const rows = allRows.filter(
     (r) => (!scene || r.sceneL1 === scene) && (!chapterId || r.chapterId === chapterId),
   );

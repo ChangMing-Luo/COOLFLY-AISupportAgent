@@ -13,6 +13,7 @@ import { DashboardView } from './views/Dashboard';
 import { FeedbackView } from './views/Feedback';
 import { AuditView } from './views/Audit';
 import { RbacView } from './views/Rbac';
+import { MetaView } from './views/MetaView';
 
 const NAV: Array<{ group: string; items: Array<{ key: ViewKey; label: string; badge?: keyof NavCounts; perm?: Permission }> }> = [
   { group: zhCN.nav.groupWorkbench, items: [{ key: 'work', label: zhCN.nav.work }] },
@@ -43,6 +44,7 @@ const NAV: Array<{ group: string; items: Array<{ key: ViewKey; label: string; ba
     items: [
       { key: 'logs', label: zhCN.nav.logs },
       { key: 'rbac', label: zhCN.nav.rbac, perm: 'rbac.manage' },
+      { key: 'meta', label: zhCN.nav.meta },
     ],
   },
 ];
@@ -164,6 +166,7 @@ export function App() {
             {view === 'feedback' && <FeedbackView />}
             {view === 'logs' && <AuditView />}
             {view === 'rbac' && <RbacView />}
+            {view === 'meta' && <MetaView />}
           </div>
         </main>
       </div>

@@ -24,6 +24,8 @@ async function seedMatrix(): Promise<void> {
 async function main(): Promise<void> {
   await query('TRUNCATE sessions, translation_pairs, sync_tasks, sync_mappings, drift_records, entry_versions, version_metrics, entry_effect_metrics, signal_events, mining_candidates, mining_batches, revision_candidates, knowledge_gaps, no_result_keywords, coverage_scenes, signal_matrix, audit_logs CASCADE');
   await query('DELETE FROM entries');
+  await query('DELETE FROM scenes');
+  await query('DELETE FROM device_models');
   await query('DELETE FROM chapters');
   await query('DELETE FROM libraries');
   await query('DELETE FROM users');
@@ -79,6 +81,43 @@ async function main(): Promise<void> {
       [c.id, c.lib, c.parent, c.name, c.ref, c.order],
     );
   }
+
+  // ===== 元数据字典（08-05-2026 元数据字典化）：问题场景两级树 + 型号 =====
+  const sceneDict = [
+    { id: 'sc_after', name: '售后与退款', parent: null, order: 1 },
+    { id: 'sc_refund_time', name: '退款时限', parent: 'sc_after', order: 1 },
+    { id: 'sc_refund_fee', name: '退货运费', parent: 'sc_after', order: 2 },
+    { id: 'sc_warranty', name: '保修换新', parent: 'sc_after', order: 3 },
+    { id: 'sc_setup', name: '安装与配网', parent: null, order: 2 },
+    { id: 'sc_wifi', name: 'Wi-Fi 配对', parent: 'sc_setup', order: 1 },
+    { id: 'sc_mount', name: '支架安装', parent: 'sc_setup', order: 2 },
+    { id: 'sc_solar', name: '太阳能供电', parent: 'sc_setup', order: 3 },
+    { id: 'sc_device', name: '设备使用', parent: null, order: 3 },
+    { id: 'sc_picture', name: '画质与录像', parent: 'sc_device', order: 1 },
+    { id: 'sc_night', name: '夜视', parent: 'sc_device', order: 2 },
+    { id: 'sc_firmware', name: '固件升级', parent: 'sc_device', order: 3 },
+    { id: 'sc_member', name: '会员与账户', parent: null, order: 4 },
+    { id: 'sc_billing', name: '会员计费', parent: 'sc_member', order: 1 },
+    { id: 'sc_account', name: '账号绑定', parent: 'sc_member', order: 2 },
+    { id: 'sc_order', name: '订单与物流', parent: null, order: 5 },
+    { id: 'sc_ship', name: '发货与签收', parent: 'sc_order', order: 1 },
+    { id: 'sc_addr', name: '地址修改', parent: 'sc_order', order: 2 },
+  ];
+  for (const s of sceneDict) {
+    await query('INSERT INTO scenes (id, name, parent_id, sort_order) VALUES ($1,$2,$3,$4)', [s.id, s.name, s.parent, s.order]);
+  }
+  const models = [
+    { id: 'mdl_a1', name: 'A1 太阳能摄像机', order: 1 },
+    { id: 'mdl_a1pro', name: 'A1 Pro', order: 2 },
+    { id: 'mdl_c1', name: 'C1 室内云台机', order: 3 },
+    { id: 'mdl_c1mini', name: 'C1 mini', order: 4 },
+    { id: 'mdl_s1', name: 'S1 户外枪机', order: 5 },
+  ];
+  for (const m of models) {
+    await query('INSERT INTO device_models (id, name, sort_order) VALUES ($1,$2,$3)', [m.id, m.name, m.order]);
+  }
+  /** 条目场景由「一级名|二级名」映射到 scenes id（种子条目沿用名称字段，字典化后落 scene_id） */
+  const SCENE_ID: Record<string, string> = Object.fromEntries(sceneDict.map((s) => [`${sceneDict.find((p) => p.id === s.parent)?.name ?? ''}|${s.name}`, s.id]));
 
   // ===== 条目（对齐 v3 原型 ENTRIES 语义） =====
   interface SeedEntry {
@@ -164,10 +203,10 @@ async function main(): Promise<void> {
       })),
     };
     await query(
-      `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
+      `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2, scene_id,
          labels, body, status, en_status, sync_status, ai_summary, summary_source, summary_at,
          current_version, owner_id, submitter_id, submitted_at, review_source, review_due_at, reject_reason, updated_at)
-       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
+       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$23,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
                CASE WHEN $16 = 'none' THEN NULL ELSE now() END,
                $17,$18,$18,
                CASE WHEN $12 = 'pending_review' THEN now() ELSE NULL END,
@@ -175,6 +214,7 @@ async function main(): Promise<void> {
                now() + ($19 || ' days')::interval, $20, now() - ($21 || ' hours')::interval)`,
       [
         e.id, e.code, e.title, e.lib, e.chapter, e.type, e.visibility, e.sceneL1, e.sceneL2,
+        SCENE_ID[`${e.sceneL1}|${e.sceneL2}`] ?? null,
         JSON.stringify(e.labels), JSON.stringify(body), e.status, e.enStatus, e.syncStatus,
         e.aiSummary ?? '', e.aiSummary ? 'ai' : 'none',
         e.version, e.owner, String(e.dueDays),

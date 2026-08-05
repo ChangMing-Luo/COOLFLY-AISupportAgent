@@ -27,6 +27,7 @@ async function main(): Promise<void> {
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS ai_summary TEXT NOT NULL DEFAULT '';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_source TEXT NOT NULL DEFAULT 'none';
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_at TIMESTAMPTZ;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS scene_id TEXT REFERENCES scenes(id) ON DELETE RESTRICT;
     ALTER TABLE mining_candidates ADD COLUMN IF NOT EXISTS dedupe_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE mining_candidates ADD COLUMN IF NOT EXISTS dedupe_degraded BOOLEAN NOT NULL DEFAULT false;
   `);

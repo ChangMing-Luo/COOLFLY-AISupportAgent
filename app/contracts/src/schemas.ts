@@ -27,6 +27,7 @@ export const TUNABLES = {
   lowSolveRatePct: 60,
   driftScanCron: '0 * * * *',
   maxLabels: 20,
+  maxModels: 20,
   importMaxRows: 500,
 } as const;
 
@@ -55,10 +56,12 @@ export const entryFieldsSchema = z.object({
   chapterId: z.string().min(1, '所属章节必填'),
   entryType: z.string().min(1),
   visibility: visibilitySchema,
-  sceneL1: z.string().min(1, '一级问题场景必填'),
-  sceneL2: z.string().min(1, '二级问题场景必填'),
+  // 08-05-2026 元数据字典化：条目引用场景字典二级 id，一级/二级名称由后端派生（sceneL1/L2 保留为冗余展示字段）
+  sceneId: z.string().min(1, '问题场景必选'),
+  sceneL1: z.string().default(''),
+  sceneL2: z.string().default(''),
   labels: z.array(z.string()).max(TUNABLES.maxLabels, `标签最多 ${TUNABLES.maxLabels} 个`),
-  deviceModels: z.array(z.string()).default([]),
+  deviceModels: z.array(z.string()).max(TUNABLES.maxModels, `适用型号最多 ${TUNABLES.maxModels} 个`).default([]),
   reviewCycleDays: z.number().int().positive().default(TUNABLES.reviewCycleDays),
   ownerId: z.string().nullable().default(null),
 });
@@ -88,6 +91,7 @@ export const entryRowSchema = z.object({
   updatedAt: z.string(),
   libraryId: z.string(),
   chapterId: z.string(),
+  sceneId: z.string().nullable(),
   sceneL1: z.string(),
   sceneL2: z.string(),
   labels: z.array(z.string()),

@@ -36,6 +36,9 @@ interface EntryDbRow {
   visibility: string;
   scene_l1: string;
   scene_l2: string;
+  scene_id: string | null;
+  scene_l2_name?: string;
+  scene_l1_name?: string;
   labels: string[];
   device_models: string[];
   body: EntryBody;
@@ -65,11 +68,14 @@ interface EntryDbRow {
 
 const ENTRY_SELECT = `
   SELECT e.*, c.name AS chapter_name, pc.name AS parent_name, l.name AS library_name,
+         sc.name AS scene_l2_name, scp.name AS scene_l1_name,
          m.solve_rate, m.bot_refs
   FROM entries e
   JOIN chapters c ON c.id = e.chapter_id
   LEFT JOIN chapters pc ON pc.id = c.parent_id
   JOIN libraries l ON l.id = e.library_id
+  LEFT JOIN scenes sc ON sc.id = e.scene_id
+  LEFT JOIN scenes scp ON scp.id = sc.parent_id
   LEFT JOIN entry_effect_metrics m ON m.entry_id = e.id
 `;
 
@@ -102,8 +108,9 @@ export function toEntryRow(r: EntryDbRow): EntryRow {
     updatedAt: r.updated_at.toISOString(),
     libraryId: r.library_id,
     chapterId: r.chapter_id,
-    sceneL1: r.scene_l1,
-    sceneL2: r.scene_l2,
+    sceneId: r.scene_id,
+    sceneL1: r.scene_l1_name ?? r.scene_l1,
+    sceneL2: r.scene_l2_name ?? r.scene_l2,
     labels: r.labels ?? [],
     lockVersion: r.lock_version,
   };
@@ -171,6 +178,19 @@ async function nextCode(client: PoolClient): Promise<string> {
   return `KB-${String(next).padStart(4, '0')}`;
 }
 
+/** 场景字典化：校验条目引用的二级场景，返回 {id, l1, l2}——场景缺失/选了一级都明确报错 */
+export async function resolveScene(sceneId: string): Promise<{ id: string; l1: string; l2: string }> {
+  const { rows } = await query<{ id: string; name: string; parent_id: string | null; parent_name: string | null }>(
+    `SELECT s.id, s.name, s.parent_id, p.name AS parent_name
+     FROM scenes s LEFT JOIN scenes p ON p.id = s.parent_id WHERE s.id = $1`,
+    [sceneId],
+  );
+  const s = rows[0];
+  if (!s) throw new DomainError('问题场景不存在——请先在「元数据管理」维护场景字典', 404);
+  if (!s.parent_id) throw new DomainError('问题场景必须是二级场景（挂在某个一级场景下）', 409);
+  return { id: s.id, l1: s.parent_name ?? '', l2: s.name };
+}
+
 /** 新建/保存草稿：中文保存联动——英文置 stale + 同步阻断（AC-P-04） */
 export async function saveEntry(
   user: SessionUser,
@@ -178,6 +198,7 @@ export async function saveEntry(
   payload: unknown,
 ): Promise<EntryRow> {
   const input = entryUpsertSchema.parse(payload);
+  const scene = await resolveScene(input.sceneId);
   return withTransaction(async (client) => {
     let id = entryId;
     let before: EntryDbRow | null = null;
@@ -206,11 +227,11 @@ export async function saveEntry(
       }
       await client.query(
         `UPDATE entries SET title=$2, library_id=$3, chapter_id=$4, entry_type=$5, visibility=$6,
-           scene_l1=$7, scene_l2=$8, labels=$9::jsonb, device_models=$10::jsonb, body=$11::jsonb,
-           status=$12, en_status = CASE WHEN en_status IN ('none','translating') THEN en_status ELSE 'stale' END,
+           scene_l1=$7, scene_l2=$8, scene_id=$9, labels=$10::jsonb, device_models=$11::jsonb, body=$12::jsonb,
+           status=$13, en_status = CASE WHEN en_status IN ('none','translating') THEN en_status ELSE 'stale' END,
            sync_status = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN 'blocked' ELSE sync_status END,
-           blocked_reason = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN $13 ELSE blocked_reason END,
-           review_cycle_days=$14, owner_id=$15,
+           blocked_reason = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN $14 ELSE blocked_reason END,
+           review_cycle_days=$15, owner_id=$16,
            lock_version = lock_version + 1, updated_at = now()
          WHERE id=$1`,
         [
@@ -220,8 +241,9 @@ export async function saveEntry(
           input.chapterId,
           input.entryType,
           input.visibility,
-          input.sceneL1,
-          input.sceneL2,
+          scene.l1,
+          scene.l2,
+          scene.id,
           JSON.stringify(input.labels),
           JSON.stringify(input.deviceModels),
           JSON.stringify(input.body),
@@ -235,9 +257,9 @@ export async function saveEntry(
       id = newId('ent');
       const code = await nextCode(client);
       await client.query(
-        `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
+        `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2, scene_id,
            labels, device_models, body, status, review_source, owner_id, review_cycle_days)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,'draft','manual',COALESCE($13,$15),$14)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13::jsonb,'draft','manual',COALESCE($14,$16),$15)`,
         [
           id,
           code,
@@ -246,8 +268,9 @@ export async function saveEntry(
           input.chapterId,
           input.entryType,
           input.visibility,
-          input.sceneL1,
-          input.sceneL2,
+          scene.l1,
+          scene.l2,
+          scene.id,
           JSON.stringify(input.labels),
           JSON.stringify(input.deviceModels),
           JSON.stringify(input.body),

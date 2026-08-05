@@ -53,6 +53,25 @@ interface PairRow {
   editNote: string | null;
 }
 
+/** 元数据字典（08-05-2026 字典化 · GET /api/meta/scenes 树结构） */
+interface SceneDictNode {
+  id: string;
+  name: string;
+  refs: number;
+  children: Array<{ id: string; name: string; refs: number }>;
+}
+
+interface ModelDictRow {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
+interface TagAggRow {
+  name: string;
+  refs: number;
+}
+
 interface VersionRow {
   id: string;
   versionNo: number;
@@ -120,19 +139,15 @@ interface TreeRoot {
   children: Array<{ id: string; name: string; sectionRef: string | null; count: number }>;
 }
 
-/* ============================ 静态口径（页面 MD §5.3 字段侧栏 / 原型 SCENE1·SCENE2） ============================ */
+/* ============================ 静态口径（页面 MD §5.3 字段侧栏） ============================ */
 
-const SCENE_L1 = ['售后与退款', '安装与配网', '设备使用', '会员与账户', '订单与物流'] as const;
-
-const SCENE_L2: Record<string, string[]> = {
-  售后与退款: ['退款时限', '退货运费', '保修换新'],
-  安装与配网: ['Wi-Fi 配对', '支架安装', '太阳能供电'],
-  设备使用: ['画质与录像', '夜视', '固件升级'],
-  会员与账户: ['会员计费', '账号绑定'],
-  订单与物流: ['发货与签收', '地址修改'],
-};
+/* 08-05-2026 元数据字典化：问题场景选项来自 /api/meta/scenes 字典（前端禁止硬编码场景常量）
+   标签/型号为可视化 chips 选择器（数据结构 labels/device_models 不变） */
 
 const ENTRY_TYPES = ['FAQ 政策型', 'FAQ 型', '操作流程型', '内部口径'];
+
+/** 适用型号按条目类型条件显隐：设备相关类型显示，政策/内部口径不显示（REQ-F09-13 rev9） */
+const MODEL_TYPES = new Set(['操作流程型', 'FAQ 型']);
 
 const REVIEW_CYCLE_OPTIONS = [90, 180, 365];
 
@@ -158,10 +173,10 @@ interface FormState {
   chapterId: string;
   entryType: string;
   visibility: Visibility;
-  sceneL1: string;
-  sceneL2: string;
-  labelsText: string;
-  deviceModelsText: string;
+  /** 08-05-2026 元数据字典化：条目引用场景字典二级 id（一级由父级派生，保存时后端落名称） */
+  sceneId: string;
+  labels: string[];
+  deviceModels: string[];
   reviewCycleDays: number;
   ownerId: string | null;
   paragraphs: Paragraph[];
@@ -174,10 +189,9 @@ function emptyForm(): FormState {
     chapterId: '',
     entryType: ENTRY_TYPES[1]!,
     visibility: 'public',
-    sceneL1: SCENE_L1[0],
-    sceneL2: SCENE_L2[SCENE_L1[0]]![0]!,
-    labelsText: '',
-    deviceModelsText: '全型号',
+    sceneId: '',
+    labels: [],
+    deviceModels: [],
     reviewCycleDays: TUNABLES.reviewCycleDays,
     ownerId: null,
     paragraphs: [{ id: 'p_0', text: '', html: '', internal: false, heading: false }],
@@ -191,21 +205,13 @@ function formOf(entry: EntryDetailRow): FormState {
     chapterId: entry.chapterId,
     entryType: entry.entryType,
     visibility: entry.visibility,
-    sceneL1: entry.sceneL1,
-    sceneL2: entry.sceneL2,
-    labelsText: entry.labels.join('，'),
-    deviceModelsText: entry.deviceModels.join('，'),
+    sceneId: entry.sceneId ?? '',
+    labels: [...entry.labels],
+    deviceModels: [...entry.deviceModels],
     reviewCycleDays: entry.reviewCycleDays ?? TUNABLES.reviewCycleDays,
     ownerId: entry.ownerId,
     paragraphs: entry.body.paragraphs.map((p) => ({ ...p })),
   };
-}
-
-function splitList(text: string): string[] {
-  return text
-    .split(/[,，]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
 }
 
 function pct(v: number | null): string {
@@ -942,6 +948,11 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     [form.libraryId],
   );
 
+  // 元数据字典（08-05-2026 字典化）：场景树 / 型号 / 标签池
+  const sceneDict = useAsync<SceneDictNode[]>(() => api.get<SceneDictNode[]>('/api/meta/scenes'), []);
+  const modelDict = useAsync<ModelDictRow[]>(() => api.get<ModelDictRow[]>('/api/meta/models'), []);
+  const tagPool = useAsync<TagAggRow[]>(() => api.get<TagAggRow[]>('/api/meta/tags'), []);
+
   const entry = detail.data?.entry ?? null;
   const hydrateKey = entry ? `${entry.id}:${entry.lockVersion}` : `new:${entryId ?? '-'}`;
 
@@ -974,6 +985,11 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     return out;
   }, [tree.data]);
 
+  // 场景字典联动：条目引用二级 id，一级由父级派生（REQ-F09-13 rev9）
+  const sceneRoots = sceneDict.data ?? [];
+  const currentL1 = sceneRoots.find((r) => r.children.some((c) => c.id === form.sceneId))?.id ?? '';
+  const currentL2s = sceneRoots.find((r) => r.id === currentL1)?.children ?? [];
+
   const reloadAll = (): void => {
     detail.reload();
     gate.reload();
@@ -987,10 +1003,9 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     chapterId: form.chapterId,
     entryType: form.entryType,
     visibility: form.visibility,
-    sceneL1: form.sceneL1,
-    sceneL2: form.sceneL2,
-    labels: splitList(form.labelsText),
-    deviceModels: splitList(form.deviceModelsText),
+    sceneId: form.sceneId,
+    labels: form.labels,
+    deviceModels: form.deviceModels,
     reviewCycleDays: form.reviewCycleDays,
     ownerId: form.ownerId,
     body: { paragraphs: form.paragraphs },
@@ -1345,18 +1360,18 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
                 <select
                   id="f-s1"
                   className="select"
-                  value={form.sceneL1}
-                  disabled={readOnly}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, sceneL1: e.target.value, sceneL2: SCENE_L2[e.target.value]?.[0] ?? '' }))
-                  }
+                  value={currentL1}
+                  disabled={readOnly || sceneRoots.length === 0}
+                  onChange={(e) => {
+                    const l1 = e.target.value;
+                    const firstL2 = sceneRoots.find((r) => r.id === l1)?.children[0];
+                    setForm((f) => ({ ...f, sceneId: firstL2?.id ?? '' }));
+                  }}
                 >
-                  {SCENE_L1.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  <option value="">{sceneRoots.length === 0 ? '场景字典为空——请先在「元数据管理」维护' : '请选择一级场景'}</option>
+                  {sceneRoots.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
-                  {!SCENE_L1.includes(form.sceneL1 as (typeof SCENE_L1)[number]) && (
-                    <option value={form.sceneL1}>{form.sceneL1}</option>
-                  )}
                 </select>
               </div>
               <div className="field">
@@ -1364,41 +1379,47 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
                 <select
                   id="f-s2"
                   className="select"
-                  value={form.sceneL2}
-                  disabled={readOnly}
-                  onChange={(e) => setForm((f) => ({ ...f, sceneL2: e.target.value }))}
+                  value={form.sceneId}
+                  disabled={readOnly || !currentL1}
+                  onChange={(e) => setForm((f) => ({ ...f, sceneId: e.target.value }))}
                 >
-                  {(SCENE_L2[form.sceneL1] ?? []).map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  <option value="">请选择二级场景</option>
+                  {currentL2s.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
-                  {!(SCENE_L2[form.sceneL1] ?? []).includes(form.sceneL2) && form.sceneL2 !== '' && (
-                    <option value={form.sceneL2}>{form.sceneL2}</option>
-                  )}
                 </select>
               </div>
               <div className="field">
-                <label className="field__label" htmlFor="f-labels">标签（同步 Zendesk labels，逗号分隔）</label>
-                <input
+                <label className="field__label" htmlFor="f-labels">标签（同步 Zendesk labels）</label>
+                <ChipsPicker
                   id="f-labels"
-                  className="input"
-                  value={form.labelsText}
-                  readOnly={readOnly}
-                  placeholder="退款，退货，运费"
-                  onChange={(e) => setForm((f) => ({ ...f, labelsText: e.target.value }))}
+                  items={(tagPool.data ?? []).map((t) => ({ value: t.name, label: t.name }))}
+                  selected={form.labels}
+                  max={TUNABLES.maxLabels}
+                  allowCreate
+                  disabled={readOnly}
+                  placeholder="搜索既有标签或输入新建…"
+                  emptyText="还没有标签——输入后回车即可创建（同步 Zendesk labels）"
+                  onChange={(next) => setForm((f) => ({ ...f, labels: next }))}
                 />
                 <div className="meta">最多 {TUNABLES.maxLabels} 个 · 影响帮助中心搜索与 bot 匹配</div>
               </div>
-              <div className="field">
-                <label className="field__label" htmlFor="f-models">适用型号（逗号分隔）</label>
-                <input
-                  id="f-models"
-                  className="input"
-                  value={form.deviceModelsText}
-                  readOnly={readOnly}
-                  placeholder="全型号"
-                  onChange={(e) => setForm((f) => ({ ...f, deviceModelsText: e.target.value }))}
-                />
-              </div>
+              {MODEL_TYPES.has(form.entryType) && (
+                <div className="field">
+                  <label className="field__label" htmlFor="f-models">适用型号（空 = 全型号）</label>
+                  <ChipsPicker
+                    id="f-models"
+                    items={(modelDict.data ?? []).map((m) => ({ value: m.id, label: m.name }))}
+                    selected={form.deviceModels}
+                    max={TUNABLES.maxModels}
+                    allowCreate={false}
+                    disabled={readOnly}
+                    placeholder="搜索型号…"
+                    emptyText="空 = 全型号适用；选项来自型号字典"
+                    onChange={(next) => setForm((f) => ({ ...f, deviceModels: next }))}
+                  />
+                </div>
+              )}
               <div className="field" style={{ marginBottom: 0 }}>
                 <label className="field__label" htmlFor="f-cycle">复核周期（天）</label>
                 <select
@@ -1469,6 +1490,110 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
           onCancel={() => setOffliningg(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * 可视化 chips 多选器（08-05-2026 元数据字典化 · REQ-F09-13 rev9）：
+ * 已选显示为可删除标签卡（视觉层级分离，杜绝逗号分隔漏录/错录）；
+ * 输入框搜索既有选项建议，allowCreate 时回车新建。
+ * 标签 selected=名称数组；型号 selected=id 数组（label 展示名称）。
+ */
+function ChipsPicker({
+  id,
+  items,
+  selected,
+  max,
+  allowCreate,
+  disabled,
+  placeholder,
+  emptyText,
+  onChange,
+}: {
+  id: string;
+  items: Array<{ value: string; label: string }>;
+  selected: string[];
+  max: number;
+  allowCreate: boolean;
+  disabled: boolean;
+  placeholder: string;
+  emptyText: string;
+  onChange: (next: string[]) => void;
+}) {
+  const { toast } = useApp();
+  const [kw, setKw] = useState('');
+
+  const labelOf = (v: string): string => items.find((i) => i.value === v)?.label ?? v;
+  const suggestions = items
+    .filter((i) => !selected.includes(i.value) && i.label.includes(kw.trim()))
+    .slice(0, 8);
+
+  const add = (raw: string): void => {
+    const v = raw.trim();
+    if (!v) return;
+    if (selected.includes(v) || items.some((i) => i.value === v)) {
+      if (!selected.includes(v)) onChange([...selected, v]);
+      setKw('');
+      return;
+    }
+    if (!allowCreate) return;
+    if (selected.length >= max) {
+      toast(`最多 ${max} 个`);
+      return;
+    }
+    onChange([...selected, v]);
+    setKw('');
+  };
+
+  return (
+    <div className={`chips${disabled ? ' chips--disabled' : ''}`}>
+      {selected.length > 0 && (
+        <div className="chips__list">
+          {selected.map((v) => (
+            <span key={v} className="chip">
+              {labelOf(v)}
+              {!disabled && (
+                <button
+                  type="button"
+                  className="chip__x"
+                  aria-label={`移除 ${labelOf(v)}`}
+                  onClick={() => onChange(selected.filter((s) => s !== v))}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {!disabled && (
+        <div className="chips__input-row">
+          <input
+            id={id}
+            className="input chips__input"
+            value={kw}
+            placeholder={selected.length === 0 ? emptyText : placeholder}
+            onChange={(e) => setKw(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add(kw);
+              }
+            }}
+          />
+          {suggestions.length > 0 && (
+            <div className="chips__suggest">
+              {suggestions.map((s) => (
+                <button key={s.value} type="button" className="chip chip--opt" onClick={() => add(s.label)}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {disabled && selected.length === 0 && <div className="meta">（只读）</div>}
     </div>
   );
 }

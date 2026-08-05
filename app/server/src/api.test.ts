@@ -88,6 +88,7 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
         chapterId: 'ch_wifi',
         entryType: '操作流程型',
         visibility: 'public',
+        sceneId: 'sc_wifi',
         sceneL1: '安装与配网',
         sceneL2: 'Wi-Fi 配对',
         labels: ['配对', '排查'],
@@ -215,7 +216,7 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
       headers: as('reviewer'),
       payload: {
         title: '自审放行验证条目', libraryId: 'lib_policy', chapterId: 'ch_refund', entryType: 'FAQ 型',
-        visibility: 'public', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['测试'],
+        visibility: 'public', sceneId: 'sc_refund_time', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['测试'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: { paragraphs: [{ id: 'p0', text: '内容', html: '', internal: false, heading: false }] },
       },
@@ -309,7 +310,7 @@ describe('FLOW-08 条目下线：归档不裸删、可重新上架（08-05-2026 
       headers: as('manager'),
       payload: {
         title: '保修期与凭证要求', libraryId: 'lib_policy', chapterId: 'ch_warranty', entryType: 'FAQ 政策型',
-        visibility: 'public', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修'],
+        visibility: 'public', sceneId: 'sc_warranty', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: e[0]!.body, expectedVersion: e[0]!.lock_version,
       },
@@ -484,7 +485,7 @@ describe('RULE-06 同步失败 / 阻断 / drift / 并发冲突', () => {
     const e = rows[0]!;
     const payload = {
       title: '订单发出后能否改地址', libraryId: 'lib_policy', chapterId: 'ch_ship', entryType: 'FAQ 型',
-      visibility: 'public', sceneL1: '订单与物流', sceneL2: '地址修改', labels: ['改地址'],
+      visibility: 'public', sceneId: 'sc_addr', sceneL1: '订单与物流', sceneL2: '地址修改', labels: ['改地址'],
       deviceModels: [], reviewCycleDays: 180, ownerId: null,
       body: { paragraphs: [{ id: 'p0', text: 'A 用户的改动', html: '', internal: false, heading: false }] },
       expectedVersion: e.lock_version,
@@ -646,7 +647,7 @@ describe('FLOW-02 驳回理由必填与往返留痕', () => {
       headers: as('manager'),
       payload: {
         title: '驳回往返验证', libraryId: 'lib_policy', chapterId: 'ch_billing', entryType: 'FAQ 型',
-        visibility: 'public', sceneL1: '会员与账户', sceneL2: '会员计费', labels: ['会员'],
+        visibility: 'public', sceneId: 'sc_billing', sceneL1: '会员与账户', sceneL2: '会员计费', labels: ['会员'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: { paragraphs: [{ id: 'p0', text: '初版内容', html: '', internal: false, heading: false }] },
       },
@@ -741,7 +742,7 @@ describe('FLOW-06 翻译工作流状态机', () => {
       headers: as('manager'),
       payload: {
         title: '保修期与凭证要求', libraryId: 'lib_policy', chapterId: 'ch_warranty', entryType: 'FAQ 政策型',
-        visibility: 'public', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修', '凭证'],
+        visibility: 'public', sceneId: 'sc_warranty', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修', '凭证'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: { paragraphs: [{ id: 'p0', text: '保修范围（已更新口径）', html: '', internal: false, heading: true }] },
         expectedVersion: e.lock_version,
@@ -765,7 +766,7 @@ describe('FLOW-06 翻译工作流状态机', () => {
       headers: as('manager'),
       payload: {
         title: '混合可见性翻译验证', libraryId: 'lib_policy', chapterId: 'ch_refund', entryType: 'FAQ 政策型',
-        visibility: 'mixed', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['退款'],
+        visibility: 'mixed', sceneId: 'sc_refund_time', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['退款'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: {
           paragraphs: [

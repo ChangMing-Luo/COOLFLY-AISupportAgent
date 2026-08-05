@@ -24,6 +24,7 @@ export const zhCN = {
     feedback: '反馈回流',
     logs: '操作日志',
     rbac: '用户与权限',
+    meta: '元数据管理',
   },
   crumbs: {
     work: '工作台',
@@ -36,6 +37,7 @@ export const zhCN = {
     feedback: '数据 / 反馈回流',
     logs: '治理 / 操作日志',
     rbac: '治理 / 用户与权限',
+    meta: '治理 / 元数据管理',
   },
   ironLaw: {
     publishBlocked: '发布权限仅知识审核员——统一过审铁律：任何角色无绕过审核的发布路径。',

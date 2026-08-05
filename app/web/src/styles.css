@@ -149,6 +149,25 @@ tr.row--warn td { background: var(--warn-bg); }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .filters .input, .filters .select { width: auto; min-width: 150px; }
 
+/* 可视化 chips 多选器（08-05-2026 元数据字典化）：已选标签卡 + 搜索建议，视觉层级分离 */
+.chips { display: flex; flex-direction: column; gap: 6px; }
+.chips--disabled { opacity: .75; }
+.chips__list { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px; font-size: 12px;
+  border: 1px solid var(--accent-line); background: var(--accent-bg, var(--surface)); color: var(--fg);
+}
+.chip__x {
+  border: 0; background: none; cursor: pointer; font-size: 13px; line-height: 1;
+  color: var(--muted); padding: 0 0 0 2px;
+}
+.chip__x:hover { color: var(--bad-fg); }
+.chip--opt { cursor: pointer; border-style: dashed; }
+.chip--opt:hover { background: var(--accent-bg, var(--surface)); border-style: solid; }
+.chips__input-row { display: flex; flex-direction: column; gap: 6px; }
+.chips__suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+
 /* 模态 */
 .modal__mask { position: fixed; inset: 0; background: rgba(19,37,43,.42); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .modal { background: var(--surface); border-radius: var(--radius-lg); padding: 20px; width: 520px; max-width: calc(100vw - 48px); max-height: 84vh; overflow-y: auto; }

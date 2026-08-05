@@ -15,6 +15,7 @@ import { registerSyncRoutes } from './routes/sync.js';
 import { registerMineRoutes } from './routes/mine.js';
 import { registerDataRoutes } from './routes/data.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerMetaRoutes } from './routes/meta.js';
 import { getZendesk } from './integrations/zendesk.js';
 import { getLlm } from './integrations/llm.js';
 
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerMineRoutes(app);
   await registerDataRoutes(app);
   await registerAdminRoutes(app);
+  await registerMetaRoutes(app);
 
   // 前端静态资源（同仓构建，随引擎部署）
   const webDist = join(here, '..', '..', 'web', 'dist');

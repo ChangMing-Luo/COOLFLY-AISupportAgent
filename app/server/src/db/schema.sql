@@ -53,12 +53,26 @@ CREATE INDEX IF NOT EXISTS idx_audit_object ON audit_logs(object_id);
 
 -- ============ 知识域 ============
 CREATE TABLE IF NOT EXISTS libraries (
-  id           TEXT PRIMARY KEY,
-  name         TEXT NOT NULL,
-  note         TEXT NOT NULL DEFAULT '',
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  note          TEXT NOT NULL DEFAULT '',
   internal_only BOOLEAN NOT NULL DEFAULT FALSE,
-  zendesk_ref  TEXT,
-  sort_order   INT NOT NULL DEFAULT 0
+  sort_order    INT NOT NULL DEFAULT 0
+);
+
+-- 元数据字典（08-05-2026 元数据字典化）：问题场景两级树（深度恒 2，parent_id=NULL=一级）
+CREATE TABLE IF NOT EXISTS scenes (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  parent_id  TEXT REFERENCES scenes(id) ON DELETE RESTRICT,
+  sort_order INT NOT NULL DEFAULT 0
+);
+
+-- 型号字典：只服务本台条目元数据（Zendesk 无对应对象，不同步）
+CREATE TABLE IF NOT EXISTS device_models (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  sort_order INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS chapters (
@@ -84,6 +98,7 @@ CREATE TABLE IF NOT EXISTS entries (
   visibility     TEXT NOT NULL DEFAULT 'public',
   scene_l1       TEXT NOT NULL DEFAULT '',
   scene_l2       TEXT NOT NULL DEFAULT '',
+  scene_id       TEXT REFERENCES scenes(id) ON DELETE RESTRICT,
   labels         JSONB NOT NULL DEFAULT '[]'::jsonb,
   device_models  JSONB NOT NULL DEFAULT '[]'::jsonb,
   body           JSONB NOT NULL DEFAULT '{"paragraphs":[]}'::jsonb,
