@@ -324,7 +324,7 @@ function GateBar({ gate, canPublish }: { gate: GateResult | null; canPublish: bo
     );
   }
   if (!gate) {
-    return <div className="note">门禁检查加载中…</div>;
+    return <div className="note">新建条目尚未保存，保存并提交审核后才会跑发布门禁（三查：格式与字段完整性 / 敏感信息与内部口径 / 英文版本状态）。</div>;
   }
   const blockers = gate.checks.filter((c) => c.hard && !c.passed);
   if (blockers.length > 0) {
@@ -1184,7 +1184,7 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
           ...payload(),
           expectedVersion: entry?.lockVersion,
         });
-        toast('已保存中文草稿：英文置「待重新校验」、同步阻断、向量置「待重建」');
+        toast('已保存中文草稿：英文置「待重新校验」、同步阻断');
         reloadAll();
       }
     } catch (err) {

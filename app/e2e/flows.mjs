@@ -397,9 +397,12 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   // 三级结构树：目录行 → 章节行 → 条目行（树内仅已发布）
   const onlyPublishedBadge = text.includes('仅已发布');
   const toolbar = ['新建目录', '新建章节', '调整层级'].every((s) => text.includes(s));
+  const leafCount = await page.locator('.tree__row--leaf').count();
   await page.locator('.tree__row--child').first().locator('.tree__caret').click();
   await page.waitForTimeout(400);
-  const leafCount = await page.locator('.tree__row--leaf').count();
+  const leafAfterCollapse = await page.locator('.tree__row--leaf').count();
+  await page.locator('.tree__row--child').first().locator('.tree__caret').click();
+  await page.waitForTimeout(400);
   // 调整层级：把「退款与退货」移到「订单与物流」目录下再移回
   const moveResp = await page.evaluate(async () => {
     const to = await (await fetch('/api/kb/tree?libraryId=lib_policy', { credentials: 'include' })).json();
@@ -431,9 +434,9 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   record(
     'FLOW-07',
     threeLibs && internalNote && sectionRef && mappingNote && overdue && selectCount >= 3 &&
-      onlyPublishedBadge && toolbar && leafCount > 0 && moveResp.ok === 200 && moveResp.moved &&
+      onlyPublishedBadge && toolbar && leafCount > 0 && leafAfterCollapse < leafCount && moveResp.ok === 200 && moveResp.moved &&
       delResp.status === 409 && delResp.msg.includes('移空'),
-    `三库可切换=${threeLibs}、仅内部库说明=${internalNote}、Section 映射标识=${sectionRef}、映射说明条=${mappingNote}、超期标注=${overdue}、筛选器=${selectCount} 个、「仅已发布」徽章=${onlyPublishedBadge}、结构工具条三按钮=${toolbar}、三级树条目行=${leafCount} 个、调整层级=${moveResp.ok}/移动生效=${moveResp.moved}、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
+    `三库可切换=${threeLibs}、仅内部库说明=${internalNote}、Section 映射标识=${sectionRef}、映射说明条=${mappingNote}、超期标注=${overdue}、筛选器=${selectCount} 个、「仅已发布」徽章=${onlyPublishedBadge}、结构工具条三按钮=${toolbar}、三级树条目行=${leafCount} 个（折叠后 ${leafAfterCollapse}）、调整层级=${moveResp.ok}/移动生效=${moveResp.moved}、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
   );
   await ctx.close();
 }

@@ -55,6 +55,27 @@ async function captureApp() {
       await btn.click();
       await page.waitForTimeout(900);
     }
+    // 条目工作台：默认是「新建条目」空白态，改从总览点一条既有条目进入，
+    // 否则 AI 摘要面板 / 版本 / 效果 / 门禁三查都没有可对照的内容
+    if (v === 'entry' && !disabled) {
+      await page.locator('[data-view="kb"]').click();
+      await page.waitForTimeout(900);
+      await page.locator('table tbody tr').first().click();
+      await page.waitForTimeout(1200);
+    }
+    // 审核中心：选中队列首条并展开 git diff，使两层变更对照与门禁三查同时可见
+    if (v === 'review' && !disabled) {
+      const firstRow = page.locator('table tbody tr').first();
+      if (await firstRow.count()) {
+        await firstRow.click();
+        await page.waitForTimeout(900);
+        const toggle = page.locator('[data-testid="toggle-diff"]');
+        if (await toggle.count()) {
+          await toggle.click();
+          await page.waitForTimeout(700);
+        }
+      }
+    }
     await page.screenshot({ path: `${OUT}/PAGE-F09-01-actual-${v}.png` });
     console.log(`actual ${v} ✓${disabled ? '（该角色无权限，截当前态）' : ''}`);
   }

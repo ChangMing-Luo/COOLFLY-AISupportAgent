@@ -246,7 +246,6 @@ export function MiningView() {
 
                 <p style={{ marginBottom: 0 }}>{c.aiSummary}</p>
                 <div className={c.canCreateNew ? 'note' : 'note note--warn'}>准入结论：{c.admissionNote}</div>
-                {!c.canCreateNew && <div className="note note--warn">{zhCN.mine.dedupeHigh}</div>}
 
                 <div className="btn-row" style={{ marginTop: 12 }}>
                   {pending ? (

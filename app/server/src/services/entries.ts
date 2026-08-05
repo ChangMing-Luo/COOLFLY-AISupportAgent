@@ -169,7 +169,7 @@ async function nextCode(client: PoolClient): Promise<string> {
   return `KB-${String(next).padStart(4, '0')}`;
 }
 
-/** 新建/保存草稿：中文保存联动——英文置 stale + 同步阻断，向量置 stale（AC-P-04） */
+/** 新建/保存草稿：中文保存联动——英文置 stale + 同步阻断（AC-P-04） */
 export async function saveEntry(
   user: SessionUser,
   entryId: string | null,
@@ -271,7 +271,7 @@ export async function saveEntry(
             field: d.field,
             before: d.before.slice(0, 400),
             after: d.after.slice(0, 400),
-            note: '中文变更联动：英文置待重新校验、同步阻断、向量置待重建',
+            note: '中文变更联动：英文置待重新校验、同步阻断',
           },
           client,
         );

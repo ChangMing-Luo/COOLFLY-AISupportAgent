@@ -14,7 +14,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const ROLE_NOTES: Record<Role, string> = {
   kb_manager: '知识生产得出：录入/编辑/结构维护/处置挖掘候选/提交审核；不能审核通过、不能发布、不能回滚',
-  kb_reviewer: '守住质量线：审核、发布、同步、回滚的唯一执行者；四眼原则——自己提交的条目须另一名审核员通过',
+  kb_reviewer: '守住质量线：审核、发布、同步、回滚的唯一执行者；可审核自己提交的条目，全部动作写审计日志可追溯',
   ai_ops: '只读 + 建议：编辑器只读，禁止审核/发布/回滚/同步；可查看数据并提交优化建议',
   sys_admin: '管人不管内容：仅用户与权限 + 审计日志；不参与知识内容审核发布',
 };

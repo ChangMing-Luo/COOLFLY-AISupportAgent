@@ -135,7 +135,7 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0212', code: 'KB-0212', title: '退货运费承担规则', lib: 'lib_script', chapter: 'ch_script_refund',
-      type: '内部口径', visibility: 'internal', status: 'draft', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '售后与退款', sceneL2: '退货运费',
+      type: '内部口径', visibility: 'internal', status: 'pending_review', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '售后与退款', sceneL2: '退货运费',
       labels: ['运费', '预付面单'], dueDays: 180, owner: 'usr_wangwen',
       paragraphs: [
         { text: '质量问题退货：运费由公司承担，客服直接发预付面单。' },
@@ -163,10 +163,13 @@ async function main(): Promise<void> {
     await query(
       `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
          labels, body, status, en_status, sync_status, ai_summary, summary_source, summary_at,
-         current_version, owner_id, submitter_id, review_due_at, reject_reason, updated_at)
+         current_version, owner_id, submitter_id, submitted_at, review_source, review_due_at, reject_reason, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
                CASE WHEN $16 = 'none' THEN NULL ELSE now() END,
-               $17,$18,$18, now() + ($19 || ' days')::interval, $20, now() - ($21 || ' hours')::interval)`,
+               $17,$18,$18,
+               CASE WHEN $12 = 'pending_review' THEN now() ELSE NULL END,
+               'manual',
+               now() + ($19 || ' days')::interval, $20, now() - ($21 || ' hours')::interval)`,
       [
         e.id, e.code, e.title, e.lib, e.chapter, e.type, e.visibility, e.sceneL1, e.sceneL2,
         JSON.stringify(e.labels), JSON.stringify(body), e.status, e.enStatus, e.syncStatus,
