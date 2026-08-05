@@ -268,8 +268,15 @@ class SandboxZendesk implements ZendeskClient {
       '摄像头夜视画面很糊，白天正常，换了角度也没用',
       '设备一直配不上 Wi-Fi，手机连的是 5G 频段，指示灯红色常亮',
     ];
+    // 真实会话是长尾分布：头部两三个主题占大头，其余零散。
+    // 均匀轮转会让每个主题都只出现 3–4 次、全部达不到频次阈值（≥10 次/周），
+    // 挖掘管道的正常路径就永远跑不到——沙箱要能覆盖happy path。
+    const weights = [12, 10, 8, 5, 3, 2, 1, 1];
     const items: string[] = [];
-    for (let i = 0; i < email + chat; i += 1) items.push(templates[(seed + i) % templates.length]!);
+    for (let t = 0; t < templates.length; t += 1) {
+      const n = Math.max(1, Math.round((weights[t]! * (email + chat)) / 42));
+      for (let k = 0; k < n; k += 1) items.push(templates[(t + seed) % templates.length]!);
+    }
     return { email, chat, items };
   }
 
@@ -531,6 +538,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async createCategory(name: string): Promise<{ id: string }> {
+    this.assertWritable('createCategory');
     // 不显式传 locale：跟随帮助中心默认源语言（en-us），中文名先原样落源语言、翻译后续在 Guide 补
     const data = await this.call<{ category: { id: number } }>('/help_center/categories.json', {
       method: 'POST',
@@ -557,10 +565,12 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async renameCategory(categoryRef: string, name: string): Promise<void> {
+    this.assertWritable('renameCategory');
     await this.renameTranslated('categories', categoryRef, name);
   }
 
   async deleteCategory(categoryRef: string): Promise<void> {
+    this.assertWritable('deleteCategory');
     await this.call(`/help_center/categories/${categoryRef}.json`, { method: 'DELETE' });
   }
 
@@ -572,6 +582,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async createSection(categoryRef: string, name: string): Promise<{ id: string }> {
+    this.assertWritable('createSection');
     const data = await this.call<{ section: { id: number } }>(
       `/help_center/categories/${categoryRef}/sections.json`,
       { method: 'POST', body: JSON.stringify({ section: { name } }) },
@@ -580,10 +591,12 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async renameSection(sectionRef: string, name: string): Promise<void> {
+    this.assertWritable('renameSection');
     await this.renameTranslated('sections', sectionRef, name);
   }
 
   async moveSection(sectionRef: string, categoryRef: string): Promise<void> {
+    this.assertWritable('moveSection');
     await this.call(`/help_center/sections/${sectionRef}.json`, {
       method: 'PUT',
       body: JSON.stringify({ section: { category_id: Number(categoryRef) } }),
@@ -591,6 +604,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async deleteSection(sectionRef: string): Promise<void> {
+    this.assertWritable('deleteSection');
     await this.call(`/help_center/sections/${sectionRef}.json`, { method: 'DELETE' });
   }
 
@@ -647,6 +661,12 @@ let client: ZendeskClient | null = null;
 /** OAuth 优先（scope 可收窄至 read write），其次 API token；均不全 → 沙箱 */
 export function getZendesk(): ZendeskClient {
   if (client) return client;
+  // 强制沙箱：开发机与 E2E 会自动加载 .env（含真实凭据），单靠 `env -u` 挡不住——
+  // loadEnvFile 会把变量填回来。这个开关是唯一可靠的「我就是要跑沙箱」表达。
+  if (process.env.ZENDESK_FORCE_SANDBOX === '1') {
+    client = new SandboxZendesk();
+    return client;
+  }
   const sub = process.env.ZENDESK_SUBDOMAIN;
   const clientId = process.env.ZENDESK_OAUTH_CLIENT_ID;
   const clientSecret = process.env.ZENDESK_OAUTH_CLIENT_SECRET;
