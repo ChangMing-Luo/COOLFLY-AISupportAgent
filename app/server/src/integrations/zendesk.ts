@@ -5,7 +5,9 @@ import { contentHash } from '../core/content.js';
 /**
  * Zendesk 集成层（技术方案 §4.4）——REST API 直连，零 SDK。
  *
- * 凭据（ZENDESK_SUBDOMAIN / ZENDESK_EMAIL / ZENDESK_API_TOKEN）为 deployment-secret。
+ * 凭据为 deployment-secret，两种认证任选其一（OAuth 优先，scope 可收窄）：
+ *  - OAuth client_credentials：ZENDESK_SUBDOMAIN + ZENDESK_OAUTH_CLIENT_ID + ZENDESK_OAUTH_CLIENT_SECRET
+ *  - API token（Basic）：ZENDESK_SUBDOMAIN + ZENDESK_EMAIL + ZENDESK_API_TOKEN
  * 未配置凭据时启用**本地沙箱**（TDD 契约 §6 明确：本轮以 Mock/沙箱联调为验收态）——
  * 沙箱实现与真实 API 相同的调用契约与失败语义（429/5xx/凭据失效），
  * 便于在无生产凭据时验证同步、drift 与限流退避链路。
@@ -184,22 +186,73 @@ class SandboxZendesk implements ZendeskClient {
   }
 }
 
+/** 英文译文固定落位的 Zendesk locale */
+const EN_LOCALE = 'en-us';
+
+type LiveAuth =
+  | { kind: 'api_token'; email: string; token: string }
+  | { kind: 'oauth'; clientId: string; clientSecret: string; scope: string };
+
 /** 真实 Zendesk（Guide/Support REST API，Node 原生 fetch，429 读 Retry-After 退避） */
 class LiveZendesk implements ZendeskClient {
   readonly mode = 'live' as const;
   private base: string;
-  private auth: string;
+  private origin: string;
+  /** OAuth 令牌缓存：2026-04-30 后创建的 client 默认 30 分钟过期，须自动续取 */
+  private bearer: { value: string; expiresAt: number } | null = null;
+  /** 条目正文所用 locale（须已在 Guide 启用），英文走 translations 分支 */
+  private locale = process.env.ZENDESK_LOCALE ?? 'zh-cn';
 
-  constructor(subdomain: string, email: string, token: string) {
-    this.base = `https://${subdomain}.zendesk.com/api/v2`;
-    this.auth = 'Basic ' + Buffer.from(`${email}/token:${token}`).toString('base64');
+  constructor(
+    subdomain: string,
+    private auth: LiveAuth,
+  ) {
+    this.origin = `https://${subdomain}.zendesk.com`;
+    this.base = `${this.origin}/api/v2`;
   }
 
-  private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /** client_credentials 取令牌（无 refresh_token，过期即重取） */
+  private async fetchBearer(): Promise<string> {
+    if (this.auth.kind !== 'oauth') throw new Error('非 OAuth 模式');
+    const res = await fetch(`${this.origin}/oauth/tokens`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'client_credentials',
+        client_id: this.auth.clientId,
+        client_secret: this.auth.clientSecret,
+        scope: this.auth.scope,
+      }),
+    });
+    if (!res.ok) {
+      throw new ZendeskApiError(
+        `Zendesk OAuth 取令牌失败（HTTP ${res.status}）——请核对 client 唯一标识符/密钥与 scope，并联系内部技术团队（owner）`,
+        res.status,
+      );
+    }
+    const data = (await res.json()) as { access_token: string; expires_in?: number };
+    // expires_in 缺省 = 该 client 创建于 2026-04-30 前，令牌不过期；仍按天续取，避免长驻进程持有陈旧令牌
+    const ttlSec = Number(data.expires_in ?? 0);
+    this.bearer = {
+      value: data.access_token,
+      expiresAt: Date.now() + (ttlSec > 0 ? Math.max(ttlSec - 60, 30) : 86400) * 1000,
+    };
+    return this.bearer.value;
+  }
+
+  private async authHeader(force = false): Promise<string> {
+    if (this.auth.kind === 'api_token') {
+      return 'Basic ' + Buffer.from(`${this.auth.email}/token:${this.auth.token}`).toString('base64');
+    }
+    if (force || !this.bearer || Date.now() >= this.bearer.expiresAt) await this.fetchBearer();
+    return `Bearer ${this.bearer!.value}`;
+  }
+
+  private async call<T>(path: string, init: RequestInit = {}, renewed = false): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
       ...init,
       headers: {
-        Authorization: this.auth,
+        Authorization: await this.authHeader(),
         'Content-Type': 'application/json',
         ...(init.headers ?? {}),
       },
@@ -207,6 +260,11 @@ class LiveZendesk implements ZendeskClient {
     if (res.status === 429) {
       const retry = Number(res.headers.get('Retry-After') ?? '60');
       throw new ZendeskApiError('Zendesk API 429 限流', 429, retry);
+    }
+    if (res.status === 401 && this.auth.kind === 'oauth' && !renewed) {
+      // 令牌被提前吊销/过期：强制续取一次再重试，仍失败才按凭据失效告警
+      await this.authHeader(true);
+      return this.call<T>(path, init, true);
     }
     if (res.status === 401 || res.status === 403) {
       throw new ZendeskApiError('Zendesk 凭据失效或权限不足——请联系内部技术团队（owner）', res.status);
@@ -218,13 +276,28 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async upsertArticle(input: PushInput): Promise<ZendeskArticle> {
+    const segmentId = process.env.ZENDESK_AGENT_SEGMENT_ID ?? null;
+    // 数据泄漏零容忍：segment 未配置时 user_segment_id 会被 JSON.stringify 丢弃，
+    // Zendesk 按默认（对外公开）建文章——内部知识必须在推送前拦下，而非事后补救
+    if (input.internalOnly && !segmentId) {
+      throw new ZendeskApiError(
+        '内部知识缺少「仅客服」用户细分配置（ZENDESK_AGENT_SEGMENT_ID）——为防内部内容被公开发布，已拒绝推送',
+        400,
+      );
+    }
+    if (input.enBodyHtml && this.locale === EN_LOCALE) {
+      throw new ZendeskApiError(
+        `条目正文 locale 与英文译文 locale 同为 ${EN_LOCALE}（ZENDESK_LOCALE）——译文会覆盖正文，已拒绝推送；请将 ZENDESK_LOCALE 设为条目正文语言（如 zh-cn）并在 Guide 启用该语言`,
+        400,
+      );
+    }
     const payload = {
       article: {
         title: input.title,
         body: input.publicHtml,
         label_names: input.labels,
-        user_segment_id: input.internalOnly ? process.env.ZENDESK_AGENT_SEGMENT_ID : null,
-        locale: 'zh-cn',
+        user_segment_id: input.internalOnly ? segmentId : null,
+        locale: this.locale,
       },
     };
     const data = await this.call<{ article: { id: number; updated_at: string } }>(
@@ -235,7 +308,7 @@ class LiveZendesk implements ZendeskClient {
       await this.call(`/help_center/articles/${data.article.id}/translations.json`, {
         method: 'POST',
         body: JSON.stringify({
-          translation: { locale: 'en-us', title: input.enTitle ?? input.title, body: input.enBodyHtml },
+          translation: { locale: EN_LOCALE, title: input.enTitle ?? input.title, body: input.enBodyHtml },
         }),
       });
     }
@@ -245,9 +318,9 @@ class LiveZendesk implements ZendeskClient {
       title: input.title,
       bodyHtml: input.publicHtml,
       labels: input.labels,
-      userSegmentId: input.internalOnly ? (process.env.ZENDESK_AGENT_SEGMENT_ID ?? null) : null,
+      userSegmentId: input.internalOnly ? segmentId : null,
       translations: input.enBodyHtml
-        ? { 'en-us': { title: input.enTitle ?? input.title, bodyHtml: input.enBodyHtml } }
+        ? { [EN_LOCALE]: { title: input.enTitle ?? input.title, bodyHtml: input.enBodyHtml } }
         : {},
       draft: false,
       updatedAt: data.article.updated_at,
@@ -301,12 +374,26 @@ class LiveZendesk implements ZendeskClient {
 
 let client: ZendeskClient | null = null;
 
+/** OAuth 优先（scope 可收窄至 read write），其次 API token；均不全 → 沙箱 */
 export function getZendesk(): ZendeskClient {
   if (client) return client;
   const sub = process.env.ZENDESK_SUBDOMAIN;
+  const clientId = process.env.ZENDESK_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.ZENDESK_OAUTH_CLIENT_SECRET;
   const email = process.env.ZENDESK_EMAIL;
   const token = process.env.ZENDESK_API_TOKEN;
-  client = sub && email && token ? new LiveZendesk(sub, email, token) : new SandboxZendesk();
+  if (sub && clientId && clientSecret) {
+    client = new LiveZendesk(sub, {
+      kind: 'oauth',
+      clientId,
+      clientSecret,
+      scope: process.env.ZENDESK_OAUTH_SCOPE ?? 'read write',
+    });
+  } else if (sub && email && token) {
+    client = new LiveZendesk(sub, { kind: 'api_token', email, token });
+  } else {
+    client = new SandboxZendesk();
+  }
   return client;
 }
 
