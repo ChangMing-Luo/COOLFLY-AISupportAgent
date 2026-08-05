@@ -57,6 +57,12 @@ export interface ZendeskClient {
   moveSection(sectionRef: string, categoryRef: string): Promise<void>;
   deleteSection(sectionRef: string): Promise<void>;
   sectionArticleCount(sectionRef: string): Promise<number>;
+  /** 文章投票（帮助中心 up/down）——确定性档位：必得 */
+  fetchArticleVotes(articleRef: string): Promise<{ up: number; down: number }>;
+  /** 工单解决信号（solved / reopen / CSAT）——确定性档位：工单信号必得 */
+  fetchTicketSignals(sinceIso: string): Promise<{ solved: number; reopened: number; csatGood: number; csatBad: number }>;
+  /** 帮助中心搜索无结果关键词——档位相关，依订阅；不可得时返回空数组由上层如实标注 */
+  fetchNoResultSearches(sinceIso: string): Promise<Array<{ keyword: string; count: number }>>;
 }
 
 export class ZendeskApiError extends Error {
@@ -248,11 +254,50 @@ class SandboxZendesk implements ZendeskClient {
   async fetchConversations(sinceIso: string): Promise<{ email: number; chat: number; items: string[] }> {
     this.maybeFail('__fetch__');
     const seed = new Date(sinceIso).getUTCDate();
-    return {
-      email: 18 + (seed % 7),
-      chat: 11 + (seed % 6),
-      items: [],
-    };
+    const email = 18 + (seed % 7);
+    const chat = 11 + (seed % 6);
+    // 沙箱语料：与真实 Zendesk 的 ticket.description 同形（一条会话一段自然语言）。
+    // 原来返回空数组，挖掘管道拿不到任何语料——真实链路缺陷被掩盖。
+    const templates = [
+      '喂鸟器在零下十几度的晚上会自己关机，白天回暖又能开，是不是低温保护？能不能一直开着',
+      '我的喂鸟器一到夜里就断电，早上又好了，最近寒潮特别明显，这是坏了吗',
+      '跨境订单什么时候开始算退款期限？我的包裹清关花了两周，退款窗口是不是已经过了',
+      '国际订单退款起算日到底是下单日还是清关日，客服说法不一致',
+      '太阳能板阴天充不满电，固件升级到 2.4 之后更明显了，是不是充电阈值改了',
+      '连续阴天太阳能供电撑不住，摄像头半夜就没电，加个 USB 供电行不行',
+      '摄像头夜视画面很糊，白天正常，换了角度也没用',
+      '设备一直配不上 Wi-Fi，手机连的是 5G 频段，指示灯红色常亮',
+    ];
+    const items: string[] = [];
+    for (let i = 0; i < email + chat; i += 1) items.push(templates[(seed + i) % templates.length]!);
+    return { email, chat, items };
+  }
+
+  async fetchArticleVotes(articleRef: string): Promise<{ up: number; down: number }> {
+    this.maybeFail('__votes__');
+    this.load();
+    const a = this.articles.get(articleRef);
+    if (!a) return { up: 0, down: 0 };
+    // 确定性派生：同一篇文章每次返回同值，便于验收断言
+    let h = 0;
+    for (const ch of articleRef) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return { up: 20 + (h % 90), down: h % 13 };
+  }
+
+  async fetchTicketSignals(sinceIso: string): Promise<{ solved: number; reopened: number; csatGood: number; csatBad: number }> {
+    this.maybeFail('__ticket_signals__');
+    const seed = new Date(sinceIso).getUTCDate();
+    return { solved: 40 + (seed % 15), reopened: 3 + (seed % 4), csatGood: 30 + (seed % 9), csatBad: 4 + (seed % 3) };
+  }
+
+  async fetchNoResultSearches(sinceIso: string): Promise<Array<{ keyword: string; count: number }>> {
+    this.maybeFail('__no_result__');
+    const seed = new Date(sinceIso).getUTCDate();
+    return [
+      { keyword: 'refund how long', count: 20 + (seed % 9) },
+      { keyword: 'solar panel cloudy', count: 12 + (seed % 6) },
+      { keyword: 'night vision blurry', count: 9 + (seed % 5) },
+    ];
   }
 
   /** 供测试/演练注入外部故障 */
@@ -295,6 +340,25 @@ type LiveAuth =
 
 /** 真实 Zendesk（Guide/Support REST API，Node 原生 fetch，429 读 Retry-After 退避） */
 class LiveZendesk implements ZendeskClient {
+  /**
+   * 写操作闸门：有凭据 ≠ 允许写生产。
+   * 开发机与 E2E 会自动加载 .env 从而连上真实 Zendesk，一旦章节映射填了真实 section id，
+   * 发布链路就会往**生产帮助中心**真写文章、真归档。默认只读，
+   * 确实要同步生产时显式 `ALLOW_LIVE_SYNC=1`。
+   */
+  private assertWritable(action: string): void {
+    // vitest 里放行：测试的外部凭据已被 globalSetup/setupFiles 擦除、fetch 也被打桩，
+    // 两层保护下不可能打到真实端点；而写路径本身（OAuth 取令牌、Basic Auth、401 续取）
+    // 必须能被单测覆盖。守卫针对的是开发机/CI 误连生产，不是测试。
+    if (process.env.VITEST) return;
+    if (process.env.ALLOW_LIVE_SYNC !== '1') {
+      throw new ZendeskApiError(
+        `已连接真实 Zendesk，但写操作被安全闸拦下（${action}）。确认要写生产帮助中心请设 ALLOW_LIVE_SYNC=1。`,
+        403,
+      );
+    }
+  }
+
   readonly mode = 'live' as const;
   private base: string;
   private origin: string;
@@ -379,6 +443,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async upsertArticle(input: PushInput): Promise<ZendeskArticle> {
+    this.assertWritable('upsertArticle');
     const segmentId = process.env.ZENDESK_AGENT_SEGMENT_ID ?? null;
     // 数据泄漏零容忍：segment 未配置时 user_segment_id 会被 JSON.stringify 丢弃，
     // Zendesk 按默认（对外公开）建文章——内部知识必须在推送前拦下，而非事后补救
@@ -432,6 +497,7 @@ class LiveZendesk implements ZendeskClient {
   }
 
   async archiveArticle(articleRef: string): Promise<void> {
+    this.assertWritable('archiveArticle');
     await this.call(`/help_center/articles/${articleRef}.json`, {
       method: 'PUT',
       body: JSON.stringify({ article: { draft: true } }),
@@ -543,6 +609,36 @@ class LiveZendesk implements ZendeskClient {
     const email = data.tickets.filter((t) => t.via?.channel !== 'chat').length;
     const chat = data.tickets.filter((t) => t.via?.channel === 'chat').length;
     return { email, chat, items: data.tickets.map((t) => t.description ?? '') };
+  }
+
+  async fetchArticleVotes(articleRef: string): Promise<{ up: number; down: number }> {
+    const data = await this.call<{ article_votes?: Array<{ value: number }> }>(
+      `/help_center/articles/${articleRef}/votes.json?per_page=100`,
+    );
+    const votes = data.article_votes ?? [];
+    return { up: votes.filter((v) => v.value > 0).length, down: votes.filter((v) => v.value < 0).length };
+  }
+
+  async fetchTicketSignals(sinceIso: string): Promise<{ solved: number; reopened: number; csatGood: number; csatBad: number }> {
+    const start = Math.floor(new Date(sinceIso).getTime() / 1000);
+    const data = await this.call<{
+      tickets: Array<{ status?: string; satisfaction_rating?: { score?: string } }>;
+    }>(`/incremental/tickets.json?start_time=${start}`);
+    const t = data.tickets ?? [];
+    return {
+      solved: t.filter((x) => x.status === 'solved' || x.status === 'closed').length,
+      reopened: t.filter((x) => x.status === 'open').length,
+      csatGood: t.filter((x) => x.satisfaction_rating?.score === 'good').length,
+      csatBad: t.filter((x) => x.satisfaction_rating?.score === 'bad').length,
+    };
+  }
+
+  /**
+   * 搜索无结果关键词：Zendesk 的帮助中心搜索报表属 Explore 能力，
+   * REST 无通用端点——不可得时返回空数组，由上层如实标注「待核实」，绝不编数。
+   */
+  async fetchNoResultSearches(): Promise<Array<{ keyword: string; count: number }>> {
+    return [];
   }
 }
 

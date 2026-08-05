@@ -22,8 +22,25 @@ async function seedMatrix(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // 安全闸：种子会直接 upsertArticle 推演示文章。带着真实 Zendesk 凭据跑，
+  // 中文演示数据会写进**生产帮助中心**——DISABLE_CRON 只挡定时任务，挡不住这里。
+  // 需要往真实环境灌初始数据时显式设 SEED_ALLOW_LIVE=1，逼使用者当场确认一次。
+  if (getZendesk().mode === 'live' && process.env.SEED_ALLOW_LIVE !== '1') {
+    console.error(
+      '拒绝执行：检测到真实 Zendesk 凭据。种子会推送演示文章到生产帮助中心。\n' +
+        '  · 只想重置本地库：先 unset ZENDESK_* 再跑，或用 ZENDESK_SANDBOX_FILE 走沙箱\n' +
+        '  · 确实要写真实环境：SEED_ALLOW_LIVE=1 pnpm db:seed',
+    );
+    process.exit(2);
+  }
+
   await query('TRUNCATE sessions, translation_pairs, sync_tasks, sync_mappings, drift_records, entry_versions, version_metrics, entry_effect_metrics, signal_events, mining_candidates, mining_batches, revision_candidates, knowledge_gaps, no_result_keywords, coverage_scenes, signal_matrix, audit_logs CASCADE');
   await query('DELETE FROM entries');
+  // 非种子用户（测试/手工创建的）一并清掉，否则重跑 seed 后「创建用户」类断言会撞 409
+  await query(
+    `DELETE FROM users WHERE email <> ALL($1::text[])`,
+    [['wangwen@coolfly.com', 'lixiao@coolfly.com', 'lizhen@coolfly.com', 'chendi@coolfly.com', 'ken@coolfly.com']],
+  );
   await query('DELETE FROM chapters');
   await query('DELETE FROM libraries');
   await query('DELETE FROM users');

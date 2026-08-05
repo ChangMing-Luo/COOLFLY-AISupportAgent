@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { zhCN, type GateResult, type ReviewDiff } from '@kb/contracts';
 import { api } from '../api';
 import { ConfirmModal, L, StatusPill, entryStatusKind, fmtTime, useApp, useAsync } from '../shared';
@@ -49,6 +49,12 @@ export function ReviewView() {
   );
 
   const canDecide = can('review.decide');
+
+  // 打开待审详情即认领（缺口 1）：让「审核中」态真正可达，其他审核员能看出谁在审
+  useEffect(() => {
+    if (!current || !canDecide || current.status !== 'pending_review') return;
+    void api.post(`/api/review/${current.id}/claim`).then(() => queue.reload()).catch(() => undefined);
+  }, [current?.id, current?.status, canDecide]);
   // 08-05-2026：四眼原则已取消，审核员可审自己提交的条目；提交人=本人只做提示不禁用
   const isSelfSubmitted = current !== null && detail.data?.entry.submitterId === user.id;
 

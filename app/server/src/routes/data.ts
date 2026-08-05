@@ -5,8 +5,22 @@ import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
 import { DomainError } from '../services/entries.js';
+import { collectSignals } from '../services/signals.js';
 
 export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
+  /** 手动触发一轮信号采集（cron 之外的补采入口）；degraded 项如实回传给界面标注 */
+  app.post('/api/data/signals/collect', { preHandler: [requireLogin, requirePermission('metrics.view')] }, async (req) => {
+    const r = await collectSignals();
+    await writeAudit(req.currentUser!, {
+      objectType: 'signal', objectId: null, objectLabel: '信号采集',
+      action: '采集反馈信号', category: 'content',
+      field: '结果', before: '—',
+      after: `条目 ${r.articles} / 信号 ${r.signals} / 缺口 ${r.gaps} / 关键词 ${r.keywords} / 场景 ${r.scenes}`,
+      note: r.degraded.length ? `降级项：${r.degraded.join('；')}` : '全部渠道采集成功',
+    });
+    return r;
+  });
+
   /** 视图⑦ 数据看板：知识库效果 */
   app.get('/api/metrics/coverage', { preHandler: [requireLogin, requirePermission('metrics.view')] }, async () => {
     const { rows } = await query<{ id: string; name: string; entry_count: number; coverage_pct: number }>(

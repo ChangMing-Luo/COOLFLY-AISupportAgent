@@ -15,6 +15,7 @@ function rethrowStructure(err: unknown): never {
   }
   throw err;
 }
+import { getLlm } from '../integrations/llm.js';
 
 export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/kb/libraries', { preHandler: requireLogin }, async () => {
@@ -353,6 +354,47 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** 批量导入（飞书 120+ 篇一次性迁移）——全部进审核队列，失败逐条报告 */
+  /**
+   * AI 整理建议（建议态，技术方案 §6.4）——标签 / 两级问题场景 / 章节归类。
+   * 只回建议不写正文，运营在导入预览或录入侧逐项采纳/修改/拒绝；
+   * LLM 不可用时 degraded=true，界面须如实标注「AI 建议未生效」。
+   */
+  app.post('/api/kb/organize-suggest', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
+    const { libraryId, items } = req.body as { libraryId: string; items: Array<{ key: string; title: string; body: string }> };
+    if (!Array.isArray(items) || items.length === 0) throw new DomainError('没有待整理的条目', 400);
+    if (items.length > TUNABLES.importMaxRows) throw new DomainError(`单次最多 ${TUNABLES.importMaxRows} 条`, 400);
+    const { rows: chapters } = await query<{ name: string }>(
+      'SELECT name FROM chapters WHERE library_id=$1 AND parent_id IS NOT NULL ORDER BY sort_order',
+      [libraryId],
+    );
+    const chapterNames = chapters.map((c) => c.name);
+    const { rows: sceneRows } = await query<{ scene_l1: string }>(
+      `SELECT DISTINCT scene_l1 FROM entries WHERE scene_l1 <> '' ORDER BY scene_l1`,
+    );
+    const scenes = sceneRows.map((r) => r.scene_l1);
+    const llm = getLlm();
+    const out: Array<{ key: string; labels: string[]; sceneL1: string; sceneL2: string; chapterName: string; reason: string; degraded: boolean }> = [];
+    for (const it of items) {
+      try {
+        const sug = await llm.suggestOrganize(it.title, it.body, chapterNames, scenes);
+        out.push({ key: it.key, ...sug });
+      } catch (err) {
+        // 单条失败不拖垮整批：如实标 degraded，运营照常人工填
+        out.push({
+          key: it.key, labels: [], sceneL1: scenes[0] ?? '', sceneL2: '',
+          chapterName: chapterNames[0] ?? '', reason: `AI 建议失败：${(err as Error).message}`, degraded: true,
+        });
+      }
+    }
+    await writeAudit(req.currentUser!, {
+      objectType: 'import', objectId: null, objectLabel: `AI 整理建议 ${items.length} 条`,
+      action: 'AI 整理建议', category: 'content',
+      field: '结果', before: `${items.length} 条`, after: `建议 ${out.filter((o) => !o.degraded).length} 条 / 降级 ${out.filter((o) => o.degraded).length} 条`,
+      note: '建议态：不写正文，运营逐项采纳或拒绝',
+    });
+    return { suggestions: out, provider: llm.mode };
+  });
+
   app.post('/api/kb/import', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
     const { rows: payloadRows, libraryId } = req.body as { rows: string[]; libraryId: string };
     if (!Array.isArray(payloadRows)) throw new DomainError('导入内容为空', 400);

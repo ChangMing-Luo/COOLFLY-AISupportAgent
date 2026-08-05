@@ -29,6 +29,25 @@ async function main(): Promise<void> {
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_at TIMESTAMPTZ;
     ALTER TABLE mining_candidates ADD COLUMN IF NOT EXISTS dedupe_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE mining_candidates ADD COLUMN IF NOT EXISTS dedupe_degraded BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS translate_fail_count INT NOT NULL DEFAULT 0;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_failed_at TIMESTAMPTZ;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS summary_fail_reason TEXT;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS review_started_at TIMESTAMPTZ;
+    ALTER TABLE entries ADD COLUMN IF NOT EXISTS review_claimed_by TEXT REFERENCES users(id);
+  `);
+
+  // 信号采集的幂等 upsert 依赖唯一键（08-05-2026 新增采集器）；建索引前先去重，
+  // 否则存量重复行会让 CREATE UNIQUE INDEX 直接失败
+  await pool.query(`
+    DELETE FROM no_result_keywords a USING no_result_keywords b
+      WHERE a.ctid < b.ctid AND a.keyword = b.keyword;
+    DELETE FROM coverage_scenes a USING coverage_scenes b
+      WHERE a.ctid < b.ctid AND a.name = b.name;
+    DELETE FROM knowledge_gaps a USING knowledge_gaps b
+      WHERE a.ctid < b.ctid AND a.topic = b.topic;
+    CREATE UNIQUE INDEX IF NOT EXISTS no_result_keywords_keyword_key ON no_result_keywords (keyword);
+    CREATE UNIQUE INDEX IF NOT EXISTS coverage_scenes_name_key ON coverage_scenes (name);
+    CREATE UNIQUE INDEX IF NOT EXISTS knowledge_gaps_topic_key ON knowledge_gaps (topic);
   `);
 
   // 审计日志 append-only：数据库层拒绝 UPDATE / DELETE（RULE-07）

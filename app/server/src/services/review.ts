@@ -273,6 +273,36 @@ export async function offlineEntry(user: SessionUser, entryId: string): Promise<
   });
 }
 
+/**
+ * 认领审核（缺口 1，08-05-2026 补齐）——审核员打开待审条目即 pending_review → reviewing。
+ * 「审核中」此前是状态流转条上画着、却永远点不亮的死态：全仓没有任何写入点。
+ * 认领同时记录认领人与时间，多审核员并发时可看出「谁正在审」，避免重复劳动。
+ * 幂等：已是 reviewing 直接返回；非待审态不报错（只是不改状态），避免打开详情就 409。
+ */
+export async function claimReview(user: SessionUser, entryId: string): Promise<{ status: string; claimedBy: string | null }> {
+  return withTransaction(async (client) => {
+    const e = await loadForReview(client, entryId);
+    if (e.status !== 'pending_review') {
+      return { status: e.status, claimedBy: null };
+    }
+    await client.query(
+      `UPDATE entries SET status='reviewing', review_started_at=now(), review_claimed_by=$2, updated_at=now() WHERE id=$1`,
+      [entryId, user.id],
+    );
+    await writeAudit(
+      user,
+      {
+        objectType: 'entry', objectId: entryId, objectLabel: `${e.code} ${e.title}`,
+        action: '开始审核', category: 'review', field: '状态',
+        before: 'pending_review', after: 'reviewing',
+        note: '审核员认领该条目，其他审核员可见「审核中」避免重复审',
+      },
+      client,
+    );
+    return { status: 'reviewing', claimedBy: user.id };
+  });
+}
+
 /** 驳回——理由必填（AC-P-11） */
 export async function rejectEntry(user: SessionUser, entryId: string, payload: unknown): Promise<{ status: string }> {
   const { reason } = rejectSchema.parse(payload);
@@ -379,10 +409,16 @@ export async function publishEntry(
       try {
         const text = await getLlm().summarizeEntry(e.title, toPlainText(e.body));
         await client.query(
-          `UPDATE entries SET ai_summary=$2, summary_source='ai', summary_at=now() WHERE id=$1`,
+          `UPDATE entries SET ai_summary=$2, summary_source='ai', summary_at=now(),
+             summary_failed_at=NULL, summary_fail_reason=NULL WHERE id=$1`,
           [entryId, text],
         );
       } catch (err) {
+        // 失败落库（缺口 3）：原来只写审计日志，界面看到的还是上一次摘要却不知道本次没更新
+        await client.query(
+          `UPDATE entries SET summary_failed_at=now(), summary_fail_reason=$2 WHERE id=$1`,
+          [entryId, (err as Error).message.slice(0, 300)],
+        );
         await writeAudit(
           user,
           {

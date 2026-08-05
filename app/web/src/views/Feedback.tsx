@@ -42,6 +42,7 @@ function certaintyKind(certainty: string): 'ok' | 'warn' | 'bad' {
 
 export function FeedbackView() {
   const { can, toast, refreshNav } = useApp();
+  const [collecting, setCollecting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const signals = useAsync<SignalRow[]>(() => api.get('/api/feedback/signals'), []);
@@ -65,6 +66,34 @@ export function FeedbackView() {
 
   return (
     <>
+      <div className="btn-row" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          disabled={collecting}
+          data-testid="collect-signals"
+          onClick={() => {
+            setCollecting(true);
+            api
+              .post<{ articles: number; signals: number; gaps: number; keywords: number; scenes: number; degraded: string[] }>(
+                '/api/data/signals/collect',
+              )
+              .then((r) => {
+                toast(
+                  `采集完成：条目 ${r.articles} / 信号 ${r.signals} / 缺口 ${r.gaps} / 关键词 ${r.keywords} / 场景 ${r.scenes}` +
+                    (r.degraded.length ? `；${r.degraded.length} 项降级（详见操作日志）` : ''),
+                );
+                candidates.reload();
+                signals.reload();
+              })
+              .catch((e: Error) => toast(e.message))
+              .finally(() => setCollecting(false));
+          }}
+        >
+          {collecting ? '采集中…' : '立即采集信号'}
+        </button>
+        <span className="meta">四渠道信号按小时自动采集；此处为手动补采。待核实档位不进达标判定，只做趋势参考。</span>
+      </div>
       <div className="note">AI 运营可提交建议（进审核队列），不可直接改库；处置动作全部留痕。</div>
 
       <div className="card">
