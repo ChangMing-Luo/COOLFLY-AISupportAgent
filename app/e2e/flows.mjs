@@ -103,6 +103,13 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   await go(reviewer.page, 'review');
   await reviewer.page.locator('table tbody tr', { hasText: flow01EntryTitle }).first().click();
   await reviewer.page.waitForTimeout(800);
+  // 变更对照两层：摘要层默认展示，点「查看具体变更」才出 git diff
+  const summaryVisible = (await reviewer.page.locator('.change-summary__item').count()) > 0;
+  const diffHiddenBefore = (await reviewer.page.locator('[data-testid="gitdiff"]').count()) === 0;
+  await reviewer.page.locator('[data-testid="toggle-diff"]').click();
+  await reviewer.page.waitForTimeout(700);
+  const diffLines = await reviewer.page.locator('.gitdiff__line').count();
+  const addLines = await reviewer.page.locator('.gitdiff__line--add').count();
   await reviewer.page.locator('[data-testid="approve"]').click();
   await reviewer.page.waitForTimeout(1200);
 
@@ -112,16 +119,20 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   }, created.id);
   const blockedNoQueue = gateBlocked.status === 'blocked';
 
-  // 补齐翻译与向量后再发布
+  // 补齐翻译确认后再发布（门禁三查：格式字段 / 内部段落 / 英文状态）
   await reviewer.page.evaluate(async (id) => {
     await fetch(`/api/kb/entries/${id}/translate`, { method: 'POST', credentials: 'include' });
     await fetch(`/api/kb/entries/${id}/translation/confirm`, { method: 'POST', credentials: 'include' });
-    await fetch(`/api/kb/entries/${id}/revector`, { method: 'POST', credentials: 'include' });
   }, created.id);
   const published = await reviewer.page.evaluate(async (id) => {
     const r = await fetch(`/api/review/${id}/publish`, { method: 'POST', credentials: 'include' });
     return r.json();
   }, created.id);
+  // 发布时生成 AI 摘要（AC-F09-39）
+  const summaryAfterPublish = await reviewer.page.evaluate(
+    async (id) => (await (await fetch(`/api/kb/entries/${id}/summary`, { credentials: 'include' })).json()).source,
+    created.id,
+  );
 
   await go(reviewer.page, 'sync');
   await reviewer.page.waitForTimeout(1000);
@@ -136,8 +147,9 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   record(
     'FLOW-01',
     draftsAfter === draftsBefore + 1 && submittedCard >= 1 && Number(reviewBadge) >= 1 &&
-      publishedBefore === 0 && blockedNoQueue && published.status === 'published' && syncedRow >= 1 && publishedAfter >= 1,
-    `草稿卡 ${draftsBefore}→${draftsAfter}、提交待审卡=${submittedCard}、待审徽标=${reviewBadge}、过审前不在总览=${publishedBefore === 0}、门禁阻断=${blockedNoQueue}、补齐后发布=${published.status}、同步任务行=${syncedRow}、总览可见=${publishedAfter >= 1}`,
+      publishedBefore === 0 && blockedNoQueue && published.status === 'published' && syncedRow >= 1 && publishedAfter >= 1 &&
+      summaryVisible && diffHiddenBefore && diffLines > 0 && summaryAfterPublish === 'ai',
+    `草稿卡 ${draftsBefore}→${draftsAfter}、提交待审卡=${submittedCard}、待审徽标=${reviewBadge}、过审前不在总览=${publishedBefore === 0}、变更摘要层=${summaryVisible}、diff 默认折叠=${diffHiddenBefore}、展开后 diff 行=${diffLines}（新增 ${addLines}）、门禁阻断=${blockedNoQueue}、补齐后发布=${published.status}、同步任务行=${syncedRow}、总览可见=${publishedAfter >= 1}、发布后 AI 摘要来源=${summaryAfterPublish}`,
   );
   await reviewer.ctx.close();
 }
@@ -209,12 +221,36 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   const hasAdmission = text.includes('三重准入');
   const dedupeHint = text.includes('不新建，挂修订') || text.includes('挂修订');
   // 高查重候选不得出现「起草并提交审核」按钮
-  const dupCard = page.locator('.card', { hasText: '太阳能板阴天充不满电' }).first();
+  const dupCard = page
+    .locator('.card')
+    .filter({ has: page.locator('span.strong', { hasText: '（挂到 KB-0155）' }) })
+    .first();
   const dupHasDraftBtn = await dupCard.locator('button', { hasText: '起草并提交审核' }).count();
+  // LLM 语义查重：判定理由随候选展示；本地 provider 时如实标注「语义查重未生效」
+  const hasDedupeReason = text.includes('查重判定理由');
+  const llmMode = await page.evaluate(async () => (await (await fetch('/healthz')).json()).llm);
+  // 真跑一次批次，验证当前 provider 下的降级标注是否如实（本地模式必须标注，不得静默给分）
+  const ranBatch = await page.evaluate(async () => {
+    const r = await fetch('/api/mine/batches/run', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchDate: '2026-08-09' }),
+    });
+    const b = await r.json();
+    const cands = await (await fetch(`/api/mine/candidates?batchId=${b.batchId}`, { credentials: 'include' })).json();
+    return { status: b.status, degraded: cands.every((c) => c.dedupeDegraded), reasons: cands.every((c) => c.dedupeReason) };
+  });
+  // 回到挖掘视图重新拉批次（页面按内部路由渲染，reload 会退回默认视图）
+  await go(page, 'work');
+  await go(page, 'mine');
+  await page.waitForTimeout(900);
+  await page.locator('[data-batch="2026-08-09"]').first().click();
+  await page.waitForTimeout(900);
+  const degradedNoted = (await page.locator('.content').innerText()).includes('语义查重未生效');
   record(
     'FLOW-03',
-    hasEmpty && hasFailed && hasChannels && hasAdmission && dedupeHint && dupHasDraftBtn === 0,
-    `空批次如实标注=${hasEmpty}、失败批次含原因=${hasFailed}、分渠道计数=${hasChannels}、三重准入说明=${hasAdmission}、查重≥0.85仅挂修订（无立新条按钮）=${dupHasDraftBtn === 0}`,
+    hasEmpty && hasFailed && hasChannels && hasAdmission && dedupeHint && dupHasDraftBtn === 0 &&
+      hasDedupeReason && ranBatch.reasons && (llmMode !== 'local' || (ranBatch.degraded && degradedNoted)),
+    `空批次如实标注=${hasEmpty}、失败批次含原因=${hasFailed}、分渠道计数=${hasChannels}、三重准入说明=${hasAdmission}、查重≥0.85仅挂修订（无立新条按钮）=${dupHasDraftBtn === 0}、查重判定理由可见=${hasDedupeReason}、LLM 模式=${llmMode}、实跑批次=${ranBatch.status}/每条含理由=${ranBatch.reasons}/本地模式标降级=${ranBatch.degraded}、界面「语义查重未生效」可见=${degradedNoted}`,
   );
   await ctx.close();
 }
@@ -335,14 +371,15 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
       internalNotTranslated: afterTranslate.pairs.filter((p) => p.internal).every((p) => !p.en),
       confirmed: c.enStatus,
       afterEditEn: afterEdit.entry.enStatus,
-      afterEditVector: afterEdit.entry.vectorStatus,
+      gateChecks: (await (await fetch(`/api/review/${e.id}/gate`, { credentials: 'include' })).json()).checks.map((c) => c.key),
     };
   });
+  const gateThree = r.gateChecks.length === 3 && !r.gateChecks.includes('proxy_eval');
   record(
     'FLOW-06',
     r.afterTranslateStatus === 'pending_human' && r.internalNotTranslated && r.confirmed === 'confirmed' &&
-      r.afterEditEn === 'stale' && r.afterEditVector === 'stale',
-    `翻译后=${r.afterTranslateStatus}、内部段落未翻译=${r.internalNotTranslated}、人工确认=${r.confirmed}、中文改动后英文=${r.afterEditEn}、向量=${r.afterEditVector}`,
+      r.afterEditEn === 'stale' && gateThree,
+    `翻译后=${r.afterTranslateStatus}、内部段落未翻译=${r.internalNotTranslated}、人工确认=${r.confirmed}、中文改动后英文=${r.afterEditEn}、门禁三查=${r.gateChecks.join('/')}`,
   );
   await ctx.close();
 }
@@ -357,7 +394,35 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   const sectionRef = text.includes('Sec 51');
   const mappingNote = text.includes('Help Center brand');
   const overdue = text.includes('复核已到期');
-  const dueSoon = text.includes('剩') && text.includes('天');
+  // 三级结构树：目录行 → 章节行 → 条目行（树内仅已发布）
+  const onlyPublishedBadge = text.includes('仅已发布');
+  const toolbar = ['新建目录', '新建章节', '调整层级'].every((s) => text.includes(s));
+  const leafCount = await page.locator('.tree__row--leaf').count();
+  await page.locator('.tree__row--child').first().locator('.tree__caret').click();
+  await page.waitForTimeout(400);
+  const leafAfterCollapse = await page.locator('.tree__row--leaf').count();
+  await page.locator('.tree__row--child').first().locator('.tree__caret').click();
+  await page.waitForTimeout(400);
+  // 调整层级：把「退款与退货」移到「订单与物流」目录下再移回
+  const moveResp = await page.evaluate(async () => {
+    const to = await (await fetch('/api/kb/tree?libraryId=lib_policy', { credentials: 'include' })).json();
+    const target = to.find((t) => t.name !== '售后政策');
+    const r = await fetch('/api/kb/chapters/ch_refund/parent', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentId: target.id }),
+    });
+    const ok = r.status;
+    const back = await (await fetch('/api/kb/tree?libraryId=lib_policy', { credentials: 'include' })).json();
+    const moved = back.find((t) => t.id === target.id).children.some((c) => c.id === 'ch_refund');
+    // 还原，避免污染后续断言
+    await fetch('/api/kb/chapters/ch_refund/parent', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentId: 'ch_after' }),
+    });
+    return { ok, moved };
+  });
   // 组合筛选
   const dueSelect = page.locator('select').filter({ hasText: '复核' }).first();
   const selectCount = await page.locator('select').count();
@@ -368,8 +433,10 @@ let flow01EntryTitle = `E2E 无人机首次配对失败排查 ${Date.now().toStr
   });
   record(
     'FLOW-07',
-    threeLibs && internalNote && sectionRef && mappingNote && overdue && selectCount >= 3 && delResp.status === 409 && delResp.msg.includes('移空'),
-    `三库可切换=${threeLibs}、仅内部库说明=${internalNote}、Section 映射标识=${sectionRef}、映射说明条=${mappingNote}、超期标注=${overdue}、筛选器=${selectCount} 个、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
+    threeLibs && internalNote && sectionRef && mappingNote && overdue && selectCount >= 3 &&
+      onlyPublishedBadge && toolbar && leafCount > 0 && leafAfterCollapse < leafCount && moveResp.ok === 200 && moveResp.moved &&
+      delResp.status === 409 && delResp.msg.includes('移空'),
+    `三库可切换=${threeLibs}、仅内部库说明=${internalNote}、Section 映射标识=${sectionRef}、映射说明条=${mappingNote}、超期标注=${overdue}、筛选器=${selectCount} 个、「仅已发布」徽章=${onlyPublishedBadge}、结构工具条三按钮=${toolbar}、三级树条目行=${leafCount} 个（折叠后 ${leafAfterCollapse}）、调整层级=${moveResp.ok}/移动生效=${moveResp.moved}、含条目章节删除拦截=${delResp.status}「${delResp.msg.slice(0, 24)}…」`,
   );
   await ctx.close();
 }

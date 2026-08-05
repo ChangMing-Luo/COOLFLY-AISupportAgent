@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { zhCN } from '@kb/contracts';
 import { api } from '../api';
-import { L, StatusPill, useApp, useAsync, vectorStatusKind } from '../shared';
+import { L, StatusPill, useApp, useAsync } from '../shared';
 
 /** 视图⑦ 数据看板（页面 MD §5.7）：知识库效果 / 知识缺口 / 客服工作数据（不重建 Explore） */
 interface CoverageScene {
@@ -25,7 +25,6 @@ interface EntryEffect {
   sampleShort: boolean;
   sampleLabel: string | null;
   low: boolean;
-  vectorStatus: string;
 }
 
 interface Gap {
@@ -143,7 +142,6 @@ export function DashboardView() {
                   <th>被踩</th>
                   <th>客服 flag</th>
                   <th>解决率</th>
-                  <th>向量化</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,9 +170,6 @@ export function DashboardView() {
                           {e.solveRate === null ? '—' : `${e.solveRate}%`}
                         </span>
                       )}
-                    </td>
-                    <td>
-                      <StatusPill kind={vectorStatusKind(e.vectorStatus)} text={L.vectorStatus(e.vectorStatus)} />
                     </td>
                   </tr>
                 ))}

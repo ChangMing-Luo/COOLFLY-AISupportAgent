@@ -4,7 +4,6 @@ import {
   entryStatusSchema,
   enStatusSchema,
   syncStatusSchema,
-  vectorStatusSchema,
   visibilitySchema,
   reviewSourceSchema,
   batchStatusSchema,
@@ -16,6 +15,8 @@ import {
 /** 建议值参数（PRD §5.10 边界数值，可配置，终稿前确认） */
 export const TUNABLES = {
   dedupeThreshold: 0.85,
+  /** 查重粗筛上限：至多把 5 条既有条目交 LLM 判定，把调用量与库规模脱钩（技术方案 §6.2） */
+  dedupeShortlist: 5,
   frequencyThreshold: 10,
   syncRetryLimit: 3,
   translateFailAlert: 3,
@@ -75,7 +76,6 @@ export const entryRowSchema = z.object({
   status: entryStatusSchema,
   enStatus: enStatusSchema,
   syncStatus: syncStatusSchema,
-  vectorStatus: vectorStatusSchema,
   solveRate: z.number().nullable(),
   sampleShort: z.boolean(),
   reviewDueAt: z.string().nullable(),
@@ -141,6 +141,11 @@ export const chapterUpsertSchema = z.object({
   zendeskSectionRef: z.string().nullable().default(null),
 });
 
+/** 调整层级：把章节移到另一个顶级目录下（结构深度恒为 2） */
+export const chapterMoveSchema = z.object({
+  parentId: z.string().min(1, '请选择目标目录'),
+});
+
 export const driftResolveSchema = z.object({
   action: z.enum(['overwrite', 'pull_back']),
 });
@@ -163,14 +168,13 @@ export const gateResultSchema = z.object({
   passed: z.boolean(),
   checks: z.array(
     z.object({
-      key: z.enum(['fields', 'internal', 'english', 'proxy_eval']),
+      key: z.enum(['fields', 'internal', 'english']),
       label: z.string(),
       passed: z.boolean(),
       detail: z.string(),
       hard: z.boolean(),
     }),
   ),
-  proxyEvalNote: z.string(),
 });
 export type GateResult = z.infer<typeof gateResultSchema>;
 
@@ -207,12 +211,54 @@ export const candidateRowSchema = z.object({
   sourceSummary: z.string(),
   frequency: z.number().int(),
   dedupeScore: z.number(),
+  /** LLM 语义查重的判定理由与比中条目；LLM 不可用时 dedupeDegraded=true 并如实标注 */
+  dedupeReason: z.string(),
+  dedupeDegraded: z.boolean(),
   gapVerdict: z.string(),
   aiSummary: z.string(),
   admissionNote: z.string(),
   targetEntryCode: z.string().nullable(),
   disposition: z.enum(['pending', 'drafted', 'attached', 'merged', 'discarded', 'suggested']),
 });
+
+/** 条目 AI 摘要（技术方案 §6.2）：发布时由 LLM 生成，可人工校正且校正后不被覆盖 */
+export const SUMMARY_SOURCES = ['none', 'ai', 'human'] as const;
+export const summarySourceSchema = z.enum(SUMMARY_SOURCES);
+export type SummarySource = z.infer<typeof summarySourceSchema>;
+
+export const SUMMARY_SOURCE_LABELS: Record<SummarySource, string> = {
+  none: '未生成',
+  ai: 'AI 生成',
+  human: '人工校正',
+};
+
+export const entrySummarySchema = z.object({
+  text: z.string(),
+  source: summarySourceSchema,
+  generatedAt: z.string().nullable(),
+});
+export type EntrySummary = z.infer<typeof entrySummarySchema>;
+
+export const summaryUpdateSchema = z.object({
+  text: z.string().trim().min(1, '摘要不能为空').max(600, '摘要最多 600 字'),
+});
+
+/** 审核中心变更对照两层：摘要层 + git diff 详情层（REQ-F09-15 rev6） */
+export const diffLineSchema = z.object({
+  kind: z.enum(['ctx', 'add', 'del']),
+  beforeLine: z.number().int().nullable(),
+  afterLine: z.number().int().nullable(),
+  text: z.string(),
+  internal: z.boolean(),
+});
+
+export const reviewDiffSchema = z.object({
+  total: z.string(),
+  summary: z.array(z.object({ kind: z.enum(['add', 'del', 'mod']), text: z.string() })),
+  lines: z.array(diffLineSchema),
+  isNew: z.boolean(),
+});
+export type ReviewDiff = z.infer<typeof reviewDiffSchema>;
 
 export const signalRowSchema = z.object({
   id: z.string(),

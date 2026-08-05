@@ -3,7 +3,6 @@ import {
   ENTRY_STATUS_LABELS,
   EN_STATUS_LABELS,
   SYNC_STATUS_LABELS,
-  VECTOR_STATUS_LABELS,
   VISIBILITY_LABELS,
   REVIEW_SOURCE_LABELS,
   BATCH_STATUS_LABELS,
@@ -69,18 +68,10 @@ export function enStatusKind(status: string): 'ok' | 'warn' | 'bad' | 'info' {
   return 'info';
 }
 
-export function vectorStatusKind(status: string): 'ok' | 'warn' | 'bad' | 'info' {
-  if (status === 'ready') return 'ok';
-  if (status === 'failed') return 'bad';
-  if (status === 'stale' || status === 'building') return 'warn';
-  return 'info';
-}
-
 export const L = {
   entryStatus: (s: string) => ENTRY_STATUS_LABELS[s as keyof typeof ENTRY_STATUS_LABELS] ?? s,
   enStatus: (s: string) => EN_STATUS_LABELS[s as keyof typeof EN_STATUS_LABELS] ?? s,
   syncStatus: (s: string) => SYNC_STATUS_LABELS[s as keyof typeof SYNC_STATUS_LABELS] ?? s,
-  vectorStatus: (s: string) => VECTOR_STATUS_LABELS[s as keyof typeof VECTOR_STATUS_LABELS] ?? s,
   visibility: (s: string) => VISIBILITY_LABELS[s as keyof typeof VISIBILITY_LABELS] ?? s,
   reviewSource: (s: string) => REVIEW_SOURCE_LABELS[s as keyof typeof REVIEW_SOURCE_LABELS] ?? s,
   batchStatus: (s: string) => BATCH_STATUS_LABELS[s as keyof typeof BATCH_STATUS_LABELS] ?? s,

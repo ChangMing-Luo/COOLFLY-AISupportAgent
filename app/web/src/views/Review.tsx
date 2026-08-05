@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { zhCN, type GateResult } from '@kb/contracts';
+import { zhCN, type GateResult, type ReviewDiff } from '@kb/contracts';
 import { api } from '../api';
 import { ConfirmModal, L, StatusPill, entryStatusKind, fmtTime, useApp, useAsync } from '../shared';
 
@@ -14,7 +14,8 @@ interface QueueRow {
   visibility: string;
   versionLabel: string;
   status: string;
-  changeSummary: Array<{ field: string; before: string; after: string }>;
+  diffTotal: string;
+  changeSummary: Array<{ kind: 'add' | 'del' | 'mod'; text: string }>;
 }
 
 interface EntryDetail {
@@ -26,6 +27,7 @@ export function ReviewView() {
   const queue = useAsync(() => api.get<QueueRow[]>('/api/review/queue'), []);
   const [selected, setSelected] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<QueueRow | null>(null);
+  const [showDiff, setShowDiff] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
 
@@ -40,7 +42,14 @@ export function ReviewView() {
     [current?.id],
   );
 
+  // 详情层：只在展开时拉取，摘要层不为不看的人付流量
+  const diff = useAsync<ReviewDiff | null>(
+    () => (current && showDiff ? api.get<ReviewDiff>(`/api/review/${current.id}/diff`) : Promise.resolve(null)),
+    [current?.id, showDiff],
+  );
+
   const canDecide = can('review.decide');
+  // 08-05-2026：四眼原则已取消，审核员可审自己提交的条目；提交人=本人只做提示不禁用
   const isSelfSubmitted = current !== null && detail.data?.entry.submitterId === user.id;
 
   async function approve(): Promise<void> {
@@ -119,7 +128,7 @@ export function ReviewView() {
                   <tr
                     key={r.id}
                     className={`row--click${current?.id === r.id ? ' row--warn' : ''}`}
-                    onClick={() => setSelected(r.id)}
+                    onClick={() => { setSelected(r.id); setShowDiff(false); }}
                     data-testid={`queue-${r.code}`}
                   >
                     <td><StatusPill kind="accent" text={L.reviewSource(r.source)} /></td>
@@ -147,24 +156,53 @@ export function ReviewView() {
                 <StatusPill kind="info" text={`来源：${L.reviewSource(current.source)}`} />
               </div>
 
-              <h3 style={{ fontSize: 13, margin: '12px 0 6px' }}>变更前后对照</h3>
+              <div className="btn-row" style={{ justifyContent: 'space-between', margin: '12px 0 6px' }}>
+                <div className="btn-row">
+                  <h3 style={{ fontSize: 13, margin: 0 }}>变更摘要</h3>
+                  <StatusPill kind="accent" text={current.diffTotal} />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  onClick={() => setShowDiff((v) => !v)}
+                  data-testid="toggle-diff"
+                >
+                  {showDiff ? '收起' : '查看具体变更'}
+                </button>
+              </div>
               {current.changeSummary.length === 0 ? (
                 <div className="meta">（无差异记录）</div>
               ) : (
-                <table>
-                  <thead>
-                    <tr><th>字段</th><th>变更前</th><th>变更后</th></tr>
-                  </thead>
-                  <tbody>
-                    {current.changeSummary.map((c) => (
-                      <tr key={c.field}>
-                        <td className="muted">{c.field}</td>
-                        <td><span className="pill pill--bad">{c.before}</span></td>
-                        <td><span className="pill pill--ok">{c.after}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ul className="change-summary">
+                  {current.changeSummary.map((c) => (
+                    <li key={c.text} className={`change-summary__item change-summary__item--${c.kind}`}>
+                      <span className="change-summary__sign">{c.kind === 'add' ? '+' : c.kind === 'del' ? '−' : '~'}</span>
+                      {c.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {showDiff && (
+                <div className="gitdiff" data-testid="gitdiff">
+                  <div className="gitdiff__head">
+                    具体变更 · {current.title}
+                    {diff.data?.isNew && <span className="meta" style={{ marginLeft: 8 }}>新建条目（无变更前侧）</span>}
+                  </div>
+                  {diff.loading && <div className="empty">变更加载中…</div>}
+                  {diff.data?.lines.map((l, i) => (
+                    <div key={`${l.kind}-${i}`} className={`gitdiff__line gitdiff__line--${l.kind}`}>
+                      <span className="gitdiff__ln">{l.beforeLine ?? ''}</span>
+                      <span className="gitdiff__ln">{l.afterLine ?? ''}</span>
+                      <span className="gitdiff__sign">{l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ' '}</span>
+                      <span className="gitdiff__text">
+                        {l.internal && <span className="pill pill--warn" style={{ marginRight: 6 }}>内部段落</span>}
+                        {l.text}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="gitdiff__foot">红底 − 为删除、绿底 + 为新增、灰字为未变更上下文。</div>
+                </div>
               )}
 
               <h3 style={{ fontSize: 13, margin: '16px 0 6px' }}>正文全文</h3>
@@ -177,7 +215,7 @@ export function ReviewView() {
                 )) ?? '加载中…'}
               </div>
 
-              <h3 style={{ fontSize: 13, margin: '16px 0 6px' }}>发布门禁四查</h3>
+              <h3 style={{ fontSize: 13, margin: '16px 0 6px' }}>发布门禁三查</h3>
               {gate.data ? (
                 <>
                   <table>
@@ -195,7 +233,6 @@ export function ReviewView() {
                       ))}
                     </tbody>
                   </table>
-                  <div className="meta" style={{ marginTop: 6 }}>{gate.data.proxyEvalNote}</div>
                 </>
               ) : (
                 <div className="meta">门禁检查加载中…</div>
@@ -205,8 +242,8 @@ export function ReviewView() {
                 <button
                   type="button"
                   className="btn btn--primary"
-                  disabled={!canDecide || isSelfSubmitted}
-                  title={!canDecide ? '审核权限仅知识审核员。' : isSelfSubmitted ? zhCN.ironLaw.fourEyes : undefined}
+                  disabled={!canDecide}
+                  title={!canDecide ? '审核权限仅知识审核员。' : undefined}
                   onClick={approve}
                   data-testid="approve"
                 >
@@ -236,10 +273,14 @@ export function ReviewView() {
                   打开条目工作台
                 </button>
               </div>
-              {isSelfSubmitted && <div className="note note--warn" style={{ marginTop: 10 }}>{zhCN.ironLaw.fourEyes}</div>}
+              {isSelfSubmitted && (
+                <div className="note" style={{ marginTop: 10 }}>
+                  这条由你本人提交——四眼原则已取消，你可以直接通过；该次审核会在操作日志中留痕（提交人 = 审核人）。
+                </div>
+              )}
               {!canDecide && <div className="note note--warn" style={{ marginTop: 10 }}>当前角色只能查看，不能通过或驳回。</div>}
               <div className="note" style={{ marginTop: 10 }}>
-                通过后自动跑发布门禁：静态检查 + 英文校验状态 + 代理评测，全过才入同步队列。
+                通过后自动跑发布门禁：静态检查 + 英文校验状态，全过才入同步队列。
               </div>
             </>
           )}

@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { chapterUpsertSchema, submitReviewSchema, TUNABLES, zhCN } from '@kb/contracts';
+import { chapterMoveSchema, chapterUpsertSchema, submitReviewSchema, TUNABLES, zhCN } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
-import { DomainError, getEntry, listEntries, rebuildVector, saveEntry, submitForReview } from '../services/entries.js';
+import { DomainError, getEntry, getSummary, listEntries, saveEntry, submitForReview, updateSummary } from '../services/entries.js';
 import { confirmTranslation, editEnTitle, editPair, listPairs, translate } from '../services/translation.js';
 
 export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
@@ -27,6 +27,10 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
        FROM chapters c ${libraryId ? 'WHERE c.library_id = $1' : ''} ORDER BY c.sort_order`,
       libraryId ? [libraryId] : [],
     );
+    // 第三层：树内只呈现已发布条目（页面 MD §5.2「仅已发布」徽章的数据依据）
+    const { rows: leaves } = await query<{ id: string; code: string; title: string; chapter_id: string }>(
+      `SELECT id, code, title, chapter_id FROM entries WHERE status='published' ORDER BY code`,
+    );
     const roots = rows.filter((r) => !r.parent_id);
     return roots.map((root) => ({
       id: root.id,
@@ -34,7 +38,15 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
       count: rows.filter((r) => r.parent_id === root.id).reduce((s, r) => s + Number(r.n), 0),
       children: rows
         .filter((r) => r.parent_id === root.id)
-        .map((c) => ({ id: c.id, name: c.name, sectionRef: c.zendesk_section_ref, count: Number(c.n) })),
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          sectionRef: c.zendesk_section_ref,
+          count: Number(c.n),
+          entries: leaves
+            .filter((e) => e.chapter_id === c.id)
+            .map((e) => ({ id: e.id, code: e.code, title: e.title })),
+        })),
     }));
   });
 
@@ -123,9 +135,14 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
     return submitForReview(req.currentUser!, id, source, note);
   });
 
-  app.post('/api/kb/entries/:id/revector', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
+  app.get('/api/kb/entries/:id/summary', { preHandler: requireLogin }, async (req) => {
     const { id } = req.params as { id: string };
-    return rebuildVector(req.currentUser!, id);
+    return getSummary(id);
+  });
+
+  app.put('/api/kb/entries/:id/summary', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
+    const { id } = req.params as { id: string };
+    return updateSummary(req.currentUser!, id, req.body);
   });
 
   app.post('/api/kb/entries/:id/translate', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
@@ -176,6 +193,39 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
     await writeAudit(req.currentUser!, {
       objectType: 'chapter', objectId: id, objectLabel: name,
       action: '重命名章节', category: 'content', field: '名称', before: rows[0].name, after: name,
+    });
+    return { ok: true };
+  });
+
+  /**
+   * 调整层级（v3 原型结构树工具条第三个按钮）：把章节移到另一个顶级目录下。
+   * 结构深度恒为 2——目标必须是顶级目录，且不可自指；不支持目录与章节互转。
+   */
+  app.patch('/api/kb/chapters/:id/parent', { preHandler: [requireLogin, requirePermission('structure.manage')] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { parentId } = chapterMoveSchema.parse(req.body);
+    if (parentId === id) throw new DomainError('不能把章节移到它自己下面', 409);
+    const { rows } = await query<{ name: string; parent_id: string | null; library_id: string }>(
+      'SELECT name, parent_id, library_id FROM chapters WHERE id=$1',
+      [id],
+    );
+    const me = rows[0];
+    if (!me) throw new DomainError('章节不存在', 404);
+    if (!me.parent_id) throw new DomainError('顶级目录不可调整层级——结构深度恒为 2', 409);
+    const { rows: targetRows } = await query<{ name: string; parent_id: string | null; library_id: string }>(
+      'SELECT name, parent_id, library_id FROM chapters WHERE id=$1',
+      [parentId],
+    );
+    const target = targetRows[0];
+    if (!target) throw new DomainError('目标目录不存在', 404);
+    if (target.parent_id) throw new DomainError('目标必须是顶级目录——结构深度恒为 2', 409);
+    if (target.library_id !== me.library_id) throw new DomainError('不能跨知识库移动章节', 409);
+    const { rows: oldRows } = await query<{ name: string }>('SELECT name FROM chapters WHERE id=$1', [me.parent_id]);
+    await query('UPDATE chapters SET parent_id=$2 WHERE id=$1', [id, parentId]);
+    await writeAudit(req.currentUser!, {
+      objectType: 'chapter', objectId: id, objectLabel: me.name,
+      action: '调整章节层级', category: 'content', field: '所属目录',
+      before: oldRows[0]?.name ?? me.parent_id, after: target.name,
     });
     return { ok: true };
   });
@@ -240,8 +290,8 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
       }));
       await query(
         `INSERT INTO entries (id, code, title, library_id, chapter_id, visibility, scene_l1, scene_l2, labels, body,
-           status, review_source, submitter_id, submitted_at, vector_status)
-         VALUES ($1,$2,$3,$4,$5,$6,'售后与退款','导入',$7::jsonb,$8::jsonb,'pending_review','import',$9,now(),'stale')`,
+           status, review_source, submitter_id, submitted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,'售后与退款','导入',$7::jsonb,$8::jsonb,'pending_review','import',$9,now())`,
         [
           id, code, title, libraryId, chapter.id, visibility,
           JSON.stringify(['批量导入']),

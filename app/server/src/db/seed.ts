@@ -1,7 +1,6 @@
 import { DEFAULT_PERMISSION_MATRIX, PERMISSIONS, ROLES } from '@kb/contracts';
 import { pool, query, newId } from './pool.js';
 import { hashPassword } from '../core/auth.js';
-import { embed, toPgVector } from '../integrations/embedding.js';
 import { contentHash, toPlainText, toPublicHtml } from '../core/content.js';
 import { getZendesk } from '../integrations/zendesk.js';
 
@@ -20,7 +19,7 @@ async function seedMatrix(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  await query('TRUNCATE sessions, translation_pairs, sync_tasks, sync_mappings, drift_records, entry_vectors, entry_versions, version_metrics, entry_effect_metrics, signal_events, mining_candidates, mining_batches, revision_candidates, knowledge_gaps, no_result_keywords, coverage_scenes, signal_matrix, audit_logs CASCADE');
+  await query('TRUNCATE sessions, translation_pairs, sync_tasks, sync_mappings, drift_records, entry_versions, version_metrics, entry_effect_metrics, signal_events, mining_candidates, mining_batches, revision_candidates, knowledge_gaps, no_result_keywords, coverage_scenes, signal_matrix, audit_logs CASCADE');
   await query('DELETE FROM entries');
   await query('DELETE FROM chapters');
   await query('DELETE FROM libraries');
@@ -82,16 +81,18 @@ async function main(): Promise<void> {
   interface SeedEntry {
     id: string; code: string; title: string; lib: string; chapter: string; type: string;
     visibility: 'public' | 'internal' | 'mixed'; status: string; enStatus: string; syncStatus: string;
-    vectorStatus: string; version: number; sceneL1: string; sceneL2: string; labels: string[];
+    version: number; sceneL1: string; sceneL2: string; labels: string[];
+    /** 已发布条目的 AI 摘要（发布时生成的产物；种子直接给出，供挖掘语义查重比对） */
+    aiSummary?: string;
     dueDays: number; paragraphs: Array<{ text: string; internal?: boolean; heading?: boolean }>;
     owner: string;
   }
   const entries: SeedEntry[] = [
     {
       id: 'ent_0201', code: 'KB-0201', title: '退款政策', lib: 'lib_policy', chapter: 'ch_refund',
-      type: 'FAQ 政策型', visibility: 'mixed', status: 'published', enStatus: 'synced', syncStatus: 'synced',
-      vectorStatus: 'ready', version: 2, sceneL1: '售后与退款', sceneL2: '退款时限',
+      type: 'FAQ 政策型', visibility: 'mixed', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 2, sceneL1: '售后与退款', sceneL2: '退款时限',
       labels: ['退款', '退货', '运费'], dueDays: 114, owner: 'usr_wangwen',
+      aiSummary: '退款分质量问题与非质量问题两档：质量问题签收后 30 天内全额退、运费公司承担；非质量问题签收后 5 天内可退、运费用户承担。会员服务按自然月退订。',
       paragraphs: [
         { text: '退款时限', heading: true },
         { text: '质量问题：签收后 30 天内可申请全额退款，运费由公司承担。' },
@@ -102,9 +103,9 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0188', code: 'KB-0188', title: '保修期与凭证要求', lib: 'lib_policy', chapter: 'ch_warranty',
-      type: 'FAQ 政策型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced',
-      vectorStatus: 'ready', version: 3, sceneL1: '售后与退款', sceneL2: '保修换新',
+      type: 'FAQ 政策型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 3, sceneL1: '售后与退款', sceneL2: '保修换新',
       labels: ['保修', '凭证'], dueDays: 47, owner: 'usr_wangwen',
+      aiSummary: '整机自签收起保修 12 个月、配件 6 个月；申请保修须提供订单号与设备序列号照片。',
       paragraphs: [
         { text: '保修范围', heading: true },
         { text: '整机自签收之日起保修 12 个月，配件保修 6 个月。' },
@@ -113,8 +114,7 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0240', code: 'KB-0240', title: '会员退订与计费周期', lib: 'lib_policy', chapter: 'ch_billing',
-      type: 'FAQ 型', visibility: 'public', status: 'rejected', enStatus: 'pending_human', syncStatus: 'blocked',
-      vectorStatus: 'stale', version: 2, sceneL1: '会员与账户', sceneL2: '会员计费',
+      type: 'FAQ 型', visibility: 'public', status: 'rejected', enStatus: 'pending_human', syncStatus: 'blocked', version: 2, sceneL1: '会员与账户', sceneL2: '会员计费',
       labels: ['会员', '退订', '计费'], dueDays: -12, owner: 'usr_wangwen',
       paragraphs: [
         { text: '计费周期', heading: true },
@@ -123,9 +123,9 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0155', code: 'KB-0155', title: '太阳能板阴天充不满电', lib: 'lib_product', chapter: 'ch_solar',
-      type: '操作流程型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced',
-      vectorStatus: 'failed', version: 4, sceneL1: '安装与配网', sceneL2: '太阳能供电',
+      type: '操作流程型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 4, sceneL1: '安装与配网', sceneL2: '太阳能供电',
       labels: ['太阳能', '充电'], dueDays: -47, owner: 'usr_wangwen',
+      aiSummary: '太阳能板在阴天或弱光条件下充电不足的排查步骤：先查表面遮挡与积灰，再确认朝南安装且每日直射不少于 4 小时，连续阴天建议改用 USB 补电。',
       paragraphs: [
         { text: '排查步骤', heading: true },
         { text: '1. 检查太阳能板表面是否有遮挡或积灰。' },
@@ -135,8 +135,7 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0212', code: 'KB-0212', title: '退货运费承担规则', lib: 'lib_script', chapter: 'ch_script_refund',
-      type: '内部口径', visibility: 'internal', status: 'draft', enStatus: 'none', syncStatus: 'none',
-      vectorStatus: 'none', version: 0, sceneL1: '售后与退款', sceneL2: '退货运费',
+      type: '内部口径', visibility: 'internal', status: 'pending_review', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '售后与退款', sceneL2: '退货运费',
       labels: ['运费', '预付面单'], dueDays: 180, owner: 'usr_wangwen',
       paragraphs: [
         { text: '质量问题退货：运费由公司承担，客服直接发预付面单。' },
@@ -146,8 +145,7 @@ async function main(): Promise<void> {
     },
     {
       id: 'ent_0233', code: 'KB-0233', title: '订单发出后能否改地址', lib: 'lib_policy', chapter: 'ch_ship',
-      type: 'FAQ 型', visibility: 'public', status: 'draft', enStatus: 'none', syncStatus: 'none',
-      vectorStatus: 'none', version: 0, sceneL1: '订单与物流', sceneL2: '地址修改',
+      type: 'FAQ 型', visibility: 'public', status: 'draft', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '订单与物流', sceneL2: '地址修改',
       labels: ['改地址', '发货'], dueDays: 180, owner: 'usr_wangwen',
       paragraphs: [
         { text: '订单发出前可在个人中心修改收货地址。' },
@@ -164,14 +162,19 @@ async function main(): Promise<void> {
     };
     await query(
       `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
-         labels, body, status, en_status, sync_status, vector_status, current_version, owner_id, submitter_id,
-         review_due_at, reject_reason, updated_at)
-       VALUES ($1,$2,$3,$21,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$17,
-               now() + ($18 || ' days')::interval, $19, now() - ($20 || ' hours')::interval)`,
+         labels, body, status, en_status, sync_status, ai_summary, summary_source, summary_at,
+         current_version, owner_id, submitter_id, submitted_at, review_source, review_due_at, reject_reason, updated_at)
+       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
+               CASE WHEN $16 = 'none' THEN NULL ELSE now() END,
+               $17,$18,$18,
+               CASE WHEN $12 = 'pending_review' THEN now() ELSE NULL END,
+               'manual',
+               now() + ($19 || ' days')::interval, $20, now() - ($21 || ' hours')::interval)`,
       [
         e.id, e.code, e.title, e.lib, e.chapter, e.type, e.visibility, e.sceneL1, e.sceneL2,
         JSON.stringify(e.labels), JSON.stringify(body), e.status, e.enStatus, e.syncStatus,
-        e.vectorStatus, e.version, e.owner, String(e.dueDays),
+        e.aiSummary ?? '', e.aiSummary ? 'ai' : 'none',
+        e.version, e.owner, String(e.dueDays),
         e.status === 'rejected' ? '计费周期与财务口径不符，请附财务确认截图' : null,
         String(entries.indexOf(e) * 3),
         // 英文标题与逐段译文同批产生：英文状态到「待人工校验」及之后才有
@@ -208,14 +211,6 @@ async function main(): Promise<void> {
           );
         }
       }
-    }
-
-    if (e.vectorStatus === 'ready') {
-      const text = `${e.title}\n${toPlainText(body)}`;
-      await query(
-        `INSERT INTO entry_vectors (entry_id, embedding, source_text) VALUES ($1,$2::vector,$3)`,
-        [e.id, toPgVector(embed(text)), text],
-      );
     }
 
     if (e.enStatus === 'synced' || e.enStatus === 'pending_human') {
@@ -382,21 +377,22 @@ async function main(): Promise<void> {
     );
   }
   const candidates = [
-    { type: 'new', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: 17, dup: 0.42, gap: '未覆盖', note: '三重准入通过 → 建议立新条', target: null,
+    { type: 'new', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: 17, dup: 0.42, dupWhy: '与 KB-0155「太阳能板阴天充不满电」最接近，但主题不同（低温自动关机 vs 弱光充电不足），既有条目未覆盖该现象', dupDegraded: false, gap: '未覆盖', note: '三重准入通过 → 建议立新条', target: null,
       summary: '用户反馈 -15°C 以下设备夜间自动关机、白天回温恢复。客服口径已趋一致，但知识库无对应条目，每次手写。',
       body: '为什么低温天气下喂鸟器会自动关机？\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。' },
-    { type: 'revision', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: 14, dup: 0.88, gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', target: 'KB-0155',
+    { type: 'revision', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: 14, dup: 0.88, dupWhy: '均在描述阴天/弱光下太阳能板充电不足，KB-0155 已覆盖同一现象与处理步骤，差异仅在固件 2.4 后的充电阈值', dupDegraded: false, gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', target: 'KB-0155',
       summary: '现有条目只写「检查遮挡」，未覆盖固件 2.4 后的充电阈值变化；客服 flag 3 次「步骤过时」。',
       body: '补充：固件 2.4 起充电阈值由 12% 调整为 18%，阴天需连续 2 日以上才触发补电提示。' },
-    { type: 'merge', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: 11, dup: 0.91, gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', target: 'KB-0188',
+    { type: 'merge', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: 11, dup: 0.91, dupWhy: '两条条目回答同一个 Wi-Fi 配对失败问题，步骤与结论高度一致，属重复建条', dupDegraded: false, gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', target: 'KB-0188',
       summary: '两条回答同一问题，bot 引用被分流导致都拿不满样本量。',
       body: '合并说明：保留主条目，另一条归档并在 Zendesk 端建立重定向。' },
   ];
   for (const c of candidates) {
     await query(
-      `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [newId('cand'), batchIds[0], c.type, c.title, c.src, c.freq, c.dup, c.gap, c.summary, c.body, c.note, c.target],
+      `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score,
+         dedupe_reason, dedupe_degraded, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [newId('cand'), batchIds[0], c.type, c.title, c.src, c.freq, c.dup, c.dupWhy, c.dupDegraded, c.gap, c.summary, c.body, c.note, c.target],
     );
   }
 

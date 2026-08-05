@@ -1,8 +1,6 @@
 -- COOLFLY 知识运营中台 · 七域数据模型（技术方案 §5.1）
 -- 域：知识 / 版本 / 翻译 / 同步 / 挖掘 / 信号 / 治理
 
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- ============ 治理域 ============
 CREATE TABLE IF NOT EXISTS users (
   id              TEXT PRIMARY KEY,
@@ -92,7 +90,9 @@ CREATE TABLE IF NOT EXISTS entries (
   status         TEXT NOT NULL DEFAULT 'draft',
   en_status      TEXT NOT NULL DEFAULT 'none',
   sync_status    TEXT NOT NULL DEFAULT 'none',
-  vector_status  TEXT NOT NULL DEFAULT 'none',
+  ai_summary     TEXT NOT NULL DEFAULT '',
+  summary_source TEXT NOT NULL DEFAULT 'none',
+  summary_at     TIMESTAMPTZ,
   review_source  TEXT NOT NULL DEFAULT 'manual',
   submitter_id   TEXT REFERENCES users(id),
   submitted_at   TIMESTAMPTZ,
@@ -218,6 +218,8 @@ CREATE TABLE IF NOT EXISTS mining_candidates (
   source_summary TEXT NOT NULL DEFAULT '',
   frequency      INT NOT NULL DEFAULT 0,
   dedupe_score   NUMERIC(4,2) NOT NULL DEFAULT 0,
+  dedupe_reason  TEXT NOT NULL DEFAULT '',
+  dedupe_degraded BOOLEAN NOT NULL DEFAULT false,
   gap_verdict    TEXT NOT NULL DEFAULT '',
   ai_summary     TEXT NOT NULL DEFAULT '',
   draft_body     TEXT NOT NULL DEFAULT '',
@@ -298,14 +300,3 @@ CREATE TABLE IF NOT EXISTS no_result_keywords (
   verdict  TEXT NOT NULL,
   level    TEXT NOT NULL DEFAULT 'warn'
 );
-
--- 向量（内部工具：挖掘查重 / 缺口聚类 / 发布门禁代理评测）
-CREATE TABLE IF NOT EXISTS entry_vectors (
-  entry_id   TEXT PRIMARY KEY REFERENCES entries(id) ON DELETE CASCADE,
-  embedding  vector(64),
-  source_text TEXT NOT NULL DEFAULT '',
-  built_at   TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- ============ 增量列（CREATE TABLE IF NOT EXISTS 不会给既有库补列，故显式 ALTER） ============
-ALTER TABLE entries ADD COLUMN IF NOT EXISTS en_title TEXT;

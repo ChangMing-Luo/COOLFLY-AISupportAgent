@@ -2,20 +2,20 @@ import { TUNABLES, zhCN, type SessionUser } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
 import { desensitize } from '../core/content.js';
-import { getLlm } from '../integrations/llm.js';
+import { getLlm, literalSimilarity } from '../integrations/llm.js';
 import { getZendesk, ZendeskApiError } from '../integrations/zendesk.js';
-import { cosine, embed } from '../integrations/embedding.js';
 import { DomainError } from './entries.js';
 
 export async function listBatches(): Promise<
   Array<{ id: string; batchDate: string; emailCount: number; chatCount: number; candidateCount: number; status: string; failReason: string | null }>
 > {
   const { rows } = await query<{
-    id: string; batch_date: Date; email_count: number; chat_count: number; candidate_count: number; status: string; fail_reason: string | null;
-  }>('SELECT * FROM mining_batches ORDER BY batch_date DESC');
+    id: string; batch_date: string; email_count: number; chat_count: number; candidate_count: number; status: string; fail_reason: string | null;
+  }>(`SELECT id, to_char(batch_date, 'YYYY-MM-DD') AS batch_date, email_count, chat_count, candidate_count, status, fail_reason
+      FROM mining_batches ORDER BY batch_date DESC`);
   return rows.map((b) => ({
     id: b.id,
-    batchDate: b.batch_date.toISOString().slice(0, 10),
+    batchDate: b.batch_date,
     emailCount: b.email_count,
     chatCount: b.chat_count,
     candidateCount: b.candidate_count,
@@ -27,13 +27,13 @@ export async function listBatches(): Promise<
 export async function listCandidates(batchId?: string): Promise<
   Array<{
     id: string; batchId: string; type: string; title: string; sourceSummary: string; frequency: number;
-    dedupeScore: number; gapVerdict: string; aiSummary: string; admissionNote: string;
+    dedupeScore: number; dedupeReason: string; dedupeDegraded: boolean; gapVerdict: string; aiSummary: string; admissionNote: string;
     targetEntryCode: string | null; disposition: string; canCreateNew: boolean;
   }>
 > {
   const { rows } = await query<{
     id: string; batch_id: string; type: string; title: string; source_summary: string; frequency: number;
-    dedupe_score: string; gap_verdict: string; ai_summary: string; admission_note: string;
+    dedupe_score: string; dedupe_reason: string; dedupe_degraded: boolean; gap_verdict: string; ai_summary: string; admission_note: string;
     target_entry_code: string | null; disposition: string;
   }>(
     batchId
@@ -49,6 +49,8 @@ export async function listCandidates(batchId?: string): Promise<
     sourceSummary: c.source_summary,
     frequency: c.frequency,
     dedupeScore: Number(c.dedupe_score),
+    dedupeReason: c.dedupe_reason,
+    dedupeDegraded: c.dedupe_degraded,
     gapVerdict: c.gap_verdict,
     aiSummary: c.ai_summary,
     admissionNote: c.admission_note,
@@ -84,8 +86,8 @@ export async function runDailyBatch(batchDate: string): Promise<{ batchId: strin
       const draft = await llm.draftCandidate(t.topic, t.sourceSummary);
       await query(
         `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score,
-           gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+           dedupe_reason, dedupe_degraded, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [
           newId('cand'),
           batchId,
@@ -94,6 +96,8 @@ export async function runDailyBatch(batchDate: string): Promise<{ batchId: strin
           desensitize(t.sourceSummary),
           t.frequency,
           t.dedupe,
+          t.dedupeReason,
+          t.dedupeDegraded,
           t.gapVerdict,
           desensitize(draft.summary),
           draft.body,
@@ -117,44 +121,62 @@ export async function runDailyBatch(batchDate: string): Promise<{ batchId: strin
   }
 }
 
-async function deriveTopics(convCount: number): Promise<
-  Array<{ topic: string; sourceSummary: string; frequency: number; dedupe: number; gapVerdict: string; type: string; admissionNote: string; targetEntryCode: string | null }>
-> {
+interface DerivedTopic {
+  topic: string;
+  sourceSummary: string;
+  frequency: number;
+  dedupe: number;
+  dedupeReason: string;
+  dedupeDegraded: boolean;
+  gapVerdict: string;
+  type: string;
+  admissionNote: string;
+  targetEntryCode: string | null;
+}
+
+async function deriveTopics(convCount: number): Promise<DerivedTopic[]> {
   // 语料：本轮以 Zendesk 会话计数驱动的主题集合（真实拉取内容在 live 模式下替换此处）
   const pool = [
     { topic: '喂鸟器在极寒天气下自动关机', summary: '17 会话 · 工单 12 / 聊天 5，用户反馈 -15°C 以下夜间自动关机' },
     { topic: '跨境订单退款起算日', summary: '13 会话 · 工单 11 / 聊天 2，用户问清关后何时起算退款' },
     { topic: '太阳能板阴天充不满电', summary: '14 会话 · 工单 5 / 聊天 9，固件 2.4 后充电阈值变化' },
   ];
-  const out: Array<{ topic: string; sourceSummary: string; frequency: number; dedupe: number; gapVerdict: string; type: string; admissionNote: string; targetEntryCode: string | null }> = [];
-  const { rows: entries } = await query<{ code: string; title: string }>(
-    `SELECT code, title FROM entries WHERE status IN ('published','approved')`,
+  const out: DerivedTopic[] = [];
+  const { rows: entries } = await query<{ code: string; title: string; ai_summary: string }>(
+    `SELECT code, title, ai_summary FROM entries WHERE status IN ('published','approved')`,
   );
+  const llm = getLlm();
 
   for (const p of pool) {
     const frequency = 10 + (convCount % 9);
     if (frequency < TUNABLES.frequencyThreshold) continue; // 三重准入①频次
-    // 三重准入②查重
-    const v = embed(p.topic);
-    let best = 0;
-    let bestCode: string | null = null;
-    for (const e of entries) {
-      const s = cosine(v, embed(e.title));
-      if (s > best) {
-        best = s;
-        bestCode = e.code;
-      }
-    }
-    const isDup = best >= TUNABLES.dedupeThreshold;
+
+    // 三重准入② LLM 语义查重（两段式，技术方案 §6.2）
+    // 第一段：字面粗筛 Top-N，把 LLM 调用量与库规模脱钩
+    const shortlist = entries
+      .map((e) => ({
+        code: e.code,
+        title: e.title,
+        summary: e.ai_summary,
+        score: literalSimilarity(p.topic, `${e.title} ${e.ai_summary}`),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, TUNABLES.dedupeShortlist);
+    // 第二段：LLM 依 AI 摘要判定，输出 {条目标识, 相似度, 理由}；结果一次定分落库不重算
+    const verdict = await llm.judgeDuplicate(p.topic, p.summary, shortlist);
+
+    const isDup = verdict.similarity >= TUNABLES.dedupeThreshold && verdict.code !== null;
     out.push({
       topic: p.topic,
       sourceSummary: p.summary,
       frequency,
-      dedupe: Number(best.toFixed(2)),
+      dedupe: Number(verdict.similarity.toFixed(2)),
+      dedupeReason: verdict.reason,
+      dedupeDegraded: verdict.degraded,
       gapVerdict: isDup ? '已覆盖但答不好' : '未覆盖',
       type: isDup ? 'revision' : 'new',
       admissionNote: isDup ? zhCN.mine.dedupeHigh : '三重准入通过 → 建议立新条',
-      targetEntryCode: isDup ? bestCode : null,
+      targetEntryCode: isDup ? verdict.code : null,
     });
   }
   return out;
@@ -202,8 +224,8 @@ export async function disposeCandidate(
   const sourceLabel = action === 'suggest' ? 'feedback' : action === 'attach_revision' ? 'revision' : 'mining';
   await query(
     `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
-       labels, body, status, review_source, submitter_id, submitted_at, vector_status)
-     VALUES ($1,$2,$3,$4,$5,'FAQ 型','public','设备使用','其他',$6::jsonb,$7::jsonb,'pending_review',$8,$9,now(),'stale')`,
+       labels, body, status, review_source, submitter_id, submitted_at)
+     VALUES ($1,$2,$3,$4,$5,'FAQ 型','public','设备使用','其他',$6::jsonb,$7::jsonb,'pending_review',$8,$9,now())`,
     [
       entryId, code, c.title, libs[0]!.id, chaps[0]!.id,
       JSON.stringify(['AI 挖掘', c.type === 'revision' ? '修订建议' : '新增']),

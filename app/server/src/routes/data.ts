@@ -23,10 +23,10 @@ export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/metrics/entries', { preHandler: [requireLogin, requirePermission('metrics.view')] }, async () => {
     const { rows } = await query<{
       entry_id: string; title: string; code: string; version: number; chapter: string; parent: string | null;
-      bot_refs: number; agent_refs: number; downvotes: number; flags: number; solve_rate: string | null; vector_status: string;
+      bot_refs: number; agent_refs: number; downvotes: number; flags: number; solve_rate: string | null;
     }>(
       `SELECT m.entry_id, e.title, e.code, e.current_version AS version, c.name AS chapter, pc.name AS parent,
-              m.bot_refs, m.agent_refs, m.downvotes, m.flags, m.solve_rate, e.vector_status
+              m.bot_refs, m.agent_refs, m.downvotes, m.flags, m.solve_rate
        FROM entry_effect_metrics m
        JOIN entries e ON e.id = m.entry_id
        JOIN chapters c ON c.id = e.chapter_id
@@ -50,7 +50,6 @@ export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
         sampleShort,
         sampleLabel: sampleShort ? zhCN.dash.sampleShort : null,
         low: !sampleShort && solve !== null && solve < TUNABLES.lowSolveRatePct,
-        vectorStatus: r.vector_status,
       };
     });
   });
@@ -136,8 +135,8 @@ export async function registerDataRoutes(app: FastifyInstance): Promise<void> {
       const entryId = newId('ent');
       await query(
         `INSERT INTO entries (id, code, title, library_id, chapter_id, visibility, scene_l1, scene_l2, labels, body,
-           status, review_source, submitter_id, submitted_at, vector_status)
-         VALUES ($1,$2,$3,$4,$5,'public','售后与退款','反馈',$6::jsonb,$7::jsonb,'pending_review','feedback',$8,now(),'stale')`,
+           status, review_source, submitter_id, submitted_at)
+         VALUES ($1,$2,$3,$4,$5,'public','售后与退款','反馈',$6::jsonb,$7::jsonb,'pending_review','feedback',$8,now())`,
         [
           entryId, code, c.topic, libs[0]!.id, chaps[0]!.id,
           JSON.stringify(['反馈修订']),

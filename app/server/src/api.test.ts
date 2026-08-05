@@ -131,7 +131,7 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
     expect(JSON.parse(res.body).message).toContain('审核通过');
   });
 
-  it('审核员通过 → 发布门禁阻断（英文未确认 + 向量待重建）', async () => {
+  it('审核员通过 → 发布门禁阻断（英文未确认）', async () => {
     const approve = await app.inject({ method: 'POST', url: `/api/review/${entryId}/approve`, headers: as('reviewer') });
     expect(approve.statusCode).toBe(200);
 
@@ -144,11 +144,10 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
     expect(Number(rows[0]!.n), '门禁不过不得入队').toBe(0);
   });
 
-  it('补齐翻译确认与向量后发布成功并入队同步', async () => {
+  it('补齐翻译确认后发布成功并入队同步，同时生成 AI 摘要（AC-F09-39）', async () => {
     await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/translate`, headers: as('manager') });
     const confirm = await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/translation/confirm`, headers: as('manager') });
     expect(confirm.statusCode).toBe(200);
-    await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/revector`, headers: as('manager') });
 
     const publish = await app.inject({ method: 'POST', url: `/api/review/${entryId}/publish`, headers: as('reviewer') });
     const body = JSON.parse(publish.body) as { status: string };
@@ -157,15 +156,65 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
     const { rows } = await query<{ status: string }>('SELECT status FROM sync_tasks WHERE entry_id=$1', [entryId]);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0]!.status).toBe('synced');
+
+    // 发布时生成 AI 摘要（人工未校正过，故 source=ai）
+    const sum = await app.inject({ method: 'GET', url: `/api/kb/entries/${entryId}/summary`, headers: as('manager') });
+    const summary = JSON.parse(sum.body) as { text: string; source: string; generatedAt: string | null };
+    expect(summary.source, '发布应生成 AI 摘要').toBe('ai');
+    expect(summary.text.length).toBeGreaterThan(0);
+    expect(summary.generatedAt).not.toBeNull();
   });
 
-  it('RULE-02 四眼原则：审核员不可通过自己提交的条目', async () => {
+  it('人工校正摘要后 source=human，再次发布不被 AI 覆盖（AC-F09-39）', async () => {
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/kb/entries/${entryId}/summary`,
+      headers: as('manager'),
+      payload: { text: '人工校正版摘要：首次配对失败的三步排查与升级路径。' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(JSON.parse(put.body).source).toBe('human');
+
+    // 走一次「改后重新过审发布」，摘要不得被 AI 结果覆盖
+    const detail = await app.inject({ method: 'GET', url: `/api/kb/entries/${entryId}`, headers: as('manager') });
+    const { entry } = JSON.parse(detail.body) as {
+      entry: {
+        title: string; libraryId: string; chapterId: string; entryType: string; visibility: string;
+        sceneL1: string; sceneL2: string; labels: string[]; deviceModels: string[];
+        reviewCycleDays: number; ownerId: string | null; body: unknown; lockVersion: number;
+      };
+    };
+    await app.inject({
+      method: 'PUT',
+      url: `/api/kb/entries/${entryId}`,
+      headers: as('manager'),
+      payload: {
+        title: entry.title, libraryId: entry.libraryId, chapterId: entry.chapterId,
+        entryType: entry.entryType, visibility: entry.visibility,
+        sceneL1: entry.sceneL1, sceneL2: entry.sceneL2, labels: entry.labels,
+        deviceModels: entry.deviceModels, reviewCycleDays: entry.reviewCycleDays, ownerId: entry.ownerId,
+        body: entry.body, expectedVersion: entry.lockVersion,
+      },
+    });
+    await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/submit`, headers: as('manager'), payload: { source: 'manual' } });
+    await app.inject({ method: 'POST', url: `/api/review/${entryId}/approve`, headers: as('reviewer') });
+    await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/translate`, headers: as('manager') });
+    await app.inject({ method: 'POST', url: `/api/kb/entries/${entryId}/translation/confirm`, headers: as('manager') });
+    await app.inject({ method: 'POST', url: `/api/review/${entryId}/publish`, headers: as('reviewer') });
+
+    const sum = await app.inject({ method: 'GET', url: `/api/kb/entries/${entryId}/summary`, headers: as('manager') });
+    const summary = JSON.parse(sum.body) as { text: string; source: string };
+    expect(summary.source, '人工校正过的摘要不得被 AI 覆盖').toBe('human');
+    expect(summary.text).toContain('人工校正版摘要');
+  });
+
+  it('RULE-02 审核员自审放行且留痕（AC-F09-36 rev6：四眼原则已取消）', async () => {
     const create = await app.inject({
       method: 'POST',
       url: '/api/kb/entries',
       headers: as('reviewer'),
       payload: {
-        title: '四眼原则验证条目', libraryId: 'lib_policy', chapterId: 'ch_refund', entryType: 'FAQ 型',
+        title: '自审放行验证条目', libraryId: 'lib_policy', chapterId: 'ch_refund', entryType: 'FAQ 型',
         visibility: 'public', sceneL1: '售后与退款', sceneL2: '退款时限', labels: ['测试'],
         deviceModels: [], reviewCycleDays: 180, ownerId: null,
         body: { paragraphs: [{ id: 'p0', text: '内容', internal: false, heading: false }] },
@@ -174,12 +223,25 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
     const selfId = JSON.parse(create.body).id as string;
     await app.inject({ method: 'POST', url: `/api/kb/entries/${selfId}/submit`, headers: as('reviewer'), payload: { source: 'manual' } });
 
+    // 提交人 = 当前审核员：接口不再拒绝
     const selfApprove = await app.inject({ method: 'POST', url: `/api/review/${selfId}/approve`, headers: as('reviewer') });
-    expect(selfApprove.statusCode).toBe(403);
-    expect(JSON.parse(selfApprove.body).message).toContain('四眼原则');
+    expect(selfApprove.statusCode, '四眼原则已取消，自审应放行').toBe(200);
+    expect(JSON.parse(selfApprove.body).status).toBe('approved');
 
-    const otherApprove = await app.inject({ method: 'POST', url: `/api/review/${selfId}/approve`, headers: as('reviewer2') });
-    expect(otherApprove.statusCode, '另一名审核员应可通过').toBe(200);
+    // 制衡改为事后审计：自审事实必须可查
+    const { rows: audit } = await query<{ note: string; actor_name: string }>(
+      `SELECT note, actor_name FROM audit_logs WHERE object_id=$1 AND action='审核通过' ORDER BY at DESC LIMIT 1`,
+      [selfId],
+    );
+    expect(audit.length, '自审必须写审计日志').toBe(1);
+    expect(audit[0]!.note, '审计里要能看出提交人 = 审核人').toContain('自审');
+
+    // 「无人审不生效」不受影响：未过审条目仍不产生同步任务
+    const { rows: pendingTasks } = await query<{ n: string }>(
+      'SELECT COUNT(*)::text AS n FROM sync_tasks WHERE entry_id=$1',
+      [selfId],
+    );
+    expect(Number(pendingTasks[0]!.n), '仅通过审核不入同步队列（发布 API 才是唯一写入源）').toBe(0);
   });
 });
 
@@ -348,9 +410,9 @@ describe('RULE-06 同步失败 / 阻断 / drift / 并发冲突', () => {
        VALUES ('ch_unmapped', 'lib_policy', 'ch_after', '未映射章节', NULL, 99) RETURNING id`,
     );
     const { rows: e } = await query<{ id: string }>(
-      `INSERT INTO entries (id, code, title, library_id, chapter_id, visibility, scene_l1, scene_l2, labels, body, status, current_version, en_status, vector_status)
+      `INSERT INTO entries (id, code, title, library_id, chapter_id, visibility, scene_l1, scene_l2, labels, body, status, current_version, en_status)
        VALUES ('ent_unmapped','KB-9999','未映射条目','lib_policy',$1,'public','售后与退款','测试','["t"]'::jsonb,
-               '{"paragraphs":[{"id":"p0","text":"内容","internal":false,"heading":false}]}'::jsonb,'published',1,'confirmed','ready') RETURNING id`,
+               '{"paragraphs":[{"id":"p0","text":"内容","internal":false,"heading":false}]}'::jsonb,'published',1,'confirmed') RETURNING id`,
       [chap[0]!.id],
     );
     await query(
@@ -582,13 +644,12 @@ describe('FLOW-06 翻译工作流状态机', () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const { rows: after } = await query<{ en_status: string; sync_status: string; vector_status: string; blocked_reason: string | null }>(
-      'SELECT en_status, sync_status, vector_status, blocked_reason FROM entries WHERE id=$1',
+    const { rows: after } = await query<{ en_status: string; sync_status: string; blocked_reason: string | null }>(
+      'SELECT en_status, sync_status, blocked_reason FROM entries WHERE id=$1',
       [e.id],
     );
     expect(after[0]!.en_status).toBe('stale');
     expect(after[0]!.sync_status).toBe('blocked');
-    expect(after[0]!.vector_status).toBe('stale');
     expect(after[0]!.blocked_reason).toContain('待重新校验');
   });
 

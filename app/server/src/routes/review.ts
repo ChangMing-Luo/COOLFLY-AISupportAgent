@@ -1,11 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
-import { approveEntry, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
+import { approveEntry, entryDiff, previewGate, publishEntry, rejectEntry, reviewQueue, rollbackEntry } from '../services/review.js';
 import { drainQueue } from '../services/sync.js';
 
 export async function registerReviewRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/review/queue', { preHandler: requireLogin }, async () => reviewQueue());
+
+  /** 变更对照详情层：审核中心「查看具体变更」按需拉取 git diff 数据（AC-F09-23 rev6） */
+  app.get('/api/review/:id/diff', { preHandler: requireLogin }, async (req) => {
+    const { id } = req.params as { id: string };
+    return entryDiff(id);
+  });
 
   app.get('/api/review/:id/gate', { preHandler: requireLogin }, async (req) => {
     const { id } = req.params as { id: string };

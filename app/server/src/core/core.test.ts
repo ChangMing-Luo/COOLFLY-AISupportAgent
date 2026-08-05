@@ -68,7 +68,7 @@ describe('脱敏管道（RULE-05：原文不落库）', () => {
   });
 });
 
-describe('发布门禁四查（AC-P-12）', () => {
+describe('发布门禁三查（AC-P-12 rev6：08-05-2026 由四查收敛）', () => {
   const base = {
     title: '退款政策',
     chapterId: 'ch_refund',
@@ -77,15 +77,14 @@ describe('发布门禁四查（AC-P-12）', () => {
     body,
     enStatus: 'confirmed' as const,
     enTitle: 'Refund policy',
-    vectorStatus: 'ready' as const,
-    proxyRecall: 1,
   };
 
-  it('四项全过才 passed', () => {
+  it('三项全过才 passed，且门禁不再产出任何检索代理指标', () => {
     const r = runPublishGate(base);
     expect(r.passed).toBe(true);
-    expect(r.checks).toHaveLength(4);
-    expect(r.proxyEvalNote).toContain('代理指标不等于 Zendesk AI 真实表现');
+    expect(r.checks).toHaveLength(3);
+    expect(r.checks.map((c) => c.key)).toEqual(['fields', 'internal', 'english']);
+    expect(JSON.stringify(r)).not.toContain('代理');
   });
 
   it('英文未确认 → 阻断（人工校验 100% 铁律）', () => {
@@ -108,12 +107,6 @@ describe('发布门禁四查（AC-P-12）', () => {
     const r = runPublishGate({ ...base, labels: [] });
     expect(r.passed).toBe(false);
     expect(r.checks.find((c) => c.key === 'fields')?.detail).toContain('标签');
-  });
-
-  it('向量待重建 → 代理评测不过', () => {
-    const r = runPublishGate({ ...base, vectorStatus: 'stale', proxyRecall: null });
-    expect(r.passed).toBe(false);
-    expect(r.checks.find((c) => c.key === 'proxy_eval')?.detail).toContain('重建向量');
   });
 
   it('混合可见性但无内部段落标记 → 阻断', () => {

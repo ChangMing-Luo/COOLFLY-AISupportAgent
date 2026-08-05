@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ENTRY_STATUSES,
   TUNABLES,
@@ -18,7 +18,6 @@ import {
   syncStatusKind,
   useApp,
   useAsync,
-  vectorStatusKind,
 } from '../shared';
 
 interface Library {
@@ -29,11 +28,19 @@ interface Library {
   count: number;
 }
 
+interface TreeLeaf {
+  id: string;
+  code: string;
+  title: string;
+}
+
 interface TreeChild {
   id: string;
   name: string;
   sectionRef: string | null;
   count: number;
+  /** 第三层：树内只呈现已发布条目（AC-F09-15 rev6「仅已发布」） */
+  entries: TreeLeaf[];
 }
 
 interface TreeRoot {
@@ -70,6 +77,9 @@ export function KbOverviewView() {
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
+  const [creating, setCreating] = useState<{ parentId: string | null } | null>(null);
+  const [moving, setMoving] = useState<{ id: string; name: string } | null>(null);
+  const [moveTarget, setMoveTarget] = useState('');
 
   const libs = useAsync<Library[]>(() => api.get<Library[]>('/api/kb/libraries'), []);
   const tree = useAsync<TreeRoot[]>(
@@ -92,12 +102,19 @@ export function KbOverviewView() {
     if (first && !libraryId) setLibraryId(first.id);
   }, [libs.data, libraryId]);
 
-  // 结构树默认展开首个目录，其余折叠（与 v3 原型一致）
+  // 结构树默认展开首个目录及其首个章节，使三级结构一眼可见（与 v3 原型一致）
   useEffect(() => {
     const roots = tree.data;
     if (!roots) return;
-    setExpanded(roots[0] ? new Set([roots[0].id]) : new Set());
-    setNewParentId(roots[0]?.id ?? '');
+    const first = roots[0];
+    const open = new Set<string>();
+    if (first) {
+      open.add(first.id);
+      const firstChild = first.children[0];
+      if (firstChild) open.add(firstChild.id);
+    }
+    setExpanded(open);
+    setNewParentId(first?.id ?? '');
   }, [tree.data]);
 
   useEffect(() => {
@@ -113,6 +130,14 @@ export function KbOverviewView() {
     (r) => (!scene || r.sceneL1 === scene) && (!chapterId || r.chapterId === chapterId),
   );
   const selectedChapter = tree.data?.flatMap((t) => t.children).find((c) => c.id === chapterId) ?? null;
+  const allChapters = (tree.data ?? []).flatMap((t) => t.children);
+
+  function openCreate(parentId: string | null): void {
+    setNewParentId(parentId ?? '');
+    setNewName('');
+    setNewSectionRef('');
+    setCreating({ parentId });
+  }
 
   function toggle(id: string): void {
     setExpanded((prev) => {
@@ -123,9 +148,12 @@ export function KbOverviewView() {
     });
   }
 
-  async function createChapter(e: FormEvent): Promise<void> {
-    e.preventDefault();
+  async function createChapter(): Promise<void> {
     if (!libraryId || busy) return;
+    if (!newName.trim()) {
+      toast('名称必填');
+      return;
+    }
     setBusy(true);
     try {
       await api.post<{ id: string }>('/api/kb/chapters', {
@@ -134,9 +162,10 @@ export function KbOverviewView() {
         name: newName.trim(),
         zendeskSectionRef: newSectionRef.trim() || null,
       });
-      toast(`章节「${newName.trim()}」已创建，结构变更已留痕`);
+      toast(`${newParentId ? '章节' : '目录'}「${newName.trim()}」已创建，结构变更已留痕`);
       setNewName('');
       setNewSectionRef('');
+      setCreating(null);
       tree.reload();
     } catch (err) {
       toast((err as Error).message);
@@ -157,6 +186,31 @@ export function KbOverviewView() {
       await api.put<{ ok: boolean }>(`/api/kb/chapters/${renaming.id}`, { name });
       toast(`章节已重命名为「${name}」`);
       setRenaming(null);
+      tree.reload();
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 调整层级：把章节移到另一个顶级目录下（结构深度恒为 2） */
+  async function moveChapter(): Promise<void> {
+    if (!moving || busy) return;
+    if (!moving.id) {
+      toast('请先在结构树里选一个章节（点章节行的「移动」）');
+      return;
+    }
+    if (!moveTarget) {
+      toast('请选择目标目录');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.patch<{ ok: boolean }>(`/api/kb/chapters/${moving.id}/parent`, { parentId: moveTarget });
+      toast(`章节「${moving.name}」已移动，结构变更已留痕`);
+      setMoving(null);
+      setMoveTarget('');
       tree.reload();
     } catch (err) {
       toast((err as Error).message);
@@ -213,109 +267,149 @@ export function KbOverviewView() {
         </div>
 
         <div className="card">
-          <h2 className="card__title">结构树（目录 → 章节 → 条目）</h2>
+          <div className="tree__head">
+            <div>
+              <div className="tree__eyebrow">目录 → 章节 → 条目</div>
+              <h2 className="card__title" style={{ margin: 0 }}>结构树</h2>
+            </div>
+            <StatusPill kind="info" text="仅已发布" />
+          </div>
+
+          {canManage && (
+            <div className="tree__toolbar">
+              <button type="button" className="btn btn--sm" onClick={() => openCreate(null)} data-testid="tree-new-root">
+                新建目录
+              </button>
+              <button type="button" className="btn btn--sm" onClick={() => openCreate(tree.data?.[0]?.id ?? '')} data-testid="tree-new-chapter">
+                新建章节
+              </button>
+              <button type="button" className="btn btn--sm" onClick={() => setMoving({ id: '', name: '' })} data-testid="tree-move">
+                调整层级
+              </button>
+            </div>
+          )}
+
           {tree.loading && <div className="empty">加载中…</div>}
           {!tree.loading && (tree.data ?? []).length === 0 && <div className="empty">该知识库还没有目录与章节</div>}
-          {(tree.data ?? []).map((root) => (
-            <div key={root.id}>
-              <div className="btn-row" style={{ gap: 6, padding: '4px 0' }}>
-                <button type="button" className="btn btn--sm" onClick={() => toggle(root.id)} aria-expanded={expanded.has(root.id)}>
-                  {expanded.has(root.id) ? '收起' : '展开'}
-                </button>
-                {renaming?.id === root.id ? (
-                  <>
-                    <input
-                      className="input"
-                      style={{ width: 160 }}
+
+          <div className="tree">
+            {(tree.data ?? []).map((root) => (
+              <div key={root.id}>
+                <div className="tree__row tree__row--root">
+                  <button
+                    type="button"
+                    className="tree__caret"
+                    onClick={() => toggle(root.id)}
+                    aria-expanded={expanded.has(root.id)}
+                    aria-label={`${expanded.has(root.id) ? '收起' : '展开'}目录 ${root.name}`}
+                  >
+                    {expanded.has(root.id) ? '▾' : '▸'}
+                  </button>
+                  <span className="tree__icon" aria-hidden="true">▣</span>
+                  {renaming?.id === root.id ? (
+                    <RenameInline
                       value={renaming.name}
-                      onChange={(e) => setRenaming({ id: root.id, name: e.target.value })}
+                      busy={busy}
+                      onChange={(v) => setRenaming({ id: root.id, name: v })}
+                      onSave={saveRename}
+                      onCancel={() => setRenaming(null)}
                     />
-                    <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={saveRename}>保存</button>
-                    <button type="button" className="btn btn--sm" onClick={() => setRenaming(null)}>取消</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="strong">{root.name}</span>
-                    <span className="mono meta">{root.count}</span>
-                    {canManage && (
-                      <>
-                        <button type="button" className="btn btn--sm" onClick={() => setRenaming({ id: root.id, name: root.name })}>重命名</button>
-                        <button type="button" className="btn btn--sm btn--danger" onClick={() => setDeleting({ id: root.id, name: root.name })}>删除</button>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-              {expanded.has(root.id) &&
-                root.children.map((child) => (
-                  <div key={child.id} className="btn-row" style={{ gap: 6, padding: '4px 0 4px 22px' }}>
-                    {renaming?.id === child.id ? (
-                      <>
-                        <input
-                          className="input"
-                          style={{ width: 160 }}
-                          value={renaming.name}
-                          onChange={(e) => setRenaming({ id: child.id, name: e.target.value })}
-                        />
-                        <button type="button" className="btn btn--sm btn--primary" disabled={busy} onClick={saveRename}>保存</button>
-                        <button type="button" className="btn btn--sm" onClick={() => setRenaming(null)}>取消</button>
-                      </>
-                    ) : (
-                      <>
+                  ) : (
+                    <>
+                      <span className="tree__name strong">{root.name}</span>
+                      <span className="tree__count mono">{root.count}</span>
+                      {canManage && (
+                        <span className="tree__ops">
+                          <button type="button" className="tree__op" onClick={() => setRenaming({ id: root.id, name: root.name })}>
+                            重命名
+                          </button>
+                          <button type="button" className="tree__op tree__op--danger" onClick={() => setDeleting({ id: root.id, name: root.name })}>
+                            删除
+                          </button>
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {expanded.has(root.id) &&
+                  root.children.map((child) => (
+                    <div key={child.id}>
+                      <div className={`tree__row tree__row--child${chapterId === child.id ? ' tree__row--active' : ''}`}>
                         <button
                           type="button"
-                          className={`btn btn--sm${chapterId === child.id ? ' btn--primary' : ''}`}
-                          onClick={() => setChapterId(chapterId === child.id ? '' : child.id)}
-                          aria-pressed={chapterId === child.id}
+                          className="tree__caret"
+                          onClick={() => toggle(child.id)}
+                          aria-expanded={expanded.has(child.id)}
+                          aria-label={`${expanded.has(child.id) ? '收起' : '展开'}章节 ${child.name}`}
                         >
-                          {child.name}（{child.count}）
+                          {child.entries.length > 0 ? (expanded.has(child.id) ? '▾' : '▸') : '·'}
                         </button>
-                        <StatusPill kind="info" text={child.sectionRef ? `Zendesk ${child.sectionRef}` : 'Zendesk Section 未映射'} />
-                        {canManage && (
+                        {renaming?.id === child.id ? (
+                          <RenameInline
+                            value={renaming.name}
+                            busy={busy}
+                            onChange={(v) => setRenaming({ id: child.id, name: v })}
+                            onSave={saveRename}
+                            onCancel={() => setRenaming(null)}
+                          />
+                        ) : (
                           <>
-                            <button type="button" className="btn btn--sm" onClick={() => setRenaming({ id: child.id, name: child.name })}>重命名</button>
-                            <button type="button" className="btn btn--sm btn--danger" onClick={() => setDeleting({ id: child.id, name: child.name })}>删除</button>
+                            <button
+                              type="button"
+                              className="tree__name tree__name--btn"
+                              onClick={() => setChapterId(chapterId === child.id ? '' : child.id)}
+                              aria-pressed={chapterId === child.id}
+                              title={`按章节「${child.name}」筛选条目列表`}
+                            >
+                              {child.name}
+                            </button>
+                            <span className="tree__ref">{child.sectionRef ? `Zendesk ${child.sectionRef}` : 'Section 未映射'}</span>
+                            <span className="tree__count mono">{child.count}</span>
+                            {canManage && (
+                              <span className="tree__ops">
+                                <button type="button" className="tree__op" onClick={() => setRenaming({ id: child.id, name: child.name })}>
+                                  重命名
+                                </button>
+                                <button type="button" className="tree__op" onClick={() => setMoving({ id: child.id, name: child.name })}>
+                                  移动
+                                </button>
+                                <button type="button" className="tree__op tree__op--danger" onClick={() => setDeleting({ id: child.id, name: child.name })}>
+                                  删除
+                                </button>
+                              </span>
+                            )}
                           </>
                         )}
-                      </>
-                    )}
-                  </div>
-                ))}
-            </div>
-          ))}
-          <div className="note" style={{ marginTop: 12 }}>{zhCN.sync.mappingNote}</div>
-        </div>
+                      </div>
 
-        {canManage && (
-          <div className="card">
-            <h2 className="card__title">章节管理</h2>
-            <form onSubmit={createChapter}>
-              <div className="field">
-                <label className="field__label" htmlFor="ch-parent">父目录</label>
-                <select id="ch-parent" className="select" value={newParentId} onChange={(e) => setNewParentId(e.target.value)}>
-                  <option value="">（作为顶级目录）</option>
-                  {(tree.data ?? []).map((root) => (
-                    <option key={root.id} value={root.id}>{root.name}</option>
+                      {expanded.has(child.id) &&
+                        child.entries.map((leaf) => (
+                          <button
+                            key={leaf.id}
+                            type="button"
+                            className="tree__row tree__row--leaf"
+                            onClick={() => goto('entry', leaf.id)}
+                            title={`${leaf.code} ${leaf.title}`}
+                          >
+                            <span className="tree__icon" aria-hidden="true">▤</span>
+                            <span className="tree__name tree__name--clip">{leaf.title}</span>
+                          </button>
+                        ))}
+                    </div>
                   ))}
-                </select>
               </div>
-              <div className="field">
-                <label className="field__label" htmlFor="ch-name">章节名称</label>
-                <input id="ch-name" className="input" value={newName} onChange={(e) => setNewName(e.target.value)} required />
-              </div>
-              <div className="field">
-                <label className="field__label" htmlFor="ch-sec">Zendesk Section 映射（选填，如 Sec 5101）</label>
-                <input id="ch-sec" className="input" value={newSectionRef} onChange={(e) => setNewSectionRef(e.target.value)} />
-              </div>
-              <button type="submit" className="btn btn--primary" disabled={busy || !libraryId}>新建章节</button>
-            </form>
-            <div className="note" style={{ marginTop: 12 }}>
+            ))}
+          </div>
+
+          <div className="note" style={{ marginTop: 12 }}>{zhCN.sync.mappingNote}</div>
+          {canManage && (
+            <div className="note" style={{ marginTop: 8 }}>
               含条目或子章节的章节不可直接删除——请先把条目移到其他章节（防孤儿条目）。结构变更即时生效并留痕，同步中心按映射更新 Zendesk 结构。
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
       <div className="card">
         <h2 className="card__title">
           条目列表{currentLib ? ` · ${currentLib.name}（共 ${currentLib.count} 条）` : ''}
@@ -379,7 +473,6 @@ export function KbOverviewView() {
                   <th>同步</th>
                   <th>解决率</th>
                   <th>复核到期</th>
-                  <th>向量化</th>
                   <th>更新时间</th>
                 </tr>
               </thead>
@@ -413,7 +506,6 @@ export function KbOverviewView() {
                       )}
                     </td>
                     <td className="meta">{dueText(r.reviewDueAt, r.reviewDueLevel)}</td>
-                    <td><StatusPill kind={vectorStatusKind(r.vectorStatus)} text={L.vectorStatus(r.vectorStatus)} /></td>
                     <td className="meta">{fmtTime(r.updatedAt)}</td>
                   </tr>
                 ))}
@@ -425,6 +517,71 @@ export function KbOverviewView() {
           点任意行进入条目工作台。列表只呈现最新状态，历史全部落在版本与日志里。
         </div>
       </div>
+
+      {creating && (
+        <ConfirmModal
+          title={creating.parentId === null ? '新建目录' : '新建章节'}
+          confirmText="创建"
+          onCancel={() => setCreating(null)}
+          onConfirm={() => void createChapter()}
+        >
+          <div className="field" style={{ marginTop: 12 }}>
+            <label className="field__label" htmlFor="ch-parent">父目录</label>
+            <select id="ch-parent" className="select" value={newParentId} onChange={(e) => setNewParentId(e.target.value)}>
+              <option value="">（作为顶级目录）</option>
+              {(tree.data ?? []).map((root) => (
+                <option key={root.id} value={root.id}>{root.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="ch-name">名称</label>
+            <input id="ch-name" className="input" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="chapter-name" />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="ch-sec">Zendesk Section 映射（选填，如 Sec 5101）</label>
+            <input id="ch-sec" className="input" value={newSectionRef} onChange={(e) => setNewSectionRef(e.target.value)} />
+          </div>
+        </ConfirmModal>
+      )}
+
+      {moving && (
+        <ConfirmModal
+          title={moving.id ? `调整层级 · 移动章节「${moving.name}」` : '调整层级'}
+          confirmText="移动"
+          onCancel={() => { setMoving(null); setMoveTarget(''); }}
+          onConfirm={() => void moveChapter()}
+          consequences={['结构深度恒为 2：章节只能挂在顶级目录下，不支持目录与章节互转', '移动即时生效并写操作日志，同步中心按映射更新 Zendesk 结构']}
+        >
+          <div className="field" style={{ marginTop: 12 }}>
+            <label className="field__label" htmlFor="mv-chapter">要移动的章节</label>
+            <select
+              id="mv-chapter"
+              className="select"
+              value={moving.id}
+              onChange={(e) => {
+                const c = allChapters.find((x) => x.id === e.target.value);
+                setMoving({ id: e.target.value, name: c?.name ?? '' });
+              }}
+              data-testid="move-chapter"
+            >
+              <option value="">（请选择章节）</option>
+              {allChapters.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="mv-target">移动到目录</label>
+            <select id="mv-target" className="select" value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)} data-testid="move-target">
+              <option value="">（请选择目标目录）</option>
+              {(tree.data ?? []).map((root) => (
+                <option key={root.id} value={root.id}>{root.name}</option>
+              ))}
+            </select>
+          </div>
+        </ConfirmModal>
+      )}
 
       {deleting && (
         <ConfirmModal
@@ -441,5 +598,30 @@ export function KbOverviewView() {
         />
       )}
     </div>
+  );
+}
+
+/** 结构树行内重命名：只在被重命名的那一行出现，不常驻挤压行宽 */
+function RenameInline({
+  value, busy, onChange, onSave, onCancel,
+}: {
+  value: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <input
+        className="input tree__rename"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="章节名称"
+        autoFocus
+      />
+      <button type="button" className="tree__op" disabled={busy} onClick={onSave}>保存</button>
+      <button type="button" className="tree__op" onClick={onCancel}>取消</button>
+    </>
   );
 }

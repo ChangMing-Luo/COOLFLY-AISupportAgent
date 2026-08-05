@@ -155,7 +155,61 @@ tr.row--warn td { background: var(--warn-bg); }
 /* toast */
 .toast { position: fixed; right: 24px; bottom: 24px; background: var(--fg); color: #fff; padding: 10px 16px; border-radius: var(--radius); font-size: 13px; max-width: 460px; z-index: 60; line-height: 1.6; }
 
-/* diff */
+/* 结构树（v3 原型 TREE：目录 → 章节 → 条目 三级折叠，行式 hover，操作不常驻） */
+.tree__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.tree__eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--meta); }
+.tree__toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tree { display: flex; flex-direction: column; gap: 1px; }
+.tree__row {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px;
+  padding: 2px 6px; border: 0; border-radius: 8px; background: transparent; text-align: left;
+  font-size: 13px; color: var(--fg);
+}
+.tree__row:hover { background: var(--surface-warm); }
+.tree__row--root { font-weight: 700; font-size: 14px; }
+.tree__row--child { padding-left: 20px; color: var(--fg-2); }
+.tree__row--leaf { padding-left: 38px; color: var(--muted); cursor: pointer; }
+.tree__row--active { background: var(--accent-soft); }
+.tree__caret {
+  flex: none; width: 16px; padding: 0; border: 0; background: transparent;
+  color: var(--meta); font-size: 11px; line-height: 1;
+}
+.tree__icon { flex: none; color: var(--accent); font-size: 11px; }
+.tree__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree__name--btn { border: 0; background: transparent; padding: 0; text-align: left; color: inherit; font: inherit; }
+.tree__name--clip { font-size: 12px; }
+.tree__ref { flex: none; font-size: 11px; color: var(--meta); white-space: nowrap; }
+.tree__count { flex: none; font-size: 11px; color: var(--meta); }
+.tree__rename { flex: 1; min-width: 0; padding: 2px 6px; }
+/* 操作按钮只在悬停/聚焦时出现——常驻会把行撑爆并逼中文换行 */
+.tree__ops { flex: none; display: none; gap: 4px; }
+.tree__row:hover .tree__ops, .tree__row:focus-within .tree__ops { display: flex; }
+.tree__op { border: 0; background: transparent; padding: 0 2px; font-size: 11px; color: var(--accent); }
+.tree__op--danger { color: var(--bad-fg); }
+.tree__op:disabled { color: var(--meta); }
+
+/* 审核中心变更摘要（第一层） */
+.change-summary { margin: 0; padding: 0; list-style: none; }
+.change-summary__item { display: flex; gap: 6px; padding: 4px 8px; border-radius: 8px; font-size: 12px; color: var(--fg-2); }
+.change-summary__item + .change-summary__item { margin-top: 2px; }
+.change-summary__sign { flex: none; font-family: var(--mono); font-weight: 700; }
+.change-summary__item--add { background: var(--ok-bg); color: var(--ok-fg); }
+.change-summary__item--del { background: var(--bad-bg); color: var(--bad-fg); }
+.change-summary__item--mod { background: var(--accent-soft); color: var(--accent); }
+
+/* 审核中心 git diff 视图（第二层） */
+.gitdiff { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.gitdiff__head { padding: 6px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line-2); font-size: 12px; font-weight: 600; color: var(--fg-2); }
+.gitdiff__foot { padding: 6px 12px; background: var(--surface-2); font-size: 11px; color: var(--meta); }
+.gitdiff__line { display: flex; align-items: flex-start; font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+.gitdiff__line--add { background: var(--ok-bg); color: var(--ok-fg); }
+.gitdiff__line--del { background: var(--bad-bg); color: var(--bad-fg); }
+.gitdiff__line--ctx { color: var(--muted); }
+.gitdiff__ln { flex: none; width: 34px; padding: 0 6px; text-align: right; color: var(--meta); user-select: none; }
+.gitdiff__sign { flex: none; width: 14px; text-align: center; font-weight: 700; }
+.gitdiff__text { flex: 1; min-width: 0; padding: 0 8px 0 2px; white-space: pre-wrap; word-break: break-word; }
+
+/* 版本 diff（条目工作台版本页签） */
 .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-family: var(--mono); font-size: 12px; }
 .diff__line { padding: 3px 8px; border-radius: 4px; white-space: pre-wrap; }
 .diff__line--del { background: var(--bad-bg); color: var(--bad-fg); }
