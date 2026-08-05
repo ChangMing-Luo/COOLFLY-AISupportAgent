@@ -6,7 +6,9 @@ import {
   VISIBILITY_LABELS,
   VERSION_STATUS_LABELS,
   ENTRY_STATUS_LABELS,
+  SUMMARY_SOURCE_LABELS,
   type EntryBody,
+  type EntrySummary,
   type EntryRow,
   type EntryStatus,
   type GateResult,
@@ -24,7 +26,6 @@ import {
   syncStatusKind,
   useApp,
   useAsync,
-  vectorStatusKind,
 } from '../shared';
 
 /* ============================ 数据契约（服务端 GET /api/kb/entries/:id 返回结构） ============================ */
@@ -136,7 +137,7 @@ const REVIEW_CYCLE_OPTIONS = [90, 180, 365];
 /** 状态流转条主链路；异常态（已驳回/已下线）不在链路上，单独标红 */
 const FLOW: EntryStatus[] = ['draft', 'editing', 'pending_review', 'reviewing', 'approved', 'published'];
 
-const VECTOR_PURPOSE = '挖掘查重 · 缺口聚类 · 发布门禁代理评测';
+const SUMMARY_PURPOSE = zhCN.summary.purpose;
 
 type TabKey = 'body' | 'ver' | 'metric' | 'log';
 
@@ -319,10 +320,7 @@ function FlowBar({ status, lastLog }: { status: EntryStatus; lastLog: EntryLogRo
 function GateBar({ gate, canPublish }: { gate: GateResult | null; canPublish: boolean }) {
   if (!canPublish) {
     return (
-      <div className="note note--warn">
-        {zhCN.ironLaw.publishBlocked}
-        <div className="meta" style={{ marginTop: 4 }}>{zhCN.gate.proxyEvalNote}</div>
-      </div>
+      <div className="note note--warn">{zhCN.ironLaw.publishBlocked}</div>
     );
   }
   if (!gate) {
@@ -340,55 +338,86 @@ function GateBar({ gate, canPublish }: { gate: GateResult | null; canPublish: bo
             </li>
           ))}
         </ul>
-        <div className="meta" style={{ marginTop: 4 }}>{gate.proxyEvalNote}</div>
       </div>
     );
   }
-  return (
-    <div className="note note--ok">
-      {zhCN.gate.passed}
-      <div className="meta" style={{ marginTop: 4 }}>{gate.proxyEvalNote}</div>
-    </div>
-  );
+  return <div className="note note--ok">{zhCN.gate.passed}</div>;
 }
 
-/* ============================ ⑥ 向量状态面板 ============================ */
+/* ============================ ⑥ AI 摘要面板 ============================ */
 
-function VectorPanel({
-  vectorStatus,
+function SummaryPanel({
+  summary,
   disabled,
   disabledReason,
   busy,
-  onRebuild,
+  editing,
+  draft,
+  onDraftChange,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
 }: {
-  vectorStatus: string;
+  summary: EntrySummary | null;
   disabled: boolean;
   disabledReason: string;
   busy: boolean;
-  onRebuild: () => void;
+  editing: boolean;
+  draft: string;
+  onDraftChange: (v: string) => void;
+  onStartEdit: () => void;
+  onCancelEdit: () => void;
+  onSave: () => void;
 }) {
+  const source = summary?.source ?? 'none';
   return (
     <div className="card">
       <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-        <span className="card__title" style={{ margin: 0 }}>向量化状态</span>
-        <StatusPill kind={vectorStatusKind(vectorStatus)} text={L.vectorStatus(vectorStatus)} />
+        <span className="card__title" style={{ margin: 0 }}>AI 摘要</span>
+        <StatusPill kind={source === 'human' ? 'accent' : source === 'ai' ? 'ok' : 'info'} text={SUMMARY_SOURCE_LABELS[source]} />
       </div>
-      <p className="meta" style={{ margin: '0 0 10px' }}>用途：{VECTOR_PURPOSE}</p>
-      {vectorStatus === 'stale' && <div className="note note--warn">{zhCN.vector.staleHint}</div>}
-      {(vectorStatus === 'stale' || vectorStatus === 'failed') && (
-        <div className="note note--bad" style={{ marginTop: 8 }}>{zhCN.vector.excluded}</div>
+      <p className="meta" style={{ margin: '0 0 10px' }}>用途：{SUMMARY_PURPOSE}</p>
+      {editing ? (
+        <>
+          <textarea
+            className="textarea"
+            style={{ minHeight: 96 }}
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            data-testid="summary-input"
+            aria-label="AI 摘要"
+          />
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <button type="button" className="btn btn--primary btn--sm" disabled={busy} onClick={onSave} data-testid="summary-save">
+              {busy ? '保存中…' : '保存摘要'}
+            </button>
+            <button type="button" className="btn btn--sm" onClick={onCancelEdit}>取消</button>
+          </div>
+        </>
+      ) : (
+        <>
+          {summary?.text ? (
+            <div className="note" data-testid="summary-text">{summary.text}</div>
+          ) : (
+            <div className="note note--warn">{zhCN.summary.notPublished}</div>
+          )}
+          <div className="meta" style={{ marginTop: 8 }}>
+            {summary?.generatedAt ? `生成时间 ${fmtTime(summary.generatedAt)} · ` : ''}
+            {source === 'human' ? zhCN.summary.humanEdited : zhCN.summary.generatedOnPublish}
+          </div>
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <GatedButton
+              label="编辑摘要"
+              variant="primary"
+              size="sm"
+              onClick={onStartEdit}
+              disabled={disabled}
+              reason={disabledReason}
+              testId="summary-edit"
+            />
+          </div>
+        </>
       )}
-      <div className="btn-row" style={{ marginTop: 12 }}>
-        <GatedButton
-          label={busy ? '重建中…' : '重建向量索引'}
-          variant="primary"
-          size="sm"
-          onClick={onRebuild}
-          disabled={disabled || busy}
-          reason={disabled ? disabledReason : '正在重建，请稍候'}
-          testId="revector"
-        />
-      </div>
     </div>
   );
 }
@@ -919,12 +948,10 @@ function MetricsTab({
   versions,
   effect,
   signals,
-  vectorStatus,
 }: {
   versions: VersionRow[];
   effect: EffectRow | null;
   signals: SignalRow[];
-  vectorStatus: string;
 }) {
   const current = versions.find((v) => v.status === 'current') ?? versions[0] ?? null;
   const sampleShort = effect?.sampleShort ?? false;
@@ -965,11 +992,6 @@ function MetricsTab({
           <div className="stat__label">采纳率</div>
           <div className="stat__value">{pct(current?.adoptRate ?? null)}</div>
           <div className="stat__hint">bot 引用后真正写进回答</div>
-        </div>
-        <div className="stat">
-          <div className="stat__label">向量状态</div>
-          <div className="stat__value" style={{ fontSize: 16 }}>{L.vectorStatus(vectorStatus)}</div>
-          <div className="stat__hint">{vectorStatus === 'ready' ? `与正文一致 · ${VECTOR_PURPOSE}` : zhCN.vector.excluded}</div>
         </div>
       </div>
 
@@ -1080,7 +1102,9 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
   const [hydrated, setHydrated] = useState<string>('');
   const [conflict, setConflict] = useState<string>('');
   const [saving, setSaving] = useState(false);
-  const [vecBusy, setVecBusy] = useState(false);
+  const [sumBusy, setSumBusy] = useState(false);
+  const [sumEditing, setSumEditing] = useState(false);
+  const [sumDraft, setSumDraft] = useState('');
 
   const detail = useAsync<EntryDetail | null>(
     () => (entryId ? api.get<EntryDetail>(`/api/kb/entries/${entryId}`) : Promise.resolve(null)),
@@ -1088,6 +1112,10 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
   );
   const gate = useAsync<GateResult | null>(
     () => (entryId ? api.get<GateResult>(`/api/review/${entryId}/gate`) : Promise.resolve(null)),
+    [entryId],
+  );
+  const summary = useAsync<EntrySummary | null>(
+    () => (entryId ? api.get<EntrySummary>(`/api/kb/entries/${entryId}/summary`) : Promise.resolve(null)),
     [entryId],
   );
   const libs = useAsync<LibraryRow[]>(() => api.get<LibraryRow[]>('/api/kb/libraries'), []);
@@ -1123,6 +1151,7 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
   const reloadAll = (): void => {
     detail.reload();
     gate.reload();
+    summary.reload();
     refreshNav();
   };
 
@@ -1190,17 +1219,19 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     }
   };
 
-  const revector = async (): Promise<void> => {
+  /** 人工校正 AI 摘要：保存后 source='human'，后续发布不再被 AI 覆盖 */
+  const saveSummary = async (): Promise<void> => {
     if (!entryId) return;
-    setVecBusy(true);
+    setSumBusy(true);
     try {
-      await api.post(`/api/kb/entries/${entryId}/revector`);
-      toast('向量索引已重建：查重、缺口聚类与代理评测将使用最新正文');
-      reloadAll();
+      await api.put(`/api/kb/entries/${entryId}/summary`, { text: sumDraft.trim() });
+      toast(zhCN.summary.humanEdited);
+      setSumEditing(false);
+      summary.reload();
     } catch (err) {
       toast((err as Error).message);
     } finally {
-      setVecBusy(false);
+      setSumBusy(false);
     }
   };
 
@@ -1229,9 +1260,6 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
               <StatusPill kind={entryStatusKind(status)} text={L.entryStatus(status)} />
               {entry && <StatusPill kind={enStatusKind(entry.enStatus)} text={`英文 ${L.enStatus(entry.enStatus)}`} />}
               {entry && <StatusPill kind={syncStatusKind(entry.syncStatus)} text={`同步 ${L.syncStatus(entry.syncStatus)}`} />}
-              {entry && (
-                <StatusPill kind={vectorStatusKind(entry.vectorStatus)} text={`向量 ${L.vectorStatus(entry.vectorStatus)}`} />
-              )}
               {entry && <StatusPill kind="plain" text={`当前发布版本 ${entry.versionLabel}`} />}
             </div>
           </div>
@@ -1506,12 +1534,17 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
               </div>
             </div>
 
-            <VectorPanel
-              vectorStatus={entry?.vectorStatus ?? 'none'}
+            <SummaryPanel
+              summary={summary.data}
               disabled={!canWrite || isNew}
-              disabledReason={!canWrite ? zhCN.ironLaw.readOnlyEditor : '请先保存中文草稿，再重建向量索引'}
-              busy={vecBusy}
-              onRebuild={() => void revector()}
+              disabledReason={!canWrite ? zhCN.ironLaw.readOnlyEditor : '请先保存中文草稿，再编辑摘要'}
+              busy={sumBusy}
+              editing={sumEditing}
+              draft={sumDraft}
+              onDraftChange={setSumDraft}
+              onStartEdit={() => { setSumDraft(summary.data?.text ?? ''); setSumEditing(true); }}
+              onCancelEdit={() => setSumEditing(false)}
+              onSave={() => void saveSummary()}
             />
           </div>
         </div>
@@ -1530,7 +1563,6 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
             versions={detail.data?.versions ?? []}
             effect={detail.data?.effect ?? null}
             signals={detail.data?.signals ?? []}
-            vectorStatus={entry.vectorStatus}
           />
         ) : (
           <div className="empty">新建条目尚无效果数据。</div>

@@ -22,6 +22,8 @@ interface Candidate {
   sourceSummary: string;
   frequency: number;
   dedupeScore: number;
+  dedupeReason: string;
+  dedupeDegraded: boolean;
   gapVerdict: string;
   aiSummary: string;
   admissionNote: string;
@@ -218,7 +220,7 @@ export function MiningView() {
                     <div className="mono strong">{c.frequency} 次</div>
                   </div>
                   <div className="note">
-                    <div className="meta">② 查重</div>
+                    <div className="meta">② LLM 语义查重</div>
                     <div className="mono strong" style={c.canCreateNew ? undefined : { color: 'var(--bad-fg)' }}>
                       {c.dedupeScore.toFixed(2)}
                       {c.targetEntryCode ? ` · ${c.targetEntryCode}` : ''}
@@ -229,6 +231,13 @@ export function MiningView() {
                     <div className="strong">{c.gapVerdict}</div>
                   </div>
                 </div>
+
+                {c.dedupeReason && (
+                  <div className="note" style={{ marginTop: 10 }} data-testid={`dedupe-reason-${c.id}`}>
+                    <span className="strong">查重判定理由：</span>{c.dedupeReason}
+                  </div>
+                )}
+                {c.dedupeDegraded && <div className="note note--warn">{zhCN.mine.dedupeDegraded}</div>}
 
                 <p style={{ marginBottom: 0 }}>{c.aiSummary}</p>
                 <div className={c.canCreateNew ? 'note' : 'note note--warn'}>准入结论：{c.admissionNote}</div>
