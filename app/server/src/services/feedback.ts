@@ -1,0 +1,323 @@
+import { bumpVersion, MISS_STATE_LABELS, FEEDBACK_STATE_LABELS, type SessionUser } from '@kb/contracts';
+import { query, newId } from '../db/pool.js';
+import { writeAudit, SYSTEM_ACTOR } from '../core/audit.js';
+import { desensitize, toPlainText } from '../core/content.js';
+import { fmtShort } from '../core/fmt.js';
+import { getZendesk } from '../integrations/zendesk.js';
+import { literalSimilarity } from '../integrations/llm.js';
+import { DomainError, actorOf, createEntry, findEntry, listEntries, type EntryRow } from './entries.js';
+
+/* ══════════ 反馈 ══════════ */
+
+export interface FeedbackDto {
+  code: string;
+  entryCode: string;
+  type: string;
+  text: string;
+  conversation: string;
+  state: string;
+  stateLabel: string;
+  at: string;
+}
+
+export async function listFeedbacks(entryId?: string): Promise<FeedbackDto[]> {
+  const { rows } = await query<{
+    code: string;
+    entry_code: string;
+    type: string;
+    text: string;
+    conversation: string;
+    state: string;
+    occurred_at: Date;
+  }>(
+    `SELECT code, entry_code, type, text, conversation, state, occurred_at FROM feedbacks
+     ${entryId ? 'WHERE entry_id=$1' : ''} ORDER BY occurred_at DESC`,
+    entryId ? [entryId] : [],
+  );
+  return rows.map((r) => ({
+    code: r.code,
+    entryCode: r.entry_code,
+    type: r.type,
+    text: r.text,
+    conversation: r.conversation,
+    state: r.state,
+    stateLabel: FEEDBACK_STATE_LABELS[r.state as keyof typeof FEEDBACK_STATE_LABELS],
+    at: fmtShort(r.occurred_at),
+  }));
+}
+
+async function nextFeedbackCode(): Promise<string> {
+  const { rows } = await query<{ max: string | null }>(
+    `SELECT MAX(CAST(SUBSTRING(code FROM 'FB-([0-9]+)') AS INT))::text AS max FROM feedbacks`,
+  );
+  return `FB-${Number(rows[0]?.max ?? 9900) + 1}`;
+}
+
+const COMPLAINT_HINTS: Array<[RegExp, '差评' | '信息有误' | '无法解决']> = [
+  [/不一致|不对|写错|过期|旧政策/, '信息有误'],
+  [/说不清|没写清|找不到|解决不了|追问|还是不懂/, '无法解决'],
+  [/太长|念不完|等不及|态度|体验差/, '差评'],
+];
+
+/**
+ * 从 Zendesk 拉客诉：
+ * ①文章 down 投票增量 → 差评；②近 7 日会话里带抱怨语气且能匹配到已发布知识的 → 按语气归类。
+ * 全部走真实接口，拉不到就返回 0 条并如实提示，不造数据。
+ */
+export async function pullFromZendesk(user: SessionUser): Promise<{ created: number; note: string }> {
+  const zd = getZendesk();
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  let created = 0;
+
+  // ① 投票增量
+  const { rows: mapped } = await query<{
+    entry_id: string;
+    code: string;
+    title_zh: string;
+    article_ref: string;
+    votes_down: number;
+    votes_up: number;
+  }>(
+    `SELECT e.id AS entry_id, e.code, e.title_zh, m.zendesk_article_ref AS article_ref,
+            COALESCE(mt.votes_down,0) AS votes_down, COALESCE(mt.votes_up,0) AS votes_up
+     FROM entries e
+     JOIN sync_mappings m ON m.entry_id = e.id AND m.zendesk_article_ref IS NOT NULL
+     LEFT JOIN entry_metrics mt ON mt.entry_id = e.id
+     WHERE e.status='published'`,
+  );
+  for (const m of mapped) {
+    let votes: { up: number; down: number };
+    try {
+      votes = await zd.fetchArticleVotes(m.article_ref);
+    } catch {
+      continue;
+    }
+    const total = votes.up + votes.down;
+    await query(
+      `INSERT INTO entry_metrics (entry_id, votes_up, votes_down, adopt_rate, refreshed_at)
+       VALUES ($1,$2,$3,$4,now())
+       ON CONFLICT (entry_id) DO UPDATE SET votes_up=EXCLUDED.votes_up, votes_down=EXCLUDED.votes_down,
+                                            adopt_rate=EXCLUDED.adopt_rate, refreshed_at=now()`,
+      [m.entry_id, votes.up, votes.down, total ? Math.round((votes.up / total) * 100) : 0],
+    );
+    const delta = votes.down - m.votes_down;
+    if (delta > 0) {
+      await query(
+        `INSERT INTO feedbacks (id, code, entry_id, entry_code, type, text, conversation, state, occurred_at)
+         VALUES ($1,$2,$3,$4,'差评',$5,$6,'open',now())`,
+        [
+          newId('fb'),
+          await nextFeedbackCode(),
+          m.entry_id,
+          m.code,
+          `帮助中心新增 ${delta} 条踩，累计 ${votes.down} 踩 / ${votes.up} 赞，需复核内容准确性`,
+          `ZD-VOTE-${m.article_ref}`,
+        ],
+      );
+      created += 1;
+    }
+  }
+
+  // ② 会话文本
+  let items: string[] = [];
+  try {
+    items = (await zd.fetchConversations(since)).items.map(desensitize);
+  } catch {
+    items = [];
+  }
+  const published = await listEntries(`WHERE e.status='published'`);
+  for (const raw of items) {
+    const hint = COMPLAINT_HINTS.find(([re]) => re.test(raw));
+    if (!hint) continue;
+    let best = { entry: null as EntryRow | null, score: 0 };
+    for (const p of published) {
+      const s = literalSimilarity(raw, `${p.title_zh} ${toPlainText(p.body_zh).slice(0, 200)}`);
+      if (s > best.score) best = { entry: p, score: s };
+    }
+    if (!best.entry || best.score < 0.12) continue;
+    const conv = `ZD-${Math.abs(hashCode(raw)) % 100000}`;
+    const { rows: dup } = await query('SELECT 1 FROM feedbacks WHERE conversation=$1', [conv]);
+    if (dup.length) continue;
+    await query(
+      `INSERT INTO feedbacks (id, code, entry_id, entry_code, type, text, conversation, state, occurred_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'open',now())`,
+      [newId('fb'), await nextFeedbackCode(), best.entry.id, best.entry.code, hint[1], raw.slice(0, 160), conv],
+    );
+    created += 1;
+  }
+
+  await writeAudit(SYSTEM_ACTOR, {
+    action: 'Zendesk 拉取',
+    objectType: 'feedback',
+    objectCode: null,
+    objectLabel: created ? `拉取到 ${created} 条客诉` : '本次未拉取到新客诉',
+  });
+  return {
+    created,
+    note: created
+      ? `已从 Zendesk 拉取 ${created} 条客诉，可直接在列表修复。`
+      : `Zendesk 近 7 日没有新的踩或客诉会话（数据源：${zd.mode === 'live' ? '真实实例' : '沙箱'}）。`,
+  };
+}
+
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
+export async function ignoreFeedback(user: SessionUser, code: string): Promise<void> {
+  const { rows } = await query<{ entry_code: string }>(
+    `UPDATE feedbacks SET state='closed', handled_by=$2, handled_at=now()
+     WHERE code=$1 AND state='open' RETURNING entry_code`,
+    [code, user.id],
+  );
+  if (!rows[0]) throw new DomainError('反馈不存在或已处理。', 404);
+  await writeAudit(actorOf(user), {
+    action: '忽略反馈',
+    objectType: 'feedback',
+    objectCode: code,
+    objectLabel: `${code} → ${rows[0].entry_code}`,
+  });
+}
+
+/** 去修复：生成小版本草稿，线上仍为上一版本；反馈置「修复中」 */
+export async function fixFeedback(user: SessionUser, code: string): Promise<EntryRow> {
+  const { rows } = await query<{ entry_code: string; text: string; state: string }>(
+    'SELECT entry_code, text, state FROM feedbacks WHERE code=$1',
+    [code],
+  );
+  const fb = rows[0];
+  if (!fb) throw new DomainError('反馈不存在。', 404);
+  const entry = await findEntry(fb.entry_code);
+  const next = entry.status === 'published' ? bumpVersion(entry.version, false) : entry.version;
+  await query(
+    `UPDATE entries SET status='draft', version=$2, note=$3, owner_id=$4, owner_name=$5, updated_at=now()
+     WHERE code=$1`,
+    [entry.code, next, `修复反馈 ${code}：${fb.text}`, user.id, user.name],
+  );
+  await query(`UPDATE feedbacks SET state='fixing', handled_by=$2, handled_at=now() WHERE code=$1`, [
+    code,
+    user.id,
+  ]);
+  await writeAudit(actorOf(user), {
+    action: '反馈转修复',
+    objectCode: entry.code,
+    objectLabel: `${code} → ${entry.code} ${next}`,
+    version: next,
+  });
+  return findEntry(entry.code);
+}
+
+/* ══════════ 未命中问题 ══════════ */
+
+export interface MissDto {
+  code: string;
+  question: string;
+  sceneZh: string;
+  count7d: number;
+  hitRate: string;
+  state: string;
+  stateLabel: string;
+  aiSummary: string;
+}
+
+export async function listMisses(): Promise<MissDto[]> {
+  const { rows } = await query<{
+    code: string;
+    question: string;
+    scene_zh: string | null;
+    count_7d: number;
+    hit_rate: number;
+    state: string;
+    ai_summary: string;
+  }>(
+    `SELECT m.code, m.question, s.name_zh AS scene_zh, m.count_7d, m.hit_rate, m.state, m.ai_summary
+     FROM misses m LEFT JOIN scenes s ON s.id=m.scene_id
+     ORDER BY m.count_7d DESC, m.created_at DESC`,
+  );
+  return rows.map((r) => ({
+    code: r.code,
+    question: r.question,
+    sceneZh: r.scene_zh ?? '未识别',
+    count7d: r.count_7d,
+    hitRate: `${r.hit_rate}%`,
+    state: r.state,
+    stateLabel: MISS_STATE_LABELS[r.state as keyof typeof MISS_STATE_LABELS],
+    aiSummary: r.ai_summary,
+  }));
+}
+
+/** 从 Zendesk 帮助中心「搜索无结果」刷新未命中；接口不可得时不写数据 */
+export async function refreshMisses(): Promise<number> {
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  let list: Array<{ keyword: string; count: number }> = [];
+  try {
+    list = await getZendesk().fetchNoResultSearches(since);
+  } catch {
+    return 0;
+  }
+  if (!list.length) return 0;
+  const scenes = await query<{ id: string; name_zh: string }>('SELECT id, name_zh FROM scenes WHERE active');
+  let n = 0;
+  for (const k of list) {
+    const { rows } = await query('SELECT 1 FROM misses WHERE question=$1', [k.keyword]);
+    const scene = scenes.rows.find((s) => k.keyword.includes(s.name_zh.slice(0, 2)));
+    if (rows.length) {
+      await query('UPDATE misses SET count_7d=$2, updated_at=now() WHERE question=$1', [k.keyword, k.count]);
+      continue;
+    }
+    const { rows: seq } = await query<{ max: string | null }>(
+      `SELECT MAX(CAST(SUBSTRING(code FROM 'MS-([0-9]+)') AS INT))::text AS max FROM misses`,
+    );
+    await query(
+      `INSERT INTO misses (id, code, question, scene_id, count_7d, hit_rate, state, ai_summary)
+       VALUES ($1,$2,$3,$4,$5,0,'open',$6)`,
+      [
+        newId('ms'),
+        `MS-${Number(seq[0]?.max ?? 420) + 1}`,
+        k.keyword,
+        scene?.id ?? null,
+        k.count,
+        `帮助中心搜索无结果 ${k.count} 次，尚无知识覆盖该提问。`,
+      ],
+    );
+    n += 1;
+  }
+  if (n) {
+    await writeAudit(SYSTEM_ACTOR, {
+      action: '未命中刷新',
+      objectType: 'miss',
+      objectCode: null,
+      objectLabel: `新增 ${n} 条未命中问题`,
+    });
+  }
+  return n;
+}
+
+export async function createDraftFromMiss(user: SessionUser, code: string): Promise<EntryRow> {
+  const { rows } = await query<{ id: string; question: string; scene_id: string | null; state: string }>(
+    'SELECT id, question, scene_id, state FROM misses WHERE code=$1',
+    [code],
+  );
+  const m = rows[0];
+  if (!m) throw new DomainError('未命中问题不存在。', 404);
+  const { rows: sc } = m.scene_id
+    ? await query<{ category_id: string }>('SELECT category_id FROM scenes WHERE id=$1', [m.scene_id])
+    : { rows: [] as Array<{ category_id: string }> };
+
+  const entry = await createEntry(user, {
+    titleZh: m.question,
+    categoryId: sc[0]?.category_id ?? null,
+    sceneId: m.scene_id,
+    source: `未命中 ${code}`,
+    quality: 40,
+  });
+  await query(`UPDATE misses SET state='planned', entry_id=$2, updated_at=now() WHERE code=$1`, [code, entry.id]);
+  await writeAudit(actorOf(user), {
+    action: '未命中新建条目',
+    objectCode: entry.code,
+    objectLabel: `${entry.code} ← ${code}`,
+  });
+  return findEntry(entry.code);
+}

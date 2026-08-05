@@ -28,7 +28,8 @@ export function toPlainText(html: string): string {
   if (!html) return '';
   return html
     .replace(/<\s*br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|h[1-6]|li|div)>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/(p|h[1-6]|div|ul|ol)>/gi, '\n\n')
     .replace(/<li[^>]*>/gi, '· ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')

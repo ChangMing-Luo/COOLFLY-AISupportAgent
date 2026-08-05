@@ -15,10 +15,8 @@ for (const dir of [process.cwd(), join(here, '..'), join(here, '../..')]) {
     break;
   }
 }
-import { drainQueue, scanDrift } from './services/sync.js';
-import { runDailyBatch } from './services/mining.js';
-import { collectSignals } from './services/signals.js';
-import { scanReviewDue } from './services/entries.js';
+import { runCollect } from './services/collect.js';
+import { refreshMisses } from './services/feedback.js';
 
 const PORT = Number(process.env.PORT ?? 3311);
 
@@ -28,26 +26,13 @@ async function main(): Promise<void> {
   app.log.info(`知识运营中台服务已启动 http://localhost:${PORT}`);
 
   if (process.env.DISABLE_CRON !== '1') {
-    // 同步队列（分钟级推送）
-    cron.schedule('* * * * *', () => {
-      drainQueue().catch((e) => app.log.error({ err: e }, '同步队列执行失败'));
+    // AI 抽取：每日 07:00（抽取工作台页头文案与此一致）
+    cron.schedule(process.env.COLLECT_CRON ?? '0 7 * * *', () => {
+      runCollect('系统').catch((e) => app.log.error({ err: e }, 'AI 抽取失败'));
     });
-    // drift 扫描（建议值每小时）
-    cron.schedule('0 * * * *', () => {
-      scanDrift().catch((e) => app.log.error({ err: e }, 'drift 扫描失败'));
-    });
-    // 信号采集（每小时，四渠道；待核实档位如实标注不进达标判定）
+    // 未命中刷新：每小时从帮助中心「搜索无结果」拉取
     cron.schedule('30 * * * *', () => {
-      collectSignals().catch((e) => app.log.error({ err: e }, '信号采集失败'));
-    });
-    // 复核到期扫描（每日 8:00，到期与临期条目写告警信号，界面据此提醒）
-    cron.schedule('0 8 * * *', () => {
-      scanReviewDue().catch((e) => app.log.error({ err: e }, '复核到期扫描失败'));
-    });
-    // 每日挖掘批次（业务时区低峰）
-    cron.schedule('0 3 * * *', () => {
-      const d = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      runDailyBatch(d).catch((e) => app.log.error({ err: e }, '挖掘批次失败'));
+      refreshMisses().catch((e) => app.log.error({ err: e }, '未命中刷新失败'));
     });
   }
 }

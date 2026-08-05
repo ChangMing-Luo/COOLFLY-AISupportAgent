@@ -1,384 +1,255 @@
-import {
-  enAllowsSync,
-  TUNABLES,
-  zhCN,
-  type EnStatus,
-  type EntryBody,
-  type SessionUser,
-  type Visibility,
-} from '@kb/contracts';
-import { query, withTransaction, newId } from '../db/pool.js';
-import { writeAudit } from '../core/audit.js';
-import { contentHash, toInternalHtml, toPlainText, toPublicHtml } from '../core/content.js';
-import { getZendesk, ZendeskApiError } from '../integrations/zendesk.js';
-import { DomainError } from './entries.js';
+import type { SessionUser } from '@kb/contracts';
+import { query, newId } from '../db/pool.js';
+import { getZendesk } from '../integrations/zendesk.js';
+import { writeAudit, SYSTEM_ACTOR, type AuditActor } from '../core/audit.js';
+import { contentHash, toPlainText } from '../core/content.js';
+import { DomainError, findEntry, actorOf, type EntryRow } from './entries.js';
 
-interface TaskRow {
-  id: string;
-  entry_id: string;
-  version_no: number;
-  action: string;
-  target: string;
-  status: string;
-  languages: string;
-  retry_count: number;
-  fail_reason: string | null;
-  blocked_reason: string | null;
-  updated_at: Date;
-  code: string;
-  title: string;
-  visibility: Visibility;
-  labels: string[];
-  body: EntryBody;
-  en_status: EnStatus;
-  en_title: string | null;
-  chapter_id: string;
-  section_ref: string | null;
+/** 报文号自增：与审计一样只增不改，用于「同步日志」页的可追溯列 */
+async function nextPayloadNo(): Promise<string> {
+  const { rows } = await query<{ n: string }>('SELECT COUNT(*)::text AS n FROM sync_logs');
+  return `#${88210 + Number(rows[0].n)}`;
 }
 
-const TASK_SELECT = `
-  SELECT t.*, e.code, e.title, e.en_title, e.visibility, e.labels, e.body, e.en_status, e.chapter_id,
-         c.zendesk_section_ref AS section_ref
-  FROM sync_tasks t
-  JOIN entries e ON e.id = t.entry_id
-  JOIN chapters c ON c.id = e.chapter_id
-`;
-
-export async function listSyncTasks(): Promise<
-  Array<{
-    id: string; entryCode: string; entryTitle: string; versionLabel: string; action: string;
-    target: string; status: string; languages: string; retryCount: number;
-    failReason: string | null; blockedReason: string | null; updatedAt: string;
-  }>
-> {
-  const { rows } = await query<TaskRow>(
-    `${TASK_SELECT} ORDER BY CASE t.status WHEN 'failed' THEN 0 WHEN 'blocked' THEN 1 ELSE 2 END, t.updated_at DESC`,
+async function logSync(args: {
+  entryId: string | null;
+  entryCode: string;
+  objectLabel: string;
+  result: '成功' | '失败';
+  message: string;
+  durationMs: number;
+  actorName: string;
+  action?: string;
+  payload?: string;
+}): Promise<void> {
+  await query(
+    `INSERT INTO sync_logs (id, entry_id, entry_code, object_label, result, message, duration_ms, payload_no, actor_name, action, payload)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    [
+      newId('slog'),
+      args.entryId,
+      args.entryCode,
+      args.objectLabel,
+      args.result,
+      args.message,
+      args.durationMs,
+      await nextPayloadNo(),
+      args.actorName,
+      args.action ?? 'upsert',
+      args.payload ?? '',
+    ],
   );
-  return rows.map((t) => ({
-    id: t.id,
-    entryCode: t.code,
-    entryTitle: t.title,
-    versionLabel: `v${t.version_no}`,
-    action: t.action,
-    target: t.target,
-    status: t.status,
-    languages: t.languages,
-    retryCount: t.retry_count,
-    failReason: t.fail_reason,
-    blockedReason: t.blocked_reason,
-    updatedAt: t.updated_at.toISOString(),
-  }));
-}
-
-export async function syncStats(): Promise<Record<string, number>> {
-  const { rows } = await query<{ status: string; n: string }>(
-    'SELECT status, COUNT(*)::text AS n FROM sync_tasks GROUP BY status',
-  );
-  const base: Record<string, number> = { queued: 0, running: 0, synced: 0, failed: 0, blocked: 0, archived: 0 };
-  for (const r of rows) base[r.status] = Number(r.n);
-  return base;
 }
 
 /**
- * 执行一条同步任务。
- * 铁律：英文非「已确认」→ 阻断（不推半截内容）；混合条目内部段落服务端剥离后才推对外。
+ * 场景 → Zendesk Section 的懒创建：
+ * 本台是结构的唯一维护方，场景没有 Section 就现建（父分类没有 Category 也一并建）。
  */
-export async function runSyncTask(taskId: string): Promise<{ status: string; reason?: string }> {
-  const { rows } = await query<TaskRow>(`${TASK_SELECT} WHERE t.id = $1`, [taskId]);
-  const t = rows[0];
-  if (!t) throw new DomainError('同步任务不存在', 404);
-  if (t.status === 'synced' || t.status === 'archived') return { status: t.status };
-
-  // 英文状态硬拦（AC-P-16）
-  if (t.languages.includes('英') && !enAllowsSync(t.en_status)) {
-    await query(
-      `UPDATE sync_tasks SET status='blocked', blocked_reason=$2, updated_at=now() WHERE id=$1`,
-      [taskId, '英文未确认——人工校验 100% 铁律，同步阻断'],
-    );
-    await query(`UPDATE entries SET sync_status='blocked', blocked_reason=$2 WHERE id=$1`, [
-      t.entry_id,
-      '英文未确认——同步阻断',
-    ]);
-    return { status: 'blocked', reason: '英文未确认' };
-  }
-  if (!t.section_ref) {
-    await query(
-      `UPDATE sync_tasks SET status='failed', fail_reason=$2, updated_at=now() WHERE id=$1`,
-      [taskId, '结构映射缺失：所属章节未配置 Zendesk Section——请先在章节管理修复映射'],
-    );
-    await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
-    return { status: 'failed', reason: '结构映射缺失' };
-  }
-
-  await query(`UPDATE sync_tasks SET status='running', updated_at=now() WHERE id=$1`, [taskId]);
+export async function ensureSectionRef(sceneId: string): Promise<string> {
+  const { rows } = await query<{
+    scene_ref: string | null;
+    scene_name_en: string;
+    scene_name_zh: string;
+    category_id: string;
+    cat_ref: string | null;
+    cat_name_en: string;
+    cat_name_zh: string;
+  }>(
+    `SELECT s.zendesk_section_ref AS scene_ref, s.name_en AS scene_name_en, s.name_zh AS scene_name_zh,
+            c.id AS category_id, c.zendesk_category_ref AS cat_ref, c.name_en AS cat_name_en, c.name_zh AS cat_name_zh
+     FROM scenes s JOIN categories c ON c.id = s.category_id WHERE s.id = $1`,
+    [sceneId],
+  );
+  const s = rows[0];
+  if (!s) throw new DomainError('问题场景不存在，无法定位 Zendesk 目录。', 400);
+  if (s.scene_ref) return s.scene_ref;
 
   const zd = getZendesk();
-
-  // 归档任务（条目下线）：只把 Zendesk 端文章置归档，不推正文——裸删会在帮助中心留死链
-  if (t.action.includes('归档')) {
-    const { rows: map } = await query<{ zendesk_ref: string }>(
-      'SELECT zendesk_ref FROM sync_mappings WHERE entry_id=$1',
-      [t.entry_id],
-    );
-    const ref = map[0]?.zendesk_ref;
-    if (!ref) {
-      await query(
-        `UPDATE sync_tasks SET status='failed', fail_reason=$2, updated_at=now() WHERE id=$1`,
-        [taskId, '该条目从未同步到 Zendesk，无可归档的文章'],
-      );
-      await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
-      return { status: 'failed', reason: '无 Zendesk 映射' };
-    }
-    try {
-      await zd.archiveArticle(ref);
-      await query(`UPDATE sync_tasks SET status='archived', fail_reason=NULL, updated_at=now() WHERE id=$1`, [taskId]);
-      await query(`UPDATE entries SET sync_status='archived', blocked_reason=NULL WHERE id=$1`, [t.entry_id]);
-      return { status: 'archived' };
-    } catch (err) {
-      const reason = (err as Error).message ?? '归档失败';
-      await query(
-        `UPDATE sync_tasks SET status='failed', retry_count=$2, fail_reason=$3, updated_at=now() WHERE id=$1`,
-        [taskId, t.retry_count + 1, reason],
-      );
-      await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
-      return { status: 'failed', reason };
-    }
-  }
-  const internalOnly = t.visibility === 'internal';
-  // 数据泄漏级零容忍：对外正文只由 stripInternal 产物生成
-  const publicHtml = internalOnly ? toInternalHtml(t.body) : toPublicHtml(t.body);
-
-  const enPairs = await query<{ en_text: string | null; internal: boolean; seq: number }>(
-    'SELECT en_text, internal, seq FROM translation_pairs WHERE entry_id=$1 ORDER BY seq',
-    [t.entry_id],
-  );
-  const enBody = enPairs.rows
-    .filter((p) => !p.internal && p.en_text)
-    .map((p) => `<p>${p.en_text}</p>`)
-    .join('\n');
-
-  const pushEn = t.languages.includes('英') && enBody !== '';
-  // 英文标题缺失即阻断：否则 en-us 译文会挂着中文标题推到帮助中心（英文读者可见）
-  if (pushEn && !t.en_title?.trim()) {
-    await query(
-      `UPDATE sync_tasks SET status='blocked', blocked_reason=$2, updated_at=now() WHERE id=$1`,
-      [taskId, '英文标题缺失——译文会挂中文标题，同步阻断'],
-    );
-    await query(`UPDATE entries SET sync_status='blocked', blocked_reason=$2 WHERE id=$1`, [
-      t.entry_id,
-      '英文标题缺失——同步阻断',
+  let catRef = s.cat_ref;
+  if (!catRef) {
+    const created = await zd.createCategory(s.cat_name_en || s.cat_name_zh);
+    catRef = created.id;
+    await query('UPDATE categories SET zendesk_category_ref=$2, updated_at=now() WHERE id=$1', [
+      s.category_id,
+      catRef,
     ]);
-    return { status: 'blocked', reason: '英文标题缺失' };
   }
+  const section = await zd.createSection(catRef, s.scene_name_en || s.scene_name_zh);
+  await query('UPDATE scenes SET zendesk_section_ref=$2, updated_at=now() WHERE id=$1', [sceneId, section.id]);
+  return section.id;
+}
 
+/**
+ * 把条目的英文版本写入 Zendesk。发布与「重新下发 / 重试」共用这一条路径。
+ * 成功 → sync_status=synced；失败 → failed + 失败原因（界面如实显示，可重试）。
+ */
+export async function pushEntry(
+  actor: AuditActor,
+  code: string,
+): Promise<{ ok: boolean; message: string }> {
+  const entry = await findEntry(code);
+  await query(`UPDATE entries SET sync_status='pending', sync_fail_reason=NULL WHERE code=$1`, [code]);
+
+  const started = Date.now();
   try {
-    const article = await zd.upsertArticle({
-      entryCode: t.code,
-      title: t.title,
-      publicHtml,
-      labels: t.labels ?? [],
-      sectionRef: t.section_ref,
-      internalOnly,
-      enTitle: pushEn ? (t.en_title ?? undefined) : undefined,
-      enBodyHtml: pushEn ? enBody : undefined,
-    });
-
-    const hash = contentHash(toPlainText(t.body));
-    await withTransaction(async (client) => {
-      await client.query(`UPDATE sync_tasks SET status='synced', fail_reason=NULL, blocked_reason=NULL, updated_at=now() WHERE id=$1`, [taskId]);
-      await client.query(
-        `UPDATE entries SET sync_status='synced', blocked_reason=NULL,
-           en_status = CASE WHEN en_status='confirmed' THEN 'synced' ELSE en_status END WHERE id=$1`,
-        [t.entry_id],
-      );
-      const { rows: existing } = await client.query('SELECT id FROM sync_mappings WHERE entry_id=$1', [t.entry_id]);
-      if (existing[0]) {
-        await client.query(
-          `UPDATE sync_mappings SET zendesk_ref=$2, published_hash=$3, visibility=$4, updated_at=now() WHERE entry_id=$1`,
-          [t.entry_id, article.id, hash, t.visibility],
-        );
-      } else {
-        await client.query(
-          `INSERT INTO sync_mappings (id, entry_id, chapter_id, local_label, zendesk_kind, zendesk_ref, visibility, published_hash)
-           VALUES ($1,$2,$3,$4,'article',$5,$6,$7)`,
-          [newId('map'), t.entry_id, t.chapter_id, `${t.code} ${t.title}`, article.id, t.visibility, hash],
-        );
-      }
-    });
-    return { status: 'synced' };
-  } catch (err) {
-    const e = err as ZendeskApiError;
-    const retry = t.retry_count + 1;
-    const exhausted = retry >= TUNABLES.syncRetryLimit;
-    const reason =
-      e instanceof ZendeskApiError && e.status === 429
-        ? `Zendesk API 429 限流（Retry-After ${e.retryAfterSec ?? '-'}s）`
-        : (e.message ?? '未知错误');
-    await query(
-      `UPDATE sync_tasks SET status='failed', retry_count=$2, fail_reason=$3, updated_at=now() WHERE id=$1`,
-      [taskId, retry, exhausted ? `${reason}（已重试 ${retry} 次，重试耗尽已告警）` : reason],
-    );
-    await query(`UPDATE entries SET sync_status='failed' WHERE id=$1`, [t.entry_id]);
-    return { status: 'failed', reason };
-  }
-}
-
-/** 处理队列中全部待同步任务（node-cron 分钟级；同步器唯一执行入口） */
-export async function drainQueue(): Promise<{ processed: number }> {
-  const { rows } = await query<{ id: string }>(`SELECT id FROM sync_tasks WHERE status='queued' ORDER BY created_at`);
-  for (const r of rows) await runSyncTask(r.id);
-  return { processed: rows.length };
-}
-
-export async function retryTask(user: SessionUser, taskId: string): Promise<{ status: string }> {
-  const { rows } = await query<TaskRow>(`${TASK_SELECT} WHERE t.id=$1`, [taskId]);
-  const t = rows[0];
-  if (!t) throw new DomainError('同步任务不存在', 404);
-  await writeAudit(user, {
-    objectType: 'sync_task',
-    objectId: taskId,
-    objectLabel: `${t.code} ${t.title}`,
-    action: '手动重试同步',
-    category: 'review',
-    field: '同步状态',
-    before: t.status,
-    after: 'queued',
-  });
-  await query(`UPDATE sync_tasks SET status='queued', updated_at=now() WHERE id=$1`, [taskId]);
-  const result = await runSyncTask(taskId);
-  return { status: result.status };
-}
-
-/** drift 检测：比对已发布内容哈希与 Zendesk 端实际内容 */
-export async function scanDrift(): Promise<{ detected: number }> {
-  const { rows } = await query<{
-    entry_id: string; zendesk_ref: string; published_hash: string; code: string; title: string; body: EntryBody;
-  }>(
-    `SELECT m.entry_id, m.zendesk_ref, m.published_hash, e.code, e.title, e.body
-     FROM sync_mappings m JOIN entries e ON e.id = m.entry_id
-     WHERE m.zendesk_ref IS NOT NULL`,
-  );
-  const zd = getZendesk();
-  let detected = 0;
-  for (const m of rows) {
-    const article = await zd.getArticle(m.zendesk_ref);
-    if (!article) continue;
-    const remoteHash = contentHash(stripTags(article.bodyHtml));
-    const localHash = contentHash(stripTags(toPublicHtml(m.body)));
-    if (remoteHash !== localHash && article.updatedBy !== 'COOLFLY 知识运营中台') {
-      const { rows: dup } = await query(
-        `SELECT id FROM drift_records WHERE entry_id=$1 AND resolved_action IS NULL`,
-        [m.entry_id],
-      );
-      if (dup[0]) continue;
-      await query(
-        `INSERT INTO drift_records (id, entry_id, article_ref, title, changed_by, diff_summary, remote_body)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [
-          newId('drift'),
-          m.entry_id,
-          `Article ${article.id}`,
-          m.title,
-          `Zendesk 端 ${article.updatedBy}`,
-          `正文与本台已发布版本不一致 · ${new Date(article.updatedAt).toLocaleString('zh-CN')}`,
-          stripTags(article.bodyHtml),
-        ],
-      );
-      detected += 1;
+    if (!entry.scene_id) throw new Error('未选择问题场景，无法定位 Zendesk 目录');
+    if (!entry.title_en.trim() || !entry.body_en.trim()) {
+      throw new Error('英文版本缺失——Zendesk 写入语言为英文，请先完成翻译');
     }
-  }
-  return { detected };
-}
-
-function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '\n').replace(/\n+/g, '\n').trim();
-}
-
-export async function listDrift(): Promise<
-  Array<{ id: string; entryCode: string; articleRef: string; title: string; changedBy: string; diffSummary: string; detectedAt: string; resolvedAction: string | null }>
-> {
-  const { rows } = await query<{
-    id: string; article_ref: string; title: string; changed_by: string; diff_summary: string;
-    detected_at: Date; resolved_action: string | null; code: string;
-  }>(
-    `SELECT d.*, e.code FROM drift_records d LEFT JOIN entries e ON e.id = d.entry_id
-     ORDER BY d.resolved_action NULLS FIRST, d.detected_at DESC`,
-  );
-  return rows.map((d) => ({
-    id: d.id,
-    entryCode: d.code,
-    articleRef: d.article_ref,
-    title: d.title,
-    changedBy: d.changed_by,
-    diffSummary: d.diff_summary,
-    detectedAt: d.detected_at.toISOString(),
-    resolvedAction: d.resolved_action,
-  }));
-}
-
-/** drift 双处置：覆盖（推本台版本）/ 拉回（Zendesk 端内容进审核队列） */
-export async function resolveDrift(
-  user: SessionUser,
-  driftId: string,
-  action: 'overwrite' | 'pull_back',
-): Promise<{ action: string }> {
-  const { rows } = await query<{
-    id: string; entry_id: string; title: string; remote_body: string | null; article_ref: string; code: string; body: EntryBody; visibility: Visibility; current_version: number;
-  }>(
-    `SELECT d.id, d.entry_id, d.title, d.remote_body, d.article_ref, e.code, e.body, e.visibility, e.current_version
-     FROM drift_records d JOIN entries e ON e.id = d.entry_id WHERE d.id=$1`,
-    [driftId],
-  );
-  const d = rows[0];
-  if (!d) throw new DomainError('漂移记录不存在', 404);
-
-  if (action === 'overwrite') {
-    const taskId = newId('sync');
-    await query(
-      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
-       VALUES ($1,$2,$3,'drift 覆盖：以本台内容重推',$4,'queued','中')`,
-      [taskId, d.entry_id, d.current_version, d.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章'],
+    const sectionRef = await ensureSectionRef(entry.scene_id);
+    const { rows: mapRows } = await query<{ zendesk_article_ref: string | null }>(
+      'SELECT zendesk_article_ref FROM sync_mappings WHERE entry_id=$1',
+      [entry.id],
     );
-    await runSyncTask(taskId);
-  } else {
-    const paragraphs = (d.remote_body ?? '')
-      .split('\n')
-      .filter((l) => l.trim())
-      .map((text, i) => ({ id: `p_pull_${i}`, text, internal: false, heading: false }));
-    await query(
-      `UPDATE entries SET body=$2::jsonb, status='pending_review', review_source='feedback',
-         submitter_id=$3, submitted_at=now(), updated_at=now() WHERE id=$1`,
-      [d.entry_id, JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_pull_0', text: '（Zendesk 端内容为空）', html: '', internal: false, heading: false }] }), user.id],
-    );
-  }
+    const articleRef = mapRows[0]?.zendesk_article_ref ?? null;
 
-  await query(`UPDATE drift_records SET resolved_action=$2, resolved_by=$3, resolved_at=now() WHERE id=$1`, [
-    driftId,
-    action,
-    user.id,
-  ]);
-  await writeAudit(user, {
-    objectType: 'drift',
-    objectId: driftId,
-    objectLabel: `${d.code} ${d.title}（${d.article_ref}）`,
-    action: action === 'overwrite' ? 'drift 处置：以本台内容覆盖' : 'drift 处置：拉回进审核队列',
-    category: 'review',
-    field: '漂移处置',
-    before: '未处置',
-    after: action === 'overwrite' ? '以本台覆盖（Zendesk 端修改丢弃）' : '拉回进审核队列（作为待审来源）',
-    note: zhCN.sync.driftGovernance,
-  });
-  return { action };
+    const article = await getZendesk().upsertArticle({
+      entryCode: entry.code,
+      title: entry.title_zh,
+      publicHtml: entry.body_zh,
+      labels: entry.tags ?? [],
+      sectionRef,
+      internalOnly: false,
+      enTitle: entry.title_en,
+      enBodyHtml: entry.body_en,
+      articleRef,
+    });
+
+    const duration = Date.now() - started;
+    await query(
+      `INSERT INTO sync_mappings (entry_id, zendesk_article_ref, published_hash, updated_at)
+       VALUES ($1,$2,$3,now())
+       ON CONFLICT (entry_id) DO UPDATE SET zendesk_article_ref=EXCLUDED.zendesk_article_ref,
+                                            published_hash=EXCLUDED.published_hash, updated_at=now()`,
+      [entry.id, article.id, contentHash(toPlainText(entry.body_en))],
+    );
+    await query(`UPDATE entries SET sync_status='synced', sync_fail_reason=NULL WHERE code=$1`, [code]);
+    await logSync({
+      entryId: entry.id,
+      entryCode: entry.code,
+      objectLabel: `${entry.code} 英文版本（成功）`,
+      result: '成功',
+      message: `article ${article.id} · section ${sectionRef}`,
+      durationMs: duration,
+      actorName: actor.name,
+      payload: JSON.stringify({ articleId: article.id, sectionRef, locale: 'en-us' }),
+    });
+    await writeAudit(SYSTEM_ACTOR, {
+      action: 'Zendesk 同步',
+      objectCode: entry.code,
+      objectLabel: `${entry.code} 英文版本（成功）`,
+      version: entry.version,
+    });
+    return { ok: true, message: '已同步' };
+  } catch (err) {
+    const duration = Date.now() - started;
+    const message = err instanceof Error ? err.message : '未知错误';
+    await query(`UPDATE entries SET sync_status='failed', sync_fail_reason=$2 WHERE code=$1`, [code, message]);
+    await logSync({
+      entryId: entry.id,
+      entryCode: entry.code,
+      objectLabel: `${entry.code} 英文版本（失败）`,
+      result: '失败',
+      message,
+      durationMs: duration,
+      actorName: actor.name,
+    });
+    await writeAudit(SYSTEM_ACTOR, {
+      action: 'Zendesk 同步',
+      objectCode: entry.code,
+      objectLabel: `${entry.code} 英文版本（失败）`,
+      result: '失败',
+      version: entry.version,
+      detail: message,
+    });
+    return { ok: false, message };
+  }
 }
 
-export async function listMappings(): Promise<Array<{ local: string; zendesk: string; visibility: string }>> {
-  const { rows } = await query<{ name: string; lib: string; ref: string | null; internal_only: boolean }>(
-    `SELECT c.name, l.name AS lib, c.zendesk_section_ref AS ref, l.internal_only
-     FROM chapters c JOIN libraries l ON l.id = c.library_id WHERE c.parent_id IS NOT NULL ORDER BY l.sort_order, c.sort_order`,
+/** 下线：Zendesk 侧归档（draft=true），不做物理删除 */
+export async function archiveEntry(actor: AuditActor, entry: EntryRow): Promise<void> {
+  const { rows } = await query<{ zendesk_article_ref: string | null }>(
+    'SELECT zendesk_article_ref FROM sync_mappings WHERE entry_id=$1',
+    [entry.id],
   );
+  const ref = rows[0]?.zendesk_article_ref;
+  const started = Date.now();
+  if (!ref) return;
+  try {
+    await getZendesk().archiveArticle(ref);
+    await logSync({
+      entryId: entry.id,
+      entryCode: entry.code,
+      objectLabel: `${entry.code} 归档（成功）`,
+      result: '成功',
+      message: `article ${ref} draft=true`,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'archive',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '未知错误';
+    await logSync({
+      entryId: entry.id,
+      entryCode: entry.code,
+      objectLabel: `${entry.code} 归档（失败）`,
+      result: '失败',
+      message,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'archive',
+    });
+  }
+}
+
+export async function retrySync(user: SessionUser, code: string): Promise<{ ok: boolean; message: string }> {
+  const entry = await findEntry(code);
+  if (entry.status !== 'published') {
+    throw new DomainError('该知识未进入发布状态，无法同步 Zendesk。', 409);
+  }
+  return pushEntry(actorOf(user), code);
+}
+
+export interface SyncLogDto {
+  id: string;
+  at: string;
+  entryCode: string;
+  objectLabel: string;
+  target: string;
+  result: string;
+  message: string;
+  durationMs: number;
+  payloadNo: string;
+  actorName: string;
+  payload: string;
+}
+
+export async function listSyncLogs(limit = 100): Promise<SyncLogDto[]> {
+  const { rows } = await query<{
+    id: string;
+    at: Date;
+    entry_code: string;
+    object_label: string;
+    target: string;
+    result: string;
+    message: string;
+    duration_ms: number;
+    payload_no: string;
+    actor_name: string;
+    payload: string;
+  }>(`SELECT * FROM sync_logs ORDER BY at DESC LIMIT $1`, [limit]);
+  const { fmtShort } = await import('../core/fmt.js');
   return rows.map((r) => ({
-    local: `${r.lib} → ${r.name}`,
-    zendesk: r.ref ? `Section ${r.ref}` : '（未映射）',
-    visibility: r.internal_only ? '仅客服 segment' : '对外公开',
+    id: r.id,
+    at: fmtShort(r.at),
+    entryCode: r.entry_code,
+    objectLabel: r.object_label,
+    target: r.target,
+    result: r.result,
+    message: r.message,
+    durationMs: r.duration_ms,
+    payloadNo: r.payload_no,
+    actorName: r.actor_name,
+    payload: r.payload,
   }));
 }

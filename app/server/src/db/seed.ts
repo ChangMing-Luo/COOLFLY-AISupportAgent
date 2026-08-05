@@ -91,6 +91,99 @@ const SEED_ENTRIES: SeedEntry[] = [
   { code: 'KB-20421', titleZh: '酒店预订取消政策（境内 / 境外差异）', category: '酒店 · 订单', scene: '酒店订单', status: 'published', version: 'v2.2', owner: '林静', at: '2026-07-26T14:00:00+08:00', quality: 85, confidence: 0.9, sync: 'synced', adopt: 76, hits: 3320, tags: ['改签', '规则'] },
 ];
 
+/**
+ * 逐版本正文快照。回滚要真的把内容换回去、审核 diff 要真的有增删，
+ * 所以这些版本的正文必须彼此不同（不能全用同一段模板）。
+ */
+const VERSION_BODIES: Record<string, { zh: string; en: string }> = {
+  'v3.2': {
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的国际机票订单。',
+      '二、费率。起飞前 7 日以上按票面价 5%；7 日内至 24 小时按 10%；24 小时至 4 小时按 20%。',
+      '三、特殊情形。因航司原因导致的变更不收取任何费用。',
+      '四、生效日期。本版自 2026 年 8 月 1 日起执行，此前出票订单按原政策。',
+    ].join('\n\n'),
+    en: [
+      'I. Scope. These terms apply to international air tickets issued on the COOLFLY platform.',
+      'II. Fees. 5% of the fare more than 7 days before departure; 10% from 7 days to 24 hours; 20% from 24 hours to 4 hours.',
+      'III. Special cases. Changes caused by the carrier incur no fee.',
+      'IV. Effective date. This edition takes effect on 1 August 2026; tickets issued earlier follow the previous policy.',
+    ].join('\n\n'),
+  },
+  'v3.1': {
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的国际机票订单。',
+      '二、费率。起飞前 7 日以上按票面价 5% 收取；7 日内至 24 小时按 10%。',
+      '三、特殊情形。因航司原因导致的变更不收取任何费用。',
+    ].join('\n\n'),
+    en: [
+      'I. Scope. These terms apply to international air tickets issued on the COOLFLY platform.',
+      'II. Fees. 5% of the fare more than 7 days before departure; 10% from 7 days to 24 hours.',
+      'III. Special cases. Changes caused by the carrier incur no fee.',
+    ].join('\n\n'),
+  },
+  'v3.0': {
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的国际机票订单。',
+      '二、费率。起飞前 7 日以上按票面价 5% 收取；7 日内统一按 10%。',
+      '三、特殊情形。因航司原因导致的变更不收取任何费用。',
+    ].join('\n\n'),
+    en: [
+      'I. Scope. These terms apply to international air tickets issued on the COOLFLY platform.',
+      'II. Fees. 5% of the fare more than 7 days before departure; a flat 10% within 7 days.',
+      'III. Special cases. Changes caused by the carrier incur no fee.',
+    ].join('\n\n'),
+  },
+  'v2.8': {
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的国际机票订单。',
+      '二、费率。国内与国际分列两套费率表，国际段起飞前 7 日以上按票面价 5% 收取。',
+    ].join('\n\n'),
+    en: [
+      'I. Scope. These terms apply to international air tickets issued on the COOLFLY platform.',
+      'II. Fees. Domestic and international fares use separate rate tables; international segments are charged 5% more than 7 days before departure.',
+    ].join('\n\n'),
+  },
+  'v2.6': {
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的机票订单。',
+      '二、费率。改签手续费按航司政策执行，具体以出票时费率表为准。',
+    ].join('\n\n'),
+    en: [
+      'I. Scope. These terms apply to air tickets issued on the COOLFLY platform.',
+      'II. Fees. Rebooking fees follow the airline policy; refer to the rate table in force at ticketing.',
+    ].join('\n\n'),
+  },
+};
+
+/** 待审条目的线上版本快照：让审核 diff 有真实增删，而不是整篇全新增 */
+const PENDING_PRIOR: Record<string, { version: string; at: string; by: string; note: string; zh: string; adopt: number; hits: number }> = {
+  'KB-20517': {
+    version: 'v1.0',
+    at: '2026-06-20T10:30:00+08:00',
+    by: '苏见',
+    note: '初版：仅说明可改签，未写补偿分档',
+    adopt: 58,
+    hits: 1240,
+    zh: [
+      '一、适用范围。本条款适用于 COOLFLY 平台出票的国际与国内机票，因航司超售导致的自愿放弃座位情形。',
+      '二、补偿标准。自愿放弃座位的旅客可获得改签至后续航班，补偿金额由航司自行确定。',
+      '三、办理方式。旅客须在登机口向地面服务人员登记，签署自愿放弃确认单后由航司出具补偿凭证。',
+    ].join('\n\n'),
+  },
+};
+
+/** 覆盖默认模板的条目正文（与上面的版本快照对齐） */
+const ENTRY_BODIES: Record<string, string> = {
+  'KB-20418': VERSION_BODIES['v3.2'].zh,
+  'KB-20517': [
+    '一、适用范围。本条款适用于 COOLFLY 平台出票的国际与国内机票，因航司超售导致的自愿放弃座位情形。',
+    '二、补偿标准。自愿放弃座位的旅客可获得改签至后续航班加现金补偿，补偿金额按原票面价的 100%–200% 分档，具体由航司当次公告确定。',
+    '三、办理方式。旅客须在登机口向地面服务人员登记，签署自愿放弃确认单后由航司出具补偿凭证。',
+    '四、常见追问。补偿到账时限为 7 个工作日；若旅客改签后再次遇到超售，可累计申请补偿。',
+  ].join('\n\n'),
+};
+
 /** KB-20418 的完整版本历史（原型 versions） */
 const SEED_VERSIONS: Array<[string, string, string, string, string, number, number]> = [
   ['v3.2', '2026-08-04T14:22:00+08:00', '林静', '发布', '按 8 月新政更新阶梯费率，新增 24 小时内档位', 31, 2840],
@@ -231,8 +324,10 @@ async function main(): Promise<void> {
     const id = newId('ent');
     entryId.set(e.code, id);
     const translated = e.status === 'published' || e.status === 'offline' || e.status === 'fixing';
-    const bodyZh = toHtml(bodyZhOf(e.category));
-    const bodyEn = translated ? toHtml(bodyEnOf(catEn.get(e.category) ?? e.category)) : '';
+    const bodyZh = toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category));
+    const bodyEn = translated
+      ? toHtml(VERSION_BODIES[e.version]?.en ?? bodyEnOf(catEn.get(e.category) ?? e.category))
+      : '';
     const titleEn = translated ? (TITLE_EN[e.titleZh] ?? '') : '';
     const owner = userId.get(e.owner) ?? null;
     await query(
@@ -285,19 +380,58 @@ async function main(): Promise<void> {
   if (kb418) {
     for (let i = SEED_VERSIONS.length - 1; i >= 0; i -= 1) {
       const [v, at, by, act, note, adopt, hits] = SEED_VERSIONS[i];
+      const snap = VERSION_BODIES[v];
       await query(
-        `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name, adopt_rate, hits, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [newId('ver'), kb418, v, act, note, userId.get(by) ?? null, by, adopt, hits, at],
+        `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name,
+                                     title_zh, title_en, body_zh, body_en, adopt_rate, hits, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [
+          newId('ver'),
+          kb418,
+          v,
+          act,
+          note,
+          userId.get(by) ?? null,
+          by,
+          '国际机票改签手续费计算规则（2026 版）',
+          TITLE_EN['国际机票改签手续费计算规则（2026 版）'],
+          toHtml(snap?.zh ?? ''),
+          toHtml(snap?.en ?? ''),
+          adopt,
+          hits,
+          at,
+        ],
       );
     }
   }
   for (const e of SEED_ENTRIES) {
     if (e.code === 'KB-20418') continue;
     const id = entryId.get(e.code)!;
+    const prior = PENDING_PRIOR[e.code];
+    if (prior) {
+      await query(
+        `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name,
+                                     title_zh, title_en, body_zh, body_en, adopt_rate, hits, created_at)
+         VALUES ($1,$2,$3,'发布',$4,$5,$6,$7,'',$8,'',$9,$10,$11)`,
+        [
+          newId('ver'),
+          id,
+          prior.version,
+          prior.note,
+          userId.get(prior.by) ?? null,
+          prior.by,
+          e.titleZh,
+          toHtml(prior.zh),
+          prior.adopt,
+          prior.hits,
+          prior.at,
+        ],
+      );
+    }
     await query(
-      `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name, adopt_rate, hits, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name,
+                                   title_zh, title_en, body_zh, body_en, adopt_rate, hits, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [
         newId('ver'),
         id,
@@ -306,6 +440,10 @@ async function main(): Promise<void> {
         e.status === 'published' ? '当前线上版本' : '初始版本',
         userId.get(e.owner) ?? null,
         e.owner,
+        e.titleZh,
+        TITLE_EN[e.titleZh] ?? '',
+        toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category)),
+        e.status === 'published' ? toHtml(bodyEnOf(catEn.get(e.category) ?? e.category)) : '',
         e.adopt,
         e.hits,
         e.at,

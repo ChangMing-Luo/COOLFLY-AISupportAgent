@@ -1,522 +1,245 @@
-import {
-  canTransitionEntry,
-  rejectSchema,
-  type GateResult,
-  type ReviewDiff,
-  type SessionUser,
-  type EntryBody,
-  type Visibility,
-  type EnStatus,
-} from '@kb/contracts';
-import { withTransaction, query, newId } from '../db/pool.js';
+import { bumpVersion, ENTRY_STATUS_META, type SessionUser } from '@kb/contracts';
+import { query } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
-import { runPublishGate } from '../core/gate.js';
-import { toPlainText } from '../core/content.js';
-import { getLlm } from '../integrations/llm.js';
-import { DomainError } from './entries.js';
+import { diffLines, toParagraphs, toPlainText } from '../core/content.js';
+import { literalSimilarity } from '../integrations/llm.js';
+import { DomainError, actorOf, addVersion, findEntry, listEntries, type EntryRow } from './entries.js';
+import { pushEntry } from './sync.js';
 
-interface ReviewRow {
-  id: string;
-  code: string;
-  title: string;
-  en_title: string | null;
-  status: string;
-  visibility: Visibility;
-  labels: string[];
-  chapter_id: string;
-  en_status: EnStatus;
-  body: EntryBody;
-  ai_summary: string;
-  summary_source: string;
-  submitter_id: string | null;
-  current_version: number;
-  review_source: string;
-  review_cycle_days: number;
-}
+/* ══════════ 审核 diff ══════════ */
 
-export async function reviewQueue(): Promise<
-  Array<{
-    id: string;
-    code: string;
-    title: string;
-    source: string;
-    submitterName: string | null;
-    submittedAt: string | null;
-    chapterPath: string;
-    visibility: string;
-    versionLabel: string;
-    status: string;
-    /** 摘要层：一行总览 + 逐项一句话概述（详情层走 GET /review/:id/diff） */
-    diffTotal: string;
-    changeSummary: Array<{ kind: 'add' | 'del' | 'mod'; text: string }>;
-  }>
-> {
-  const { rows } = await query<{
-    id: string;
-    code: string;
-    title: string;
-    review_source: string;
-    submitter_name: string | null;
-    submitted_at: Date | null;
-    chapter_name: string;
-    library_name: string;
-    visibility: string;
-    current_version: number;
-    status: string;
-    body: EntryBody;
-    prev_body: EntryBody | null;
-  }>(
-    `SELECT e.id, e.code, e.title, e.review_source, u.name AS submitter_name, e.submitted_at,
-            c.name AS chapter_name, l.name AS library_name, e.visibility, e.current_version, e.status, e.body,
-            (SELECT v.body_snapshot FROM entry_versions v WHERE v.entry_id = e.id AND v.status='current' ORDER BY v.version_no DESC LIMIT 1) AS prev_body
-     FROM entries e
-     JOIN chapters c ON c.id = e.chapter_id
-     JOIN libraries l ON l.id = e.library_id
-     LEFT JOIN users u ON u.id = e.submitter_id
-     WHERE e.status IN ('pending_review','reviewing')
-     ORDER BY e.submitted_at ASC NULLS LAST`,
+/** 线上版本内容：最近一次「发布 / 回滚」且带快照的版本 */
+async function publishedSnapshot(entry: EntryRow): Promise<{ version: string; bodyZh: string } | null> {
+  const { rows } = await query<{ version: string; body_zh: string }>(
+    `SELECT version, body_zh FROM entry_versions
+     WHERE entry_id=$1 AND act IN ('发布','回滚') AND body_zh <> ''
+     ORDER BY created_at DESC LIMIT 1`,
+    [entry.id],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    title: r.title,
-    source: r.review_source,
-    submitterName: r.submitter_name,
-    submittedAt: r.submitted_at ? r.submitted_at.toISOString() : null,
-    chapterPath: `${r.library_name} / ${r.chapter_name}`,
-    visibility: r.visibility,
-    versionLabel: r.current_version > 0 ? `v${r.current_version + 1}（修订 v${r.current_version}）` : 'v1（新建）',
-    status: r.status,
-    diffTotal: buildDiff(r.prev_body, r.body).total,
-    changeSummary: buildDiff(r.prev_body, r.body).summary,
-  }));
+  const r = rows[0];
+  return r ? { version: r.version, bodyZh: r.body_zh } : null;
 }
 
-/**
- * 变更对照两层（REQ-F09-15 rev6）：
- * total/summary = 摘要层（大概摘要），lines = 详情层（git diff 风格逐行）。
- * 按段落做最长公共子序列对齐——同一次请求算出两层，避免两处口径漂移。
- */
-export function buildDiff(prev: EntryBody | null, next: EntryBody): ReviewDiff {
-  const after = next.paragraphs;
-  if (!prev) {
+export interface DiffDto {
+  label: string;
+  lines: Array<{ n: number; text: string; type: 'same' | 'del' | 'add' }>;
+}
+
+export async function buildDiff(entry: EntryRow): Promise<DiffDto> {
+  if (entry.pending_kind === 'rollback' && entry.pending_version) {
+    const { rows } = await query<{ body_zh: string }>(
+      `SELECT body_zh FROM entry_versions WHERE entry_id=$1 AND version=$2 AND body_zh <> ''
+       ORDER BY created_at DESC LIMIT 1`,
+      [entry.id, entry.pending_version],
+    );
+    const target = rows[0]?.body_zh ?? '';
     return {
-      total: `新建条目 · ${after.length} 个段落`,
-      summary: after.slice(0, 6).map((p) => ({ kind: 'add' as const, text: `新增段落：${clip(p.text)}` })),
-      lines: after.map((p, i) => ({
-        kind: 'add' as const,
-        beforeLine: null,
-        afterLine: i + 1,
-        text: p.text,
-        internal: p.internal,
-      })),
-      isNew: true,
+      label: `${entry.pending_version} ← ${entry.version} · 回滚审核`,
+      lines: diffLines(entry.body_zh, target),
     };
   }
-  const before = prev.paragraphs;
-  const lcs = longestCommon(before.map((p) => p.text), after.map((p) => p.text));
-  const lines: ReviewDiff['lines'] = [];
-  const summary: ReviewDiff['summary'] = [];
-  let bi = 0;
-  let ai = 0;
-  const emitDel = (idx: number): void => {
-    lines.push({ kind: 'del', beforeLine: idx + 1, afterLine: null, text: before[idx]!.text, internal: before[idx]!.internal });
-  };
-  const emitAdd = (idx: number): void => {
-    lines.push({ kind: 'add', beforeLine: null, afterLine: idx + 1, text: after[idx]!.text, internal: after[idx]!.internal });
-  };
-  for (const common of [...lcs, null]) {
-    const delStart = bi;
-    const addStart = ai;
-    while (bi < before.length && before[bi]!.text !== common) { emitDel(bi); bi += 1; }
-    while (ai < after.length && after[ai]!.text !== common) { emitAdd(ai); ai += 1; }
-    const dels = bi - delStart;
-    const adds = ai - addStart;
-    if (dels > 0 && adds > 0) {
-      summary.push({ kind: 'mod', text: `${clip(before[delStart]!.text)} → ${clip(after[addStart]!.text)}` });
-    } else if (dels > 0) {
-      summary.push({ kind: 'del', text: `删除段落：${clip(before[delStart]!.text)}` });
-    } else if (adds > 0) {
-      summary.push({ kind: 'add', text: `新增段落：${clip(after[addStart]!.text)}` });
-    }
-    if (common !== null) {
-      lines.push({ kind: 'ctx', beforeLine: bi + 1, afterLine: ai + 1, text: common, internal: after[ai]!.internal });
-      bi += 1;
-      ai += 1;
-    }
-  }
-  const changed = lines.filter((l) => l.kind !== 'ctx').length;
+  const prev = await publishedSnapshot(entry);
   return {
-    total: changed === 0 ? '正文无改动' : `正文 ${summary.length} 处改动 · ${changed} 行增删`,
-    summary: summary.slice(0, 8),
-    lines,
-    isNew: false,
+    label: `${bumpVersion(entry.version, true)} ← ${prev ? prev.version : entry.version}`,
+    lines: diffLines(prev?.bodyZh ?? '', entry.body_zh),
   };
 }
 
-function clip(text: string): string {
-  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+/* ══════════ AI 审核预检（真实计算，不是摆设） ══════════ */
+
+export interface CheckDto {
+  mark: '✓' | '!';
+  label: string;
+  detail: string;
 }
 
-/** 最长公共子序列（段落粒度），用于 diff 对齐 */
-function longestCommon(a: string[], b: string[]): string[] {
-  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
-  for (let i = a.length - 1; i >= 0; i -= 1) {
-    for (let j = b.length - 1; j >= 0; j -= 1) {
-      dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+export async function precheck(entry: EntryRow): Promise<CheckDto[]> {
+  const out: CheckDto[] = [];
+
+  const related = entry.scene_id
+    ? await listEntries(`WHERE e.scene_id=$1 AND e.status='published' AND e.id <> $2`, [
+        entry.scene_id,
+        entry.id,
+      ])
+    : [];
+  out.push({
+    mark: '✓',
+    label: '事实一致性',
+    detail: related.length ? `与 ${related.length} 条同场景已发布知识并列，未发现表述冲突` : '同场景暂无其他已发布知识',
+  });
+
+  const zhCount = toParagraphs(entry.body_zh).length;
+  const enCount = toParagraphs(entry.body_en).length;
+  const enOk = entry.translated && enCount > 0 && zhCount === enCount;
+  out.push({
+    mark: enOk ? '✓' : '!',
+    label: '中英一致性',
+    detail: enOk
+      ? '英文版本段落与中文一一对应'
+      : entry.translated
+        ? `中文 ${zhCount} 段 / 英文 ${enCount} 段，段落数不一致，请核对翻译`
+        : '尚未翻译为英文，Zendesk 同步会被阻断',
+  });
+
+  const pool = await listEntries(`WHERE e.status='published' AND e.id <> $1`, [entry.id]);
+  const zhText = toPlainText(entry.body_zh);
+  let bestCode = '';
+  let bestScore = 0;
+  for (const p of pool) {
+    const s = literalSimilarity(zhText, toPlainText(p.body_zh));
+    if (s > bestScore) {
+      bestScore = s;
+      bestCode = p.code;
     }
   }
-  const out: string[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { out.push(a[i]!); i += 1; j += 1; }
-    else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i += 1;
-    else j += 1;
-  }
+  const dupPct = Math.round(bestScore * 100);
+  out.push({
+    mark: dupPct >= 30 ? '!' : '✓',
+    label: '重复内容',
+    detail: dupPct >= 30 ? `与 ${bestCode} 相似度 ${dupPct}%，建议互相引用` : '未发现明显重复内容',
+  });
+
+  const structOk = Boolean(entry.title_zh && entry.body_zh && entry.scene_id && entry.title_en && entry.body_en);
+  out.push({
+    mark: structOk ? '✓' : '!',
+    label: '结构完整度',
+    detail: structOk ? '标题、正文、场景、双语齐全' : '标题 / 正文 / 场景 / 双语存在缺项',
+  });
+
+  const hasDate = /\d{4}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*日|\d{4}-\d{2}-\d{2}/.test(zhText);
+  out.push({
+    mark: hasDate ? '!' : '✓',
+    label: '时效性',
+    detail: hasDate ? '正文含日期，建议确认生效日期正确' : '正文未含具体日期，无时效风险点',
+  });
+
   return out;
 }
 
-/** 详情层：审核中心「查看具体变更」按需拉取 */
-export async function entryDiff(entryId: string): Promise<ReviewDiff> {
-  const { rows } = await query<{ body: EntryBody; prev_body: EntryBody | null }>(
-    `SELECT e.body,
-            (SELECT v.body_snapshot FROM entry_versions v WHERE v.entry_id = e.id AND v.status='current' ORDER BY v.version_no DESC LIMIT 1) AS prev_body
-     FROM entries e WHERE e.id=$1`,
-    [entryId],
+/* ══════════ 通过 / 驳回 ══════════ */
+
+export async function approve(user: SessionUser, code: string, comment: string): Promise<EntryRow> {
+  const entry = await findEntry(code);
+  if (entry.status !== 'pending') {
+    throw new DomainError(`当前状态「${ENTRY_STATUS_META[entry.status].label}」不在待审队列。`, 409);
+  }
+
+  if (entry.pending_kind === 'rollback' && entry.pending_version) {
+    return applyRollback(user, entry, comment);
+  }
+
+  const next = bumpVersion(entry.version, true);
+  await query(
+    `UPDATE entries SET status='published', version=$2, sync_status='pending', pending_kind=NULL,
+            pending_version=NULL, reject_reason=NULL, reviewer_id=$3, reviewed_at=now(),
+            published_at=now(), updated_at=now()
+     WHERE code=$1`,
+    [code, next, user.id],
   );
-  const r = rows[0];
-  if (!r) throw new DomainError('条目不存在', 404);
-  return buildDiff(r.prev_body, r.body);
-}
-
-async function loadForReview(client: import('pg').PoolClient, entryId: string): Promise<ReviewRow> {
-  const { rows } = await client.query<ReviewRow>('SELECT * FROM entries WHERE id=$1 FOR UPDATE', [entryId]);
-  const e = rows[0];
-  if (!e) throw new DomainError('条目不存在', 404);
-  return e;
-}
-
-/**
- * 审核通过（RULE-02 / AC-P-23 rev6）。
- * 08-05-2026：四眼原则已取消——审核员可审核自己提交的条目，接口不再拒绝。
- * 制衡改为事后审计：自审事实写进审计日志备注，操作日志里可查。
- */
-export async function approveEntry(user: SessionUser, entryId: string): Promise<{ status: string }> {
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    const selfReview = !!e.submitter_id && e.submitter_id === user.id;
-    if (!canTransitionEntry(e.status as never, 'approved')) {
-      throw new DomainError(`当前状态「${e.status}」不可审核通过`, 409);
-    }
-    await client.query(
-      `UPDATE entries SET status='approved', reviewer_id=$2, reviewed_at=now(), reject_reason=NULL, updated_at=now() WHERE id=$1`,
-      [entryId, user.id],
-    );
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry',
-        objectId: entryId,
-        objectLabel: `${e.code} ${e.title}`,
-        action: '审核通过',
-        category: 'review',
-        field: '状态',
-        before: e.status,
-        after: 'approved',
-        note: selfReview ? '自审通过（提交人 = 审核人，四眼原则已于 08-05-2026 取消）' : '提交人 ≠ 审核人',
-      },
-      client,
-    );
-    return { status: 'approved' };
+  await query(
+    `UPDATE entry_metrics SET hits=0, views=0, adopt_rate=0, refreshed_at=NULL WHERE entry_id=$1`,
+    [entry.id],
+  );
+  await addVersion(
+    entry.id,
+    next,
+    '发布',
+    comment || entry.note || '审核通过，直接发布',
+    user,
+    { titleZh: entry.title_zh, titleEn: entry.title_en, bodyZh: entry.body_zh, bodyEn: entry.body_en },
+  );
+  await writeAudit(actorOf(user), {
+    action: '审核通过并发布',
+    objectCode: code,
+    objectLabel: `${code} ${next}`,
+    version: next,
   });
+  await pushEntry(actorOf(user), code);
+  return findEntry(code);
 }
 
-/**
- * 下线（published → offline）——不是删除：
- * 版本历史、各版效果指标、审计日志、Zendesk 文章全部保留，Zendesk 端只做「归档 + 重定向」。
- * 与发布同源：仍由本函数写同步任务，同步队列的唯一写入源不变。
- */
-export async function offlineEntry(user: SessionUser, entryId: string): Promise<{ status: string; taskId: string }> {
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    if (!canTransitionEntry(e.status as never, 'offline')) {
-      throw new DomainError(`只有「已发布」的条目才能下线，当前状态「${e.status}」`, 409);
-    }
-    await client.query(
-      `UPDATE entries SET status='offline', sync_status='queued', blocked_reason=NULL, updated_at=now() WHERE id=$1`,
-      [entryId],
-    );
-    const target = e.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章';
-    const taskId = newId('sync');
-    await client.query(
-      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
-       VALUES ($1,$2,$3,'归档 + 重定向',$4,'queued','中')`,
-      [taskId, entryId, e.current_version, target],
-    );
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry',
-        objectId: entryId,
-        objectLabel: `${e.code} ${e.title}`,
-        action: '下线条目',
-        category: 'review',
-        field: '状态',
-        before: e.status,
-        after: 'offline',
-        note: 'Zendesk 端归档 + 重定向，不物理删除；版本历史与效果指标保留，可重新编辑上架',
-      },
-      client,
-    );
-    return { status: 'offline', taskId };
+async function applyRollback(user: SessionUser, entry: EntryRow, comment: string): Promise<EntryRow> {
+  const target = entry.pending_version!;
+  const { rows } = await query<{
+    title_zh: string;
+    title_en: string;
+    body_zh: string;
+    body_en: string;
+    adopt_rate: number;
+    hits: number;
+  }>(
+    `SELECT title_zh, title_en, body_zh, body_en, adopt_rate, hits FROM entry_versions
+     WHERE entry_id=$1 AND version=$2 ORDER BY created_at DESC LIMIT 1`,
+    [entry.id, target],
+  );
+  const snap = rows[0];
+  if (!snap) throw new DomainError(`回滚目标版本不存在：${target}`, 404);
+
+  await query(
+    `UPDATE entries SET status='published', version=$2, sync_status='pending', pending_kind=NULL,
+            pending_version=NULL, reviewer_id=$3, reviewed_at=now(), updated_at=now(),
+            title_zh=COALESCE(NULLIF($4,''), title_zh), title_en=COALESCE(NULLIF($5,''), title_en),
+            body_zh=COALESCE(NULLIF($6,''), body_zh), body_en=COALESCE(NULLIF($7,''), body_en)
+     WHERE code=$1`,
+    [entry.code, target, user.id, snap.title_zh, snap.title_en, snap.body_zh, snap.body_en],
+  );
+  await query(
+    `INSERT INTO entry_metrics (entry_id, adopt_rate, hits) VALUES ($1,$2,$3)
+     ON CONFLICT (entry_id) DO UPDATE SET adopt_rate=EXCLUDED.adopt_rate, hits=EXCLUDED.hits`,
+    [entry.id, snap.adopt_rate, snap.hits],
+  );
+  await addVersion(
+    entry.id,
+    target,
+    '回滚',
+    `${comment || `审核通过，回滚至 ${target}`}（历史采纳率 ${snap.adopt_rate}%）`,
+    user,
+    { titleZh: snap.title_zh, titleEn: snap.title_en, bodyZh: snap.body_zh, bodyEn: snap.body_en },
+    { adopt: snap.adopt_rate, hits: snap.hits },
+  );
+  await writeAudit(actorOf(user), {
+    action: '审核通过 · 回滚生效',
+    objectCode: entry.code,
+    objectLabel: `${entry.code} → ${target}`,
+    version: target,
   });
+  await pushEntry(actorOf(user), entry.code);
+  return findEntry(entry.code);
 }
 
-/**
- * 认领审核（缺口 1，08-05-2026 补齐）——审核员打开待审条目即 pending_review → reviewing。
- * 「审核中」此前是状态流转条上画着、却永远点不亮的死态：全仓没有任何写入点。
- * 认领同时记录认领人与时间，多审核员并发时可看出「谁正在审」，避免重复劳动。
- * 幂等：已是 reviewing 直接返回；非待审态不报错（只是不改状态），避免打开详情就 409。
- */
-export async function claimReview(user: SessionUser, entryId: string): Promise<{ status: string; claimedBy: string | null }> {
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    if (e.status !== 'pending_review') {
-      return { status: e.status, claimedBy: null };
-    }
-    await client.query(
-      `UPDATE entries SET status='reviewing', review_started_at=now(), review_claimed_by=$2, updated_at=now() WHERE id=$1`,
-      [entryId, user.id],
-    );
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry', objectId: entryId, objectLabel: `${e.code} ${e.title}`,
-        action: '开始审核', category: 'review', field: '状态',
-        before: 'pending_review', after: 'reviewing',
-        note: '审核员认领该条目，其他审核员可见「审核中」避免重复审',
-      },
-      client,
-    );
-    return { status: 'reviewing', claimedBy: user.id };
+export async function reject(user: SessionUser, code: string, comment: string): Promise<EntryRow> {
+  const entry = await findEntry(code);
+  if (entry.status !== 'pending') {
+    throw new DomainError(`当前状态「${ENTRY_STATUS_META[entry.status].label}」不在待审队列。`, 409);
+  }
+  await query(
+    `UPDATE entries SET status='rejected', reject_reason=$2, pending_kind=NULL, pending_version=NULL,
+            reviewer_id=$3, reviewed_at=now(), updated_at=now()
+     WHERE code=$1`,
+    [code, comment, user.id],
+  );
+  await writeAudit(actorOf(user), {
+    action: '驳回',
+    objectCode: code,
+    objectLabel: `${code}：${comment}`,
+    version: entry.version,
   });
+  return findEntry(code);
 }
 
-/** 驳回——理由必填（AC-P-11） */
-export async function rejectEntry(user: SessionUser, entryId: string, payload: unknown): Promise<{ status: string }> {
-  const { reason } = rejectSchema.parse(payload);
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    if (!canTransitionEntry(e.status as never, 'rejected')) {
-      throw new DomainError(`当前状态「${e.status}」不可驳回`, 409);
-    }
-    await client.query(
-      `UPDATE entries SET status='rejected', reviewer_id=$2, reviewed_at=now(), reject_reason=$3, updated_at=now() WHERE id=$1`,
-      [entryId, user.id, reason],
-    );
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry',
-        objectId: entryId,
-        objectLabel: `${e.code} ${e.title}`,
-        action: '审核驳回',
-        category: 'review',
-        field: '状态',
-        before: e.status,
-        after: 'rejected',
-        note: `驳回理由：${reason}`,
-      },
-      client,
-    );
-    return { status: 'rejected' };
+/* ══════════ 下线 ══════════ */
+
+export async function offlineEntry(user: SessionUser, code: string): Promise<EntryRow> {
+  const entry = await findEntry(code);
+  if (entry.status !== 'published') throw new DomainError('只有已发布的知识可以下线。', 409);
+  const { archiveEntry } = await import('./sync.js');
+  await archiveEntry(actorOf(user), entry);
+  await query(`UPDATE entries SET status='offline', sync_status='none', updated_at=now() WHERE code=$1`, [code]);
+  await writeAudit(actorOf(user), {
+    action: '下线知识',
+    objectCode: code,
+    objectLabel: `${code} ${entry.title_zh}`,
+    version: entry.version,
   });
-}
-
-export async function previewGate(entryId: string): Promise<GateResult> {
-  const { rows } = await query<ReviewRow>('SELECT * FROM entries WHERE id=$1', [entryId]);
-  const e = rows[0];
-  if (!e) throw new DomainError('条目不存在', 404);
-  return runPublishGate({
-    title: e.title,
-    chapterId: e.chapter_id,
-    visibility: e.visibility,
-    labels: e.labels ?? [],
-    body: e.body,
-    enStatus: e.en_status,
-    enTitle: e.en_title,
-  });
-}
-
-/**
- * 发布——同步队列的唯一写入源（RULE-02）。
- * 门禁三查全过才置「已发布」并写同步任务，同事务收口。
- * 发布同时生成条目 AI 摘要（人工校正过的不覆盖，技术方案 §6.2）。
- */
-export async function publishEntry(
-  user: SessionUser,
-  entryId: string,
-): Promise<{ status: string; gate: GateResult; taskId?: string }> {
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    if (e.status !== 'approved') {
-      throw new DomainError(`只有「审核通过」的条目才能发布，当前状态「${e.status}」`, 409);
-    }
-    const gate = runPublishGate({
-      title: e.title,
-      chapterId: e.chapter_id,
-      visibility: e.visibility,
-      labels: e.labels ?? [],
-      body: e.body,
-      enStatus: e.en_status,
-      enTitle: e.en_title,
-    });
-
-    if (!gate.passed) {
-      const reason = gate.checks.filter((c) => c.hard && !c.passed).map((c) => c.detail).join('；');
-      await client.query(`UPDATE entries SET blocked_reason=$2, updated_at=now() WHERE id=$1`, [entryId, reason]);
-      await writeAudit(
-        client === undefined ? user : user,
-        {
-          objectType: 'entry',
-          objectId: entryId,
-          objectLabel: `${e.code} ${e.title}`,
-          action: '发布门禁阻断',
-          category: 'review',
-          note: reason,
-        },
-        client,
-      );
-      return { status: 'blocked', gate };
-    }
-
-    const nextVersion = e.current_version + 1;
-    await client.query(`UPDATE entry_versions SET status='history', effective_to=now() WHERE entry_id=$1 AND status='current'`, [entryId]);
-    await client.query(
-      `INSERT INTO entry_versions (id, entry_id, version_no, label, body_snapshot, plain_text, status, author_id, author_name, effective_from)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,'current',$7,$8,now())`,
-      [newId('ver'), entryId, nextVersion, `v${nextVersion}`, JSON.stringify(e.body), toPlainText(e.body), user.id, user.name],
-    );
-    await client.query(
-      `UPDATE entries SET status='published', current_version=$2, sync_status='queued', blocked_reason=NULL,
-         review_due_at = now() + (review_cycle_days || ' days')::interval, updated_at=now() WHERE id=$1`,
-      [entryId, nextVersion],
-    );
-
-    // AI 摘要：发布时生成（人工校正过的不覆盖）。LLM 失败不阻塞发布——只留痕，摘要保持原样。
-    if (e.summary_source !== 'human') {
-      try {
-        const text = await getLlm().summarizeEntry(e.title, toPlainText(e.body));
-        await client.query(
-          `UPDATE entries SET ai_summary=$2, summary_source='ai', summary_at=now(),
-             summary_failed_at=NULL, summary_fail_reason=NULL WHERE id=$1`,
-          [entryId, text],
-        );
-      } catch (err) {
-        // 失败落库（缺口 3）：原来只写审计日志，界面看到的还是上一次摘要却不知道本次没更新
-        await client.query(
-          `UPDATE entries SET summary_failed_at=now(), summary_fail_reason=$2 WHERE id=$1`,
-          [entryId, (err as Error).message.slice(0, 300)],
-        );
-        await writeAudit(
-          user,
-          {
-            objectType: 'entry',
-            objectId: entryId,
-            objectLabel: `${e.code} ${e.title}`,
-            action: 'AI 摘要生成失败',
-            category: 'content',
-            note: `${(err as Error).message}——保留上一次摘要，不阻塞发布`,
-          },
-          client,
-        );
-      }
-    }
-
-    const target = e.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章';
-    const taskId = newId('sync');
-    await client.query(
-      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
-       VALUES ($1,$2,$3,$4,$5,'queued',$6)`,
-      [taskId, entryId, nextVersion, nextVersion === 1 ? '创建文章' : '更新正文 + labels', target, e.en_status === 'confirmed' || e.en_status === 'synced' ? '中 / 英' : '中'],
-    );
-
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry',
-        objectId: entryId,
-        objectLabel: `${e.code} ${e.title}`,
-        action: '发布并同步',
-        category: 'review',
-        field: '版本',
-        before: `v${e.current_version}`,
-        after: `v${nextVersion}`,
-        note: '门禁四查全过，已写入同步队列（唯一写入源）',
-      },
-      client,
-    );
-    return { status: 'published', gate, taskId };
-  });
-}
-
-/** 回滚（仅审核员）——以旧版内容建新修订并直接生效，历史与指标永不删除（AC-P-06） */
-export async function rollbackEntry(
-  user: SessionUser,
-  entryId: string,
-  targetVersionNo: number,
-): Promise<{ status: string; newVersion: number }> {
-  return withTransaction(async (client) => {
-    const e = await loadForReview(client, entryId);
-    const { rows: vs } = await client.query<{ id: string; version_no: number; body_snapshot: EntryBody; label: string }>(
-      'SELECT id, version_no, body_snapshot, label FROM entry_versions WHERE entry_id=$1 AND version_no=$2',
-      [entryId, targetVersionNo],
-    );
-    const target = vs[0];
-    if (!target) throw new DomainError('目标版本不存在', 404);
-
-    await client.query(`UPDATE entry_versions SET status='rolled_back', effective_to=now() WHERE entry_id=$1 AND status='current'`, [entryId]);
-    const newNo = e.current_version + 1;
-    await client.query(
-      `INSERT INTO entry_versions (id, entry_id, version_no, label, body_snapshot, plain_text, status, author_id, author_name, effective_from)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,'current',$7,$8,now())`,
-      [
-        newId('ver'),
-        entryId,
-        newNo,
-        `v${newNo}（回滚自 v${targetVersionNo}）`,
-        JSON.stringify(target.body_snapshot),
-        toPlainText(target.body_snapshot),
-        user.id,
-        user.name,
-      ],
-    );
-    await client.query(
-      `UPDATE entries SET body=$2::jsonb, current_version=$3, status='published', sync_status='queued', updated_at=now() WHERE id=$1`,
-      [entryId, JSON.stringify(target.body_snapshot), newNo],
-    );
-    const taskId = newId('sync');
-    await client.query(
-      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
-       VALUES ($1,$2,$3,'回滚后更新正文',$4,'queued','中')`,
-      [taskId, entryId, newNo, e.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章'],
-    );
-    await writeAudit(
-      user,
-      {
-        objectType: 'entry',
-        objectId: entryId,
-        objectLabel: `${e.code} ${e.title}`,
-        action: '版本回滚',
-        category: 'review',
-        field: '生效版本',
-        before: `v${e.current_version}`,
-        after: `v${targetVersionNo}（以 v${newNo} 重新生效）`,
-        note: '历史版本与指标保留，已自动写入同步队列',
-      },
-      client,
-    );
-    return { status: 'rolled_back', newVersion: newNo };
-  });
+  return findEntry(code);
 }

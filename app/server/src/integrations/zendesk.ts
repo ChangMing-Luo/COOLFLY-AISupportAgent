@@ -35,6 +35,11 @@ export interface PushInput {
   internalOnly: boolean;
   enTitle?: string;
   enBodyHtml?: string;
+  /**
+   * 已同步过的文章 id。传了走**更新**路径，不传才创建。
+   * 缺它会让「重新下发 / 重试同步」在帮助中心堆出重复文章。
+   */
+  articleRef?: string | null;
 }
 
 export interface ZendeskClient {
@@ -466,29 +471,49 @@ class LiveZendesk implements ZendeskClient {
         400,
       );
     }
-    const payload = {
-      article: {
-        title: input.title,
-        body: input.publicHtml,
-        label_names: input.labels,
-        user_segment_id: input.internalOnly ? segmentId : null,
-        locale: this.locale,
-      },
-    };
-    const data = await this.call<{ article: { id: number; updated_at: string } }>(
-      `/help_center/sections/${input.sectionRef}/articles.json`,
-      { method: 'POST', body: JSON.stringify(payload) },
-    );
+    let articleId: string;
+    let updatedAt: string;
+    if (input.articleRef) {
+      // 更新路径：文章的标题与正文存在 translation 里，对象端点只改元数据
+      await this.upsertTranslation(input.articleRef, this.locale, input.title, input.publicHtml);
+      const meta = await this.call<{ article: { id: number; updated_at: string } }>(
+        `/help_center/articles/${input.articleRef}.json`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            article: {
+              section_id: Number(input.sectionRef),
+              label_names: input.labels,
+              user_segment_id: input.internalOnly ? segmentId : null,
+              draft: false,
+            },
+          }),
+        },
+      );
+      articleId = String(meta.article.id);
+      updatedAt = meta.article.updated_at;
+    } else {
+      const payload = {
+        article: {
+          title: input.title,
+          body: input.publicHtml,
+          label_names: input.labels,
+          user_segment_id: input.internalOnly ? segmentId : null,
+          locale: this.locale,
+        },
+      };
+      const data = await this.call<{ article: { id: number; updated_at: string } }>(
+        `/help_center/sections/${input.sectionRef}/articles.json`,
+        { method: 'POST', body: JSON.stringify(payload) },
+      );
+      articleId = String(data.article.id);
+      updatedAt = data.article.updated_at;
+    }
     if (input.enBodyHtml) {
-      await this.call(`/help_center/articles/${data.article.id}/translations.json`, {
-        method: 'POST',
-        body: JSON.stringify({
-          translation: { locale: EN_LOCALE, title: input.enTitle ?? input.title, body: input.enBodyHtml },
-        }),
-      });
+      await this.upsertTranslation(articleId, EN_LOCALE, input.enTitle ?? input.title, input.enBodyHtml);
     }
     return {
-      id: String(data.article.id),
+      id: articleId,
       sectionId: input.sectionRef,
       title: input.title,
       bodyHtml: input.publicHtml,
@@ -498,9 +523,33 @@ class LiveZendesk implements ZendeskClient {
         ? { [EN_LOCALE]: { title: input.enTitle ?? input.title, bodyHtml: input.enBodyHtml } }
         : {},
       draft: false,
-      updatedAt: data.article.updated_at,
+      updatedAt,
       updatedBy: 'COOLFLY 知识运营中台',
     };
+  }
+
+  /** 翻译 upsert：先试 PUT，翻译不存在（404）再 POST 创建 */
+  private async upsertTranslation(
+    articleRef: string,
+    locale: string,
+    title: string,
+    body: string,
+  ): Promise<void> {
+    try {
+      await this.call(`/help_center/articles/${articleRef}/translations/${locale}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ translation: { title, body } }),
+      });
+    } catch (err) {
+      if (err instanceof ZendeskApiError && err.status === 404) {
+        await this.call(`/help_center/articles/${articleRef}/translations.json`, {
+          method: 'POST',
+          body: JSON.stringify({ translation: { locale, title, body } }),
+        });
+        return;
+      }
+      throw err;
+    }
   }
 
   async archiveArticle(articleRef: string): Promise<void> {

@@ -1,130 +1,170 @@
 import type { FastifyInstance } from 'fastify';
 import {
-  createUserSchema,
-  matrixUpdateSchema,
-  PERMISSIONS,
-  PERMISSION_LABELS,
-  ROLES,
+  PERMISSION_MATRIX_ROWS,
   ROLE_LABELS,
-  ROLE_NOTES,
-  type Permission,
-  type Role,
+  grantReviewSchema,
+  toggleUserSchema,
+  updateMatrixSchema,
 } from '@kb/contracts';
-import { query, newId } from '../db/pool.js';
-import { destroyUserSessions, hashPassword, requireLogin } from '../core/auth.js';
-import { getMatrix, invalidateMatrixCache, requirePermission } from '../core/rbac.js';
+import { query } from '../db/pool.js';
+import { requirePermission, invalidateMatrixCache, getMatrix } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
-import { DomainError } from '../services/entries.js';
+import { destroyUserSessions } from '../core/auth.js';
+import { fmtShort } from '../core/fmt.js';
+import { actorOf, DomainError } from '../services/entries.js';
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/rbac/users', { preHandler: [requireLogin, requirePermission('rbac.manage')] }, async () => {
+  const guard = { preHandler: requirePermission('admin.manage') };
+
+  app.get('/api/admin/users', guard, async () => {
     const { rows } = await query<{
-      id: string; name: string; email: string; role: Role; library_scope: string[]; enabled: boolean; last_active_at: Date | null;
-    }>('SELECT id, name, email, role, library_scope, enabled, last_active_at FROM users ORDER BY created_at'),
-    { rows: libs } = await query<{ id: string; name: string }>('SELECT id, name FROM libraries ORDER BY sort_order');
-    const libName = new Map(libs.map((l) => [l.id, l.name]));
-    return rows.map((u) => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      role: u.role,
-      roleLabel: ROLE_LABELS[u.role],
-      scopeLabel:
-        u.library_scope.length === 0 || u.library_scope.length === libs.length
-          ? '全部知识库'
-          : u.library_scope.map((id) => libName.get(id) ?? id).join(' / '),
-      enabled: u.enabled,
-      lastActiveAt: u.last_active_at ? u.last_active_at.toISOString() : null,
-    }));
-  });
-
-  app.get('/api/rbac/roles', { preHandler: requireLogin }, async () => {
-    const matrix = await getMatrix();
-    const { rows } = await query<{ role: Role; n: string }>('SELECT role, COUNT(*)::text AS n FROM users GROUP BY role');
-    const counts = new Map(rows.map((r) => [r.role, Number(r.n)]));
-    return ROLES.map((role) => ({
-      role,
-      label: ROLE_LABELS[role],
-      note: ROLE_NOTES[role],
-      userCount: counts.get(role) ?? 0,
-      allowed: PERMISSIONS.filter((p) => matrix[p][role]).map((p) => PERMISSION_LABELS[p]),
-      denied: PERMISSIONS.filter((p) => !matrix[p][role]).map((p) => PERMISSION_LABELS[p]),
-    }));
-  });
-
-  app.get('/api/rbac/matrix', { preHandler: requireLogin }, async () => {
-    const matrix = await getMatrix();
+      id: string;
+      name: string;
+      email: string;
+      role: 'super' | 'ops';
+      department: string;
+      review_granted: boolean;
+      enabled: boolean;
+      last_active_at: Date | null;
+    }>(`SELECT id, name, email, role, department, review_granted, enabled, last_active_at
+        FROM users ORDER BY CASE role WHEN 'super' THEN 0 ELSE 1 END, created_at`);
     return {
-      roles: ROLES.map((r) => ({ role: r, label: ROLE_LABELS[r] })),
-      rows: PERMISSIONS.map((p) => ({
-        permission: p,
-        label: PERMISSION_LABELS[p],
-        values: ROLES.map((r) => matrix[p][r]),
+      users: rows.map((r, i) => ({
+        id: r.id,
+        uid: `UID-${1001 + i}`,
+        name: r.name,
+        email: r.email,
+        department: r.department,
+        role: r.role,
+        roleLabel: r.role === 'super' ? ROLE_LABELS.super : r.review_granted ? '知识运营 · 审核' : '知识运营',
+        reviewGranted: r.review_granted,
+        enabled: r.enabled,
+        lastActive: fmtShort(r.last_active_at),
+        status: r.enabled ? '正常' : '已停用',
       })),
     };
   });
 
-  /** 权限矩阵修改——仅系统管理员，写审计，即时生效（缓存失效） */
-  app.put('/api/rbac/matrix', { preHandler: [requireLogin, requirePermission('rbac.manage')] }, async (req) => {
-    const { permission, role, allowed } = matrixUpdateSchema.parse(req.body);
-    const matrix = await getMatrix();
-    const before = matrix[permission as Permission][role as Role];
-    await query(
-      `INSERT INTO permission_matrix (permission, role, allowed) VALUES ($1,$2,$3)
-       ON CONFLICT (permission, role) DO UPDATE SET allowed=EXCLUDED.allowed, updated_at=now()`,
-      [permission, role, allowed],
+  app.post('/api/admin/users/:id/toggle', guard, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = toggleUserSchema.parse(req.body);
+    const { rows } = await query<{ name: string }>(
+      'UPDATE users SET enabled=$2 WHERE id=$1 RETURNING name',
+      [id, body.enabled],
     );
-    invalidateMatrixCache();
-    await writeAudit(req.currentUser!, {
-      objectType: 'permission_matrix',
-      objectId: `${permission}:${role}`,
-      objectLabel: `角色：${ROLE_LABELS[role as Role]} · ${PERMISSION_LABELS[permission as Permission]}`,
-      action: '修改角色权限',
-      category: 'admin',
-      field: PERMISSION_LABELS[permission as Permission],
-      before: before ? '允许' : '禁止',
-      after: allowed ? '允许' : '禁止',
+    if (!rows[0]) throw new DomainError('用户不存在', 404);
+    if (!body.enabled) await destroyUserSessions(id);
+    await writeAudit(actorOf(req.currentUser!), {
+      action: body.enabled ? '启用账号' : '停用账号',
+      objectType: 'user',
+      objectCode: id,
+      objectLabel: rows[0].name,
     });
     return { ok: true };
   });
 
-  app.post('/api/rbac/users', { preHandler: [requireLogin, requirePermission('rbac.manage')] }, async (req) => {
-    const input = createUserSchema.parse(req.body);
-    const { rows: dup } = await query('SELECT id FROM users WHERE email=$1', [input.email]);
-    if (dup[0]) throw new DomainError('该邮箱已存在', 409);
-    const id = newId('usr');
-    await query(
-      `INSERT INTO users (id, name, email, password_hash, role, library_scope, must_change_password)
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb,TRUE)`,
-      [id, input.name, input.email, await hashPassword(input.initialPassword), input.role, JSON.stringify(input.libraryScope)],
+  app.post('/api/admin/users/:id/review-grant', guard, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = grantReviewSchema.parse(req.body);
+    const { rows } = await query<{ name: string }>(
+      'UPDATE users SET review_granted=$2 WHERE id=$1 RETURNING name',
+      [id, body.granted],
     );
-    await writeAudit(req.currentUser!, {
-      objectType: 'user', objectId: id, objectLabel: `${input.name}（${input.email}）`,
-      action: '创建用户', category: 'admin', field: '角色与范围',
-      before: '—', after: `${ROLE_LABELS[input.role]} · ${input.libraryScope.length} 个知识库`,
-      note: '首次登录强制改密',
+    if (!rows[0]) throw new DomainError('用户不存在', 404);
+    await writeAudit(actorOf(req.currentUser!), {
+      action: body.granted ? '授予审核权限' : '收回审核权限',
+      objectType: 'user',
+      objectCode: id,
+      objectLabel: rows[0].name,
     });
-    return { id };
+    return { ok: true };
   });
 
-  /** 禁用用户——会话即时失效（删除会话行），历史留痕保留 */
-  app.post('/api/rbac/users/:id/toggle', { preHandler: [requireLogin, requirePermission('rbac.manage')] }, async (req) => {
-    const { id } = req.params as { id: string };
-    const { enabled } = req.body as { enabled: boolean };
-    const { rows } = await query<{ name: string; email: string; enabled: boolean }>(
-      'SELECT name, email, enabled FROM users WHERE id=$1',
-      [id],
+  app.get('/api/admin/permissions', guard, async () => {
+    const matrix = await getMatrix();
+    return {
+      rows: PERMISSION_MATRIX_ROWS.map((r, i) => ({
+        ...r,
+        index: String(i + 1).padStart(2, '0'),
+        superAllowed: matrix[r.permission].super,
+        opsAllowed: matrix[r.permission].ops,
+      })),
+    };
+  });
+
+  app.put('/api/admin/permissions', guard, async (req) => {
+    const body = updateMatrixSchema.parse(req.body);
+    await query(
+      `INSERT INTO permission_matrix (permission, role, allowed) VALUES ($1,$2,$3)
+       ON CONFLICT (permission, role) DO UPDATE SET allowed=EXCLUDED.allowed, updated_at=now()`,
+      [body.permission, body.role, body.allowed],
     );
-    const u = rows[0];
-    if (!u) throw new DomainError('用户不存在', 404);
-    await query('UPDATE users SET enabled=$2 WHERE id=$1', [id, enabled]);
-    if (!enabled) await destroyUserSessions(id);
-    await writeAudit(req.currentUser!, {
-      objectType: 'user', objectId: id, objectLabel: `${u.name}（${u.email}）`,
-      action: enabled ? '启用用户' : '禁用用户', category: 'admin', field: '启用状态',
-      before: u.enabled ? '启用' : '禁用', after: enabled ? '启用' : '禁用',
-      note: enabled ? '账号恢复可登录' : '会话即时失效，历史留痕保留',
+    invalidateMatrixCache();
+    await writeAudit(actorOf(req.currentUser!), {
+      action: '调整权限矩阵',
+      objectType: 'permission',
+      objectCode: body.permission,
+      objectLabel: `${body.permission} · ${body.role} → ${body.allowed ? '允许' : '禁止'}`,
     });
-    return { ok: true, message: enabled ? `已启用 ${u.name}` : `已禁用 ${u.name}（会话即时失效，历史留痕保留）` };
+    return { ok: true };
+  });
+
+  app.get('/api/admin/audit', guard, async (req) => {
+    const limit = Number((req.query as { limit?: string }).limit ?? 200);
+    const { rows } = await query<{
+      id: string;
+      at: Date;
+      actor_name: string;
+      action: string;
+      object_label: string;
+      object_code: string | null;
+      result: string;
+      version: string | null;
+      detail: string | null;
+      actor_role: string;
+    }>(`SELECT * FROM audit_logs ORDER BY at DESC LIMIT $1`, [limit]);
+    return {
+      logs: rows.map((r, i) => ({
+        id: r.id,
+        no: `#${90000 + rows.length - i}`,
+        at: fmtShort(r.at),
+        who: r.actor_name,
+        role: r.actor_role,
+        act: r.action,
+        obj: r.object_label,
+        objCode: r.object_code,
+        result: r.result,
+        version: r.version,
+        detail: r.detail,
+      })),
+    };
+  });
+
+  /** 审核记录：审核结论的专用视图（从审计里筛出通过 / 驳回） */
+  app.get('/api/review/log', async () => {
+    const { rows } = await query<{
+      id: string;
+      at: Date;
+      actor_name: string;
+      action: string;
+      object_label: string;
+      object_code: string | null;
+      version: string | null;
+    }>(
+      `SELECT id, at, actor_name, action, object_label, object_code, version FROM audit_logs
+       WHERE action LIKE '审核通过%' OR action = '驳回' ORDER BY at DESC LIMIT 200`,
+    );
+    return {
+      logs: rows.map((r) => ({
+        id: r.id,
+        at: fmtShort(r.at),
+        who: r.actor_name,
+        act: r.action,
+        verdict: r.action === '驳回' ? '驳回' : '通过',
+        obj: r.object_label,
+        objCode: r.object_code,
+        version: r.version ?? '—',
+      })),
+    };
   });
 }

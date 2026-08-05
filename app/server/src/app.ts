@@ -9,16 +9,17 @@ import { ZodError } from 'zod';
 import { attachUser } from './core/auth.js';
 import { DomainError } from './services/entries.js';
 import { registerAuthRoutes } from './routes/auth.js';
-import { registerKbRoutes } from './routes/kb.js';
-import { registerReviewRoutes } from './routes/review.js';
-import { registerSyncRoutes } from './routes/sync.js';
-import { registerMineRoutes } from './routes/mine.js';
-import { registerDataRoutes } from './routes/data.js';
+import { registerEntryRoutes } from './routes/entries.js';
+import { registerMetaRoutes } from './routes/meta.js';
+import { registerOpsRoutes } from './routes/ops.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { getZendesk } from './integrations/zendesk.js';
 import { getLlm } from './integrations/llm.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/** 无需登录的接口白名单 */
+const PUBLIC_PATHS = new Set(['/api/auth/login']);
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -30,8 +31,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   await app.register(rateLimit, { global: false });
 
-  app.addHook('preHandler', async (req) => {
+  app.addHook('preHandler', async (req, reply) => {
     await attachUser(req);
+    const path = req.url.split('?')[0];
+    if (path.startsWith('/api/') && !PUBLIC_PATHS.has(path) && !req.currentUser) {
+      await reply.code(401).send({ error: 'unauthorized', message: '未登录或会话已失效' });
+    }
   });
 
   app.setErrorHandler(async (err, _req, reply) => {
@@ -55,11 +60,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   }));
 
   await registerAuthRoutes(app);
-  await registerKbRoutes(app);
-  await registerReviewRoutes(app);
-  await registerSyncRoutes(app);
-  await registerMineRoutes(app);
-  await registerDataRoutes(app);
+  await registerEntryRoutes(app);
+  await registerMetaRoutes(app);
+  await registerOpsRoutes(app);
   await registerAdminRoutes(app);
 
   // 前端静态资源（同仓构建，随引擎部署）
