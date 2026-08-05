@@ -6,6 +6,15 @@ import { requirePermission } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
 import { DomainError, getEntry, getSummary, listEntries, saveEntry, submitForReview, updateSummary } from '../services/entries.js';
 import { confirmTranslation, editEnTitle, editPair, listPairs, translate } from '../services/translation.js';
+import { getZendesk, ZendeskApiError } from '../integrations/zendesk.js';
+
+/** Zendesk 结构调用失败 → 上游错误如实回传（本台不留半截结构，调用方看到原因后重试） */
+function rethrowStructure(err: unknown): never {
+  if (err instanceof ZendeskApiError) {
+    throw new DomainError(`Zendesk 结构同步失败：${err.message}`, 502);
+  }
+  throw err;
+}
 
 export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/kb/libraries', { preHandler: requireLogin }, async () => {
@@ -169,30 +178,81 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
     return confirmTranslation(req.currentUser!, id);
   });
 
+  /**
+   * 结构维护四接口（08-05-2026 拍板）：结构只在本台维护并**实时同步 Zendesk**——
+   * 目录→Category、章节→Section；Zendesk 侧不再手工维护结构。
+   * 顺序统一为「先 Zendesk 后本地」：Zendesk 失败则本地不落（502 回传原因）；
+   * 本地写失败留下的 Zendesk 空结构无害且可见，重试即复用（挂接字段填 id）。
+   */
+
+  /** 父目录无 Category 映射时懒创建（存量目录首次挂新章节时补齐） */
+  async function ensureCategoryRef(dir: { id: string; name: string; ref: string | null }): Promise<string> {
+    if (dir.ref) return dir.ref;
+    const created = await getZendesk().createCategory(dir.name).catch(rethrowStructure);
+    await query('UPDATE chapters SET zendesk_section_ref=$2 WHERE id=$1', [dir.id, created.id]);
+    return created.id;
+  }
+
   // 章节管理：含条目或子章节的章节禁止删除（先移空）
   app.post('/api/kb/chapters', { preHandler: [requireLogin, requirePermission('structure.manage')] }, async (req) => {
     const input = chapterUpsertSchema.parse(req.body);
     const id = newId('chap');
+    // 挂接语义：zendeskSectionRef 填了 = 挂接 Zendesk 既有结构；留空 = 由本台创建
+    let ref = input.zendeskSectionRef?.trim() || null;
+    if (input.parentId === null) {
+      if (!ref) ref = (await getZendesk().createCategory(input.name).catch(rethrowStructure)).id;
+    } else {
+      const { rows: parentRows } = await query<{ id: string; name: string; parent_id: string | null; zendesk_section_ref: string | null }>(
+        'SELECT id, name, parent_id, zendesk_section_ref FROM chapters WHERE id=$1',
+        [input.parentId],
+      );
+      const parent = parentRows[0];
+      if (!parent) throw new DomainError('父目录不存在', 404);
+      if (parent.parent_id) throw new DomainError('父级必须是顶级目录——结构深度恒为 2', 409);
+      if (!ref) {
+        const catRef = await ensureCategoryRef({ id: parent.id, name: parent.name, ref: parent.zendesk_section_ref });
+        ref = (await getZendesk().createSection(catRef, input.name).catch(rethrowStructure)).id;
+      }
+    }
     await query(
       'INSERT INTO chapters (id, library_id, parent_id, name, zendesk_section_ref) VALUES ($1,$2,$3,$4,$5)',
-      [id, input.libraryId, input.parentId, input.name, input.zendeskSectionRef],
+      [id, input.libraryId, input.parentId, input.name, ref],
     );
+    const kind = input.parentId === null ? '目录' : '章节';
+    const zdKind = input.parentId === null ? 'Category' : 'Section';
     await writeAudit(req.currentUser!, {
       objectType: 'chapter', objectId: id, objectLabel: input.name,
-      action: '新建章节', category: 'content', field: '章节', before: '—', after: input.name,
+      action: `新建${kind}`, category: 'content', field: kind, before: '—', after: input.name,
+      note: input.zendeskSectionRef?.trim()
+        ? `挂接 Zendesk 既有 ${zdKind} ${ref}`
+        : `已在 Zendesk 创建 ${zdKind} ${ref}（结构由本台维护并同步）`,
     });
-    return { id };
+    return { id, zendeskRef: ref };
   });
 
   app.put('/api/kb/chapters/:id', { preHandler: [requireLogin, requirePermission('structure.manage')] }, async (req) => {
     const { id } = req.params as { id: string };
     const { name } = req.body as { name: string };
-    const { rows } = await query<{ name: string }>('SELECT name FROM chapters WHERE id=$1', [id]);
+    const { rows } = await query<{ name: string; parent_id: string | null; zendesk_section_ref: string | null }>(
+      'SELECT name, parent_id, zendesk_section_ref FROM chapters WHERE id=$1',
+      [id],
+    );
     if (!rows[0]) throw new DomainError('章节不存在', 404);
+    const r = rows[0];
+    if (r.zendesk_section_ref) {
+      const zd = getZendesk();
+      await (r.parent_id === null
+        ? zd.renameCategory(r.zendesk_section_ref, name)
+        : zd.renameSection(r.zendesk_section_ref, name)
+      ).catch(rethrowStructure);
+    }
     await query('UPDATE chapters SET name=$2 WHERE id=$1', [id, name]);
     await writeAudit(req.currentUser!, {
       objectType: 'chapter', objectId: id, objectLabel: name,
-      action: '重命名章节', category: 'content', field: '名称', before: rows[0].name, after: name,
+      action: '重命名章节', category: 'content', field: '名称', before: r.name, after: name,
+      note: r.zendesk_section_ref
+        ? `Zendesk ${r.parent_id === null ? 'Category' : 'Section'} ${r.zendesk_section_ref} 已同步改名`
+        : '未挂接 Zendesk 结构，仅本台改名',
     });
     return { ok: true };
   });
@@ -212,20 +272,31 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
     const me = rows[0];
     if (!me) throw new DomainError('章节不存在', 404);
     if (!me.parent_id) throw new DomainError('顶级目录不可调整层级——结构深度恒为 2', 409);
-    const { rows: targetRows } = await query<{ name: string; parent_id: string | null; library_id: string }>(
-      'SELECT name, parent_id, library_id FROM chapters WHERE id=$1',
+    const { rows: targetRows } = await query<{ name: string; parent_id: string | null; library_id: string; zendesk_section_ref: string | null }>(
+      'SELECT name, parent_id, library_id, zendesk_section_ref FROM chapters WHERE id=$1',
       [parentId],
     );
     const target = targetRows[0];
     if (!target) throw new DomainError('目标目录不存在', 404);
     if (target.parent_id) throw new DomainError('目标必须是顶级目录——结构深度恒为 2', 409);
     if (target.library_id !== me.library_id) throw new DomainError('不能跨知识库移动章节', 409);
+    const { rows: meRefRows } = await query<{ zendesk_section_ref: string | null }>(
+      'SELECT zendesk_section_ref FROM chapters WHERE id=$1',
+      [id],
+    );
+    const meRef = meRefRows[0]?.zendesk_section_ref ?? null;
+    if (meRef) {
+      // Zendesk 侧同步移动：目标目录无 Category 时懒创建
+      const catRef = await ensureCategoryRef({ id: parentId, name: target.name, ref: target.zendesk_section_ref });
+      await getZendesk().moveSection(meRef, catRef).catch(rethrowStructure);
+    }
     const { rows: oldRows } = await query<{ name: string }>('SELECT name FROM chapters WHERE id=$1', [me.parent_id]);
     await query('UPDATE chapters SET parent_id=$2 WHERE id=$1', [id, parentId]);
     await writeAudit(req.currentUser!, {
       objectType: 'chapter', objectId: id, objectLabel: me.name,
       action: '调整章节层级', category: 'content', field: '所属目录',
       before: oldRows[0]?.name ?? me.parent_id, after: target.name,
+      note: meRef ? `Zendesk Section ${meRef} 已同步移动到目标目录 Category` : '未挂接 Zendesk 结构，仅本台移动',
     });
     return { ok: true };
   });
@@ -240,11 +311,43 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
         409,
       );
     }
-    const { rows } = await query<{ name: string }>('SELECT name FROM chapters WHERE id=$1', [id]);
+    const { rows } = await query<{ name: string; parent_id: string | null; zendesk_section_ref: string | null }>(
+      'SELECT name, parent_id, zendesk_section_ref FROM chapters WHERE id=$1',
+      [id],
+    );
+    if (!rows[0]) throw new DomainError('章节不存在', 404);
+    const r = rows[0];
+    let zdNote = '未挂接 Zendesk 结构，仅本台删除';
+    if (r.zendesk_section_ref) {
+      const zd = getZendesk();
+      if (r.parent_id === null) {
+        // 目录 → Category：Zendesk 端该 Category 仍有 Section（可能含本台未挂接的存量）则拒删，防连带删掉线上文章
+        const n = await zd.categorySectionCount(r.zendesk_section_ref).catch(rethrowStructure);
+        if (n > 0) {
+          throw new DomainError(
+            `Zendesk 端该 Category 仍有 ${n} 个 Section——删除会连带删除其中全部文章，已拒绝。请先移空 Zendesk 端结构`,
+            409,
+          );
+        }
+        await zd.deleteCategory(r.zendesk_section_ref).catch(rethrowStructure);
+        zdNote = `Zendesk Category ${r.zendesk_section_ref} 已同步删除`;
+      } else {
+        // 章节 → Section：本地条目已清空，但 Zendesk 端可能有非本台文章（如原有英文文章）
+        const n = await zd.sectionArticleCount(r.zendesk_section_ref).catch(rethrowStructure);
+        if (n > 0) {
+          throw new DomainError(
+            `Zendesk 端该 Section 仍有 ${n} 篇文章——删除会连带删除线上文章，已拒绝。请先在 Zendesk 迁移或归档这些文章`,
+            409,
+          );
+        }
+        await zd.deleteSection(r.zendesk_section_ref).catch(rethrowStructure);
+        zdNote = `Zendesk Section ${r.zendesk_section_ref} 已同步删除`;
+      }
+    }
     await query('DELETE FROM chapters WHERE id=$1', [id]);
     await writeAudit(req.currentUser!, {
-      objectType: 'chapter', objectId: id, objectLabel: rows[0]?.name ?? id,
-      action: '删除章节', category: 'content', field: '章节', before: rows[0]?.name ?? '', after: '—',
+      objectType: 'chapter', objectId: id, objectLabel: r.name,
+      action: '删除章节', category: 'content', field: '章节', before: r.name, after: '—', note: zdNote,
     });
     return { ok: true };
   });

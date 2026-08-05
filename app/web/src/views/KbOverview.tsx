@@ -156,13 +156,15 @@ export function KbOverviewView() {
     }
     setBusy(true);
     try {
-      await api.post<{ id: string }>('/api/kb/chapters', {
+      const created = await api.post<{ id: string; zendeskRef: string | null }>('/api/kb/chapters', {
         libraryId,
         parentId: newParentId || null,
         name: newName.trim(),
         zendeskSectionRef: newSectionRef.trim() || null,
       });
-      toast(`${newParentId ? '章节' : '目录'}「${newName.trim()}」已创建，结构变更已留痕`);
+      toast(
+        `${newParentId ? '章节' : '目录'}「${newName.trim()}」已创建并同步 Zendesk（${newParentId ? 'Section' : 'Category'} ${created.zendeskRef ?? '—'}），结构变更已留痕`,
+      );
       setNewName('');
       setNewSectionRef('');
       setCreating(null);
@@ -539,8 +541,16 @@ export function KbOverviewView() {
             <input id="ch-name" className="input" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="chapter-name" />
           </div>
           <div className="field">
-            <label className="field__label" htmlFor="ch-sec">Zendesk Section 映射（选填，如 Sec 5101）</label>
-            <input id="ch-sec" className="input" value={newSectionRef} onChange={(e) => setNewSectionRef(e.target.value)} />
+            <label className="field__label" htmlFor="ch-sec">
+              挂接 Zendesk 既有{newParentId ? ' Section' : ' Category'}（选填 id；留空则自动在 Zendesk 创建）
+            </label>
+            <input
+              id="ch-sec"
+              className="input"
+              value={newSectionRef}
+              onChange={(e) => setNewSectionRef(e.target.value)}
+              placeholder="留空 = 本台创建并同步 Zendesk"
+            />
           </div>
         </ConfirmModal>
       )}
@@ -551,7 +561,7 @@ export function KbOverviewView() {
           confirmText="移动"
           onCancel={() => { setMoving(null); setMoveTarget(''); }}
           onConfirm={() => void moveChapter()}
-          consequences={['结构深度恒为 2：章节只能挂在顶级目录下，不支持目录与章节互转', '移动即时生效并写操作日志，同步中心按映射更新 Zendesk 结构']}
+          consequences={['结构深度恒为 2：章节只能挂在顶级目录下，不支持目录与章节互转', '移动即时生效并写操作日志，Zendesk 端 Section 实时同步移动到目标 Category']}
         >
           <div className="field" style={{ marginTop: 12 }}>
             <label className="field__label" htmlFor="mv-chapter">要移动的章节</label>
