@@ -245,6 +245,110 @@ describe('RULE-02 统一过审：同步队列唯一写入源 = 发布 API 成功
   });
 });
 
+describe('FLOW-08 条目下线：归档不裸删、可重新上架（08-05-2026 补齐）', () => {
+  it('知识管理员无下线权限 → 403', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/review/ent_0188/offline', headers: as('manager') });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('未发布条目不可下线 → 409', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/review/ent_0233/offline', headers: as('reviewer') });
+    expect(res.statusCode, '草稿态不可下线').toBe(409);
+    expect(JSON.parse(res.body).message).toContain('已发布');
+  });
+
+  it('审核员下线已发布条目 → offline + 写归档同步任务 + Zendesk 端归档而非删除', async () => {
+    const sandbox = getSandbox();
+    const before = await sandbox.getArticle('art_KB-0188');
+    expect(before, '前置：该条目应已同步到 Zendesk').not.toBeNull();
+
+    const res = await app.inject({ method: 'POST', url: '/api/review/ent_0188/offline', headers: as('reviewer') });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).status).toBe('offline');
+
+    const { rows: e } = await query<{ status: string; sync_status: string }>(
+      'SELECT status, sync_status FROM entries WHERE id=$1',
+      ['ent_0188'],
+    );
+    expect(e[0]!.status).toBe('offline');
+    expect(e[0]!.sync_status, '归档任务已跑完').toBe('archived');
+
+    const { rows: task } = await query<{ action: string; status: string }>(
+      `SELECT action, status FROM sync_tasks WHERE entry_id='ent_0188' ORDER BY created_at DESC LIMIT 1`,
+    );
+    expect(task[0]!.action).toContain('归档');
+    expect(task[0]!.status).toBe('archived');
+
+    // 不裸删：Zendesk 端文章仍在，只是置为 draft（归档）
+    const after = await sandbox.getArticle('art_KB-0188');
+    expect(after, 'Zendesk 端文章不得被物理删除，否则帮助中心留死链').not.toBeNull();
+    expect(after!.draft, '归档 = draft:true').toBe(true);
+
+    // 版本历史与效果指标保留
+    const { rows: vers } = await query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM entry_versions WHERE entry_id='ent_0188'`,
+    );
+    expect(Number(vers[0]!.n), '下线不得删版本历史').toBeGreaterThan(0);
+
+    // 审计留痕
+    const { rows: audit } = await query<{ before_value: string; after_value: string }>(
+      `SELECT before_value, after_value FROM audit_logs WHERE object_id='ent_0188' AND action='下线条目' ORDER BY at DESC LIMIT 1`,
+    );
+    expect(audit.length).toBe(1);
+    expect(audit[0]!.after_value).toBe('offline');
+  });
+
+  it('下线后可重新编辑回「编辑中」（不是单向陷阱）', async () => {
+    const { rows: e } = await query<{ lock_version: number; body: unknown }>(
+      'SELECT lock_version, body FROM entries WHERE id=$1',
+      ['ent_0188'],
+    );
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/kb/entries/ent_0188',
+      headers: as('manager'),
+      payload: {
+        title: '保修期与凭证要求', libraryId: 'lib_policy', chapterId: 'ch_warranty', entryType: 'FAQ 政策型',
+        visibility: 'public', sceneL1: '售后与退款', sceneL2: '保修换新', labels: ['保修'],
+        deviceModels: [], reviewCycleDays: 180, ownerId: null,
+        body: e[0]!.body, expectedVersion: e[0]!.lock_version,
+      },
+    });
+    expect(res.statusCode, '下线条目必须还能编辑，否则下线=单向陷阱').toBe(200);
+    const { rows: after } = await query<{ status: string }>('SELECT status FROM entries WHERE id=$1', ['ent_0188']);
+    expect(after[0]!.status).toBe('editing');
+  });
+});
+
+describe('RULE-03 导入分段与内部段落标记（08-05-2026 补：原来只断言行数，漏了分段）', () => {
+  it('多段正文按换行切成多个段落，内部前缀段落被标住', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/kb/import',
+      headers: as('manager'),
+      payload: {
+        libraryId: 'lib_policy',
+        rows: ['摄像头离线自查|退款与退货|mixed|先确认 2.4GHz 频段已开启。\n长按 RESET 8 秒重新配网。\n内部：连续两次失败直接换机。'],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { succeeded: string[]; failed: unknown[] };
+    expect(body.succeeded.length).toBe(1);
+
+    const { rows } = await query<{ body: { paragraphs: Array<{ text: string; internal: boolean }> } }>(
+      'SELECT body FROM entries WHERE code=$1',
+      [body.succeeded[0]!],
+    );
+    const paras = rows[0]!.body.paragraphs;
+    expect(paras.length, '正文必须按换行切成 3 段——原来 split 的是字面量反斜杠 n，永远只有 1 段').toBe(3);
+    expect(paras.filter((p) => p.internal).length, '「内部：」开头的段落必须被标住').toBe(1);
+    expect(paras[2]!.internal).toBe(true);
+    expect(paras[0]!.internal).toBe(false);
+    // 混合可见性 + 已标内部段落 → 发布门禁第②查才可能过；未标会被硬拦（内部口径零外泄）
+    expect(paras[2]!.text).toContain('直接换机');
+  });
+});
+
 describe('RULE-04 可见性同步：内部段落零外泄', () => {
   it('混合条目对外文章不含内部段落原文', async () => {
     const sandbox = getSandbox();

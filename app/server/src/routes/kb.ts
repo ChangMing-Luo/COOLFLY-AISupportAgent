@@ -285,8 +285,8 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
         `SELECT MAX(CAST(SUBSTRING(code FROM 4) AS INT))::text AS max FROM entries WHERE code ~ '^KB-[0-9]+$'`,
       );
       const code = `KB-${String(Number(maxCode[0]?.max ?? '200') + 1).padStart(4, '0')}`;
-      const paragraphs = bodyParts.join('|').split('\\n').filter(Boolean).map((text, i) => ({
-        id: `p_${i}`, text, internal: text.startsWith('内部：'), heading: false,
+      const paragraphs = bodyParts.join('|').split('\n').map((t) => t.trim()).filter(Boolean).map((text, i) => ({
+        id: `p_${i}`, text, html: '', internal: /^(内部[：:]|【内部】)/.test(text), heading: false,
       }));
       await query(
         `INSERT INTO entries (id, code, title, library_id, chapter_id, visibility, scene_l1, scene_l2, labels, body,

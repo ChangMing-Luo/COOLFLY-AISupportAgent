@@ -232,6 +232,47 @@ export async function approveEntry(user: SessionUser, entryId: string): Promise<
   });
 }
 
+/**
+ * 下线（published → offline）——不是删除：
+ * 版本历史、各版效果指标、审计日志、Zendesk 文章全部保留，Zendesk 端只做「归档 + 重定向」。
+ * 与发布同源：仍由本函数写同步任务，同步队列的唯一写入源不变。
+ */
+export async function offlineEntry(user: SessionUser, entryId: string): Promise<{ status: string; taskId: string }> {
+  return withTransaction(async (client) => {
+    const e = await loadForReview(client, entryId);
+    if (!canTransitionEntry(e.status as never, 'offline')) {
+      throw new DomainError(`只有「已发布」的条目才能下线，当前状态「${e.status}」`, 409);
+    }
+    await client.query(
+      `UPDATE entries SET status='offline', sync_status='queued', blocked_reason=NULL, updated_at=now() WHERE id=$1`,
+      [entryId],
+    );
+    const target = e.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章';
+    const taskId = newId('sync');
+    await client.query(
+      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
+       VALUES ($1,$2,$3,'归档 + 重定向',$4,'queued','中')`,
+      [taskId, entryId, e.current_version, target],
+    );
+    await writeAudit(
+      user,
+      {
+        objectType: 'entry',
+        objectId: entryId,
+        objectLabel: `${e.code} ${e.title}`,
+        action: '下线条目',
+        category: 'review',
+        field: '状态',
+        before: e.status,
+        after: 'offline',
+        note: 'Zendesk 端归档 + 重定向，不物理删除；版本历史与效果指标保留，可重新编辑上架',
+      },
+      client,
+    );
+    return { status: 'offline', taskId };
+  });
+}
+
 /** 驳回——理由必填（AC-P-11） */
 export async function rejectEntry(user: SessionUser, entryId: string, payload: unknown): Promise<{ status: string }> {
   const { reason } = rejectSchema.parse(payload);

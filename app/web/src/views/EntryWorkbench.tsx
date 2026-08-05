@@ -919,6 +919,7 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
   const [saving, setSaving] = useState(false);
   const [sumBusy, setSumBusy] = useState(false);
   const [enBusy, setEnBusy] = useState('');
+  const [offlining, setOffliningg] = useState(false);
   const [enEdits, setEnEdits] = useState<Record<string, { en: string; note: string }>>({});
   const [sumEditing, setSumEditing] = useState(false);
   const [sumDraft, setSumDraft] = useState('');
@@ -1036,6 +1037,19 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
     }
   };
 
+  /** 下线：published → offline + Zendesk 归档（不是删除，版本与指标全留，可重新编辑上架） */
+  const offline = async (): Promise<void> => {
+    if (!entryId) return;
+    setOffliningg(false);
+    try {
+      await api.post(`/api/review/${entryId}/offline`);
+      toast('已下线：Zendesk 端文章归档 + 重定向；版本历史与效果指标保留，重新编辑并过审即可再次上架');
+      reloadAll();
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  };
+
   /** 英文侧动作：生成翻译 / 标记已确认 */
   const runEn = async (key: string, fn: () => Promise<unknown>, okMsg: string): Promise<void> => {
     setEnBusy(key);
@@ -1143,6 +1157,14 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
               disabled={!canPublish || isNew}
               reason={!canPublish ? zhCN.ironLaw.publishBlocked : '请先保存中文草稿'}
               testId="publish"
+            />
+            <GatedButton
+              label="下线"
+              variant="danger"
+              onClick={() => setOffliningg(true)}
+              disabled={!canPublish || status !== 'published'}
+              reason={!canPublish ? zhCN.ironLaw.publishBlocked : '只有「已发布」的条目才能下线'}
+              testId="offline"
             />
           </div>
         </div>
@@ -1438,6 +1460,22 @@ export function EntryWorkbenchView({ entryId }: { entryId: string | null }) {
         ))}
 
       {tab === 'log' && <LogsTab logs={detail.data?.logs ?? []} />}
+
+      {offlining && (
+        <ConfirmModal
+          danger
+          title={`下线「${entry?.title ?? ''}」`}
+          consequences={[
+            '条目状态置「已下线」，不再对外提供——但**不是删除**',
+            'Zendesk 端文章做归档 + 重定向，不裸删，帮助中心不会留死链',
+            '版本历史、各版效果指标、审计日志全部保留可查',
+            '需要再次上架时：重新编辑（自动回「编辑中」）→ 提交审核 → 通过 → 发布',
+          ]}
+          confirmText="确认下线"
+          onConfirm={() => void offline()}
+          onCancel={() => setOffliningg(false)}
+        />
+      )}
     </div>
   );
 }

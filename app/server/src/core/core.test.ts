@@ -71,6 +71,15 @@ describe('内部段落剥离（RULE-04 数据泄漏级零容忍）', () => {
     expect(pub).toContain('&lt;img');
   });
 
+  it('导入的内部段落识别口径：内部：/内部:/【内部】三种前缀都要标住', () => {
+    // 预览标了内部、入库没标 = 内部口径直接外泄，故三种写法必须一致命中
+    const re = /^(内部[：:]|【内部】)/;
+    expect(re.test('内部：超时个案走主管审批')).toBe(true);
+    expect(re.test('内部:超时个案走主管审批')).toBe(true);
+    expect(re.test('【内部】超时个案走主管审批')).toBe(true);
+    expect(re.test('内部人员也适用本政策')).toBe(false);
+  });
+
   it('hasInternal 识别混合条目', () => {
     expect(hasInternal(body)).toBe(true);
     expect(hasInternal({ paragraphs: [{ id: 'a', text: 'x', html: '', internal: false, heading: false }] })).toBe(false);
