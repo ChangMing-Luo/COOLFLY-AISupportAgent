@@ -4,7 +4,7 @@
 
 - work_type: feature
 - workflow_mode: standard
-- revision: 9
+- revision: 10
 - source_prd: PRD详细版.md（958 行，commit a91bee9 Zendesk 转向大重构：D-10 架构基准——C 端服务归 Zendesk 生态（Guide/AI bot/Support/Explore），自研范围=知识运营中台十视图五组（功能标准=v3 原型）；§13 一致性自检为 ID 权威）
 - status: active
 - generated_from: 阶段 5.5.1（本文件为机器需求契约，不复制 PRD 研究过程；价值、场景与取舍解释见 PRD）
@@ -76,6 +76,15 @@
 - **修订续用（Revision→9，ID 与 Anchor 不变）**：REQ-F09-02（新增 AI 整理建议 EARS，接住 REQ-F09-03 retired 时的错误承接指向）、REQ-F09-12（复核到期改主动扫描）、REQ-F09-14（主题提炼改真实会话来源）、REQ-F09-15（新增认领机制 EARS）、REQ-F09-17（信号采集改真实拉取机制）；AC-F09-23（补认领机制描述）。REQ-F09-03 retirement note 补记（承接指向从「全归 REQ-F09-14」修正为「标签/场景/章节归类归 REQ-F09-02，候选起草归 REQ-F09-14」）。
 - **retire**：无。缺口①-④、⑦是「代码没做到规范已写的行为」，规范本身不改；缺口⑤⑥⑧是规范描述不够精确导致的实现漂移，已在对应 REQ 补充 EARS 精度。
 - **术语与外部依赖同步**：External capability configuration / Capability prerequisites 两处 LLM 与 Zendesk 行状态由「待配置/committed」更新为「ready（真实凭据联调通过）」；LLM 供应商标注由 Anthropic Claude 改通义千问，DPA 硬条件不变、证据仍未就绪。
+
+### revision 10 · source_ids_changed（08-05-2026 四轮：Zendesk 工单快照层 + 看板统计口径缺陷登记）
+
+- **变更依据**：用户先问「数据看板的几个统计需要怎么实现」「需要哪些数据」，AI 逐项溯源后确认看板九项统计**无一项来自真实 Zendesk**（实测 `entry_effect_metrics` 0 行，`coverage_scenes`/`knowledge_gaps`/`no_result_keywords` 全为种子值）；用户随即拍板「需要将 Zendesk 的工单数据也同步过来」。
+- **架构新增**：信号域增加**快照层**——`zendesk_tickets`（工单原始快照）+ `sync_cursors`（增量拉取游标）。原实现「边拉边算直接写统计表」使口径变更必须重拉全量，而增量导出只能向前推进；改为统计一律从快照重算。详见技术方案 §5.1「快照层」。
+- **修订续用（Revision→10，ID 与 Anchor 不变）**：REQ-F09-17（信号采集补「工单快照先行、统计从快照重算」机制描述与游标语义）。
+- **retire**：无。
+- **同期登记但未修复的既有缺陷**（技术方案 §8.4.4 列表，规范本身不改，属实现未达规范）：重开次数误用工单当前状态判定、场景覆盖率分母错用本台条目数（与页面 MD 文案直接冲突）、`bot_refs`/`agent_refs`/`flags` 三列无意义、解决率近似归因界面未标注、文章投票逐条拉取可批量化。
+- **Zendesk 能力边界登记（官方文档核实）**：搜索无结果关键词与文章浏览量属 Explore 报表能力，REST 无通用端点，界面须如实标「不可得」不得渲染种子假数据；`bot 引用`须本台埋点非 Zendesk 数据；`agent 引用`依赖 `KnowledgeLinked` 工单 audit 事件，该事件**未经 API 官方 reference 证实**且 Knowledge Capture app 已于 2024-08-29 下线，须实测确认后再实现，不可得则标「未接入」不编数。
 
 ## ID 体系与映射说明
 
@@ -2165,11 +2174,13 @@ drift 检测 SHALL 周期性（「建议值 每小时 · 终稿前确认」）�
 - Story: US-F09-13
 - Anchor: FR-F09（PRD §5.10 视图⑧；信号数据面唯一落点 §4.3；指标口径 §8.2）
 - Stage: MVP
-- Revision: 9（08-05-2026 三轮：补齐**信号采集实现**——原五张信号表（`signal_events`/`entry_effect_metrics`/`knowledge_gaps`/`no_result_keywords`/`coverage_scenes`）只在初始化种子数据时被写入、服务端无任何采集代码，即使配上 Zendesk 凭据也不会产生新数据；本轮新增每小时定时采集（拉取帮助中心文章投票、工单解决信号，写入条目效果与信号事件）+ 反馈回流页手动补采按钮）
+- Revision: 10（08-05-2026 四轮：新增**工单快照层**——原采集为「边拉边算直接写统计表」，而 Zendesk 增量导出只能沿游标向前推进、历史重拉代价极高，口径一改即须重拉全量；本轮改为先落工单原始快照 `zendesk_tickets` + 游标持久化 `sync_cursors`，统计从快照重算。承接 revision 9：原五张信号表只在初始化种子数据时被写入、服务端无任何采集代码，即使配上 Zendesk 凭据也不会产生新数据）
 - Status: active
 - Behavior (EARS):
 
 ```text
+THE SYSTEM SHALL 定时（可手动触发补采）从 Zendesk 增量拉取工单快照，按游标分页推进直至流末尾标志为真；游标须持久化，每页落库后即推进，中途失败下一轮从断点继续；单轮页数上限触顶时如实标注剩余数据下轮续拉，不静默截断。
+THE SYSTEM SHALL 使全部看板统计从工单快照重算得出，而非在拉取过程中直接写入统计表——口径变更须仅靠重算消化，不得要求重拉历史数据。
 THE SYSTEM SHALL 每小时（可手动触发补采）从 Zendesk 拉取文章投票（up/down）与工单解决信号（solved/reopen/CSAT），写入条目效果指标与信号事件；搜索无结果关键词按订阅档位可得则采集、不可得则如实标「待核实」不编数（§8.3 防欺骗）。
 展示四渠道信号矩阵表（bot 自动回答 / 人工工单 / 用户自助浏览 / 客服 flag）：每行含 渠道/命中信号/解决信号/确定性档位（原生·必得 / 档位相关 / 待核实——如实标注，数据面唯一落点 §4.3）；待核实信号核实前不进达标判定、不编造数据（§7.2/§8.3）。
 修订候选队列（五来源）SHALL 逐条展示 来源徽章（客服 flag / 文章被踩 / bot 未解决转人工 / 高频无覆盖 / 搜索无结果关键词）+ 条目或主题 + 信号摘要与次数，动作按钮（转为修订建议 / 起草新条目 / 改标题与 labels）全部进审核队列（来源标注「反馈修订」）并留痕；客服 flag 处置时限「建议值 3 日内进候选 · 终稿前确认」（§8.2）。
