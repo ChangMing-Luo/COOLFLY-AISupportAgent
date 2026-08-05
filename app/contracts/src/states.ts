@@ -1,176 +1,123 @@
 import { z } from 'zod';
 
-/** 条目状态机（PRD §8.1 / 页面 MD §5.3 状态流转条） */
-export const ENTRY_STATUSES = [
-  'draft',
-  'editing',
-  'pending_review',
-  'reviewing',
-  'approved',
-  'published',
-  'rejected',
-  'offline',
-] as const;
+/* ══════════ 条目六态（原型 prototype.logic.js:21-25，文案逐字一致） ══════════ */
+
+export const ENTRY_STATUSES = ['draft', 'pending', 'rejected', 'published', 'fixing', 'offline'] as const;
 export const entryStatusSchema = z.enum(ENTRY_STATUSES);
 export type EntryStatus = z.infer<typeof entryStatusSchema>;
 
-export const ENTRY_STATUS_LABELS: Record<EntryStatus, string> = {
-  draft: '草稿',
-  editing: '编辑中',
-  pending_review: '待审核',
-  reviewing: '审核中',
-  approved: '审核通过',
-  published: '已发布',
-  rejected: '已驳回',
-  offline: '已下线',
+export interface StatusMeta {
+  /** 短标签，列表与徽标用 */
+  label: string;
+  /** tokens.css 的 tag 类 */
+  tagClass: 'tag-neutral' | 'tag-outline' | 'tag-accent' | 'tag-accent-2';
+  /** 人话说明，详情页「状态：」后面那句 */
+  readable: string;
+}
+
+export const ENTRY_STATUS_META: Record<EntryStatus, StatusMeta> = {
+  draft: { label: '草稿', tagClass: 'tag-neutral', readable: '草稿 · 编辑中，尚未提交审核' },
+  pending: { label: '待审核', tagClass: 'tag-outline', readable: '待审核 · 已提交，排队等待审核' },
+  rejected: { label: '已驳回', tagClass: 'tag-neutral', readable: '已驳回 · 审核未通过，退回修改' },
+  published: { label: '已发布', tagClass: 'tag-accent', readable: '已发布 · 线上生效，已同步 Zendesk' },
+  fixing: { label: '修复中', tagClass: 'tag-accent-2', readable: '修复中 · 正在根据反馈修订' },
+  offline: { label: '已下线', tagClass: 'tag-neutral', readable: '已下线 · 已撤回，不再对客展示' },
 };
 
-/** 合法流转表——非法流转直接 409（技术方案 §4.2 状态机守卫） */
+/** 合法流转表（SPEC-v4 §2.3）。键 = 起点，值 = 允许到达的状态 */
 export const ENTRY_TRANSITIONS: Record<EntryStatus, EntryStatus[]> = {
-  draft: ['draft', 'editing', 'pending_review'],
-  editing: ['editing', 'draft', 'pending_review'],
-  pending_review: ['reviewing', 'approved', 'rejected'],
-  reviewing: ['approved', 'rejected', 'pending_review'],
-  approved: ['published', 'editing'],
-  published: ['editing', 'offline'],
-  rejected: ['draft', 'editing', 'pending_review'],
-  offline: ['editing'],
+  draft: ['draft', 'pending'],
+  pending: ['published', 'rejected'],
+  rejected: ['rejected', 'draft', 'pending'],
+  published: ['draft', 'fixing', 'offline', 'pending'],
+  fixing: ['fixing', 'draft', 'pending'],
+  offline: ['draft'],
 };
 
-export function canTransitionEntry(from: EntryStatus, to: EntryStatus): boolean {
+export function canTransition(from: EntryStatus, to: EntryStatus): boolean {
   return ENTRY_TRANSITIONS[from].includes(to);
 }
 
-/** 英文（翻译）状态机（PRD §5.10 翻译工作流；铁律：confirmed 前不可同步） */
-export const EN_STATUSES = [
-  'none',
-  'translating',
-  'pending_human',
-  'confirmed',
-  'synced',
-  'failed',
-  'stale',
-] as const;
-export const enStatusSchema = z.enum(EN_STATUSES);
-export type EnStatus = z.infer<typeof enStatusSchema>;
+/* ══════════ 同步四态 ══════════ */
 
-export const EN_STATUS_LABELS: Record<EnStatus, string> = {
-  none: '未生成',
-  translating: 'AI 翻译中',
-  pending_human: '待人工校验',
-  confirmed: '已确认',
-  synced: '已同步 Zendesk',
-  failed: '翻译失败',
-  stale: '待重新校验',
-};
-
-export const EN_TRANSITIONS: Record<EnStatus, EnStatus[]> = {
-  none: ['translating'],
-  translating: ['pending_human', 'failed'],
-  pending_human: ['confirmed', 'translating', 'stale'],
-  confirmed: ['synced', 'stale', 'translating'],
-  synced: ['stale', 'translating'],
-  failed: ['translating', 'stale'],
-  stale: ['translating', 'pending_human'],
-};
-
-export function canTransitionEn(from: EnStatus, to: EnStatus): boolean {
-  return EN_TRANSITIONS[from].includes(to);
-}
-
-/** 英文「已确认」及之后才允许同步——铁律，服务端强制 */
-export function enAllowsSync(status: EnStatus): boolean {
-  return status === 'confirmed' || status === 'synced';
-}
-
-/** 同步状态机（PRD §8.1；页面 MD §5.6 状态机说明） */
-export const SYNC_STATUSES = [
-  'none',
-  'queued',
-  'running',
-  'synced',
-  'failed',
-  'blocked',
-  'archived',
-] as const;
+export const SYNC_STATUSES = ['none', 'pending', 'synced', 'failed'] as const;
 export const syncStatusSchema = z.enum(SYNC_STATUSES);
 export type SyncStatus = z.infer<typeof syncStatusSchema>;
 
-export const SYNC_STATUS_LABELS: Record<SyncStatus, string> = {
-  none: '未同步',
-  queued: '待同步',
-  running: '同步中',
-  synced: '已同步',
-  failed: '失败',
-  blocked: '已阻断',
-  archived: '已归档',
+export const SYNC_STATUS_META: Record<SyncStatus, { label: string; tagClass: string }> = {
+  none: { label: '未同步', tagClass: 'tag-neutral' },
+  pending: { label: '同步中', tagClass: 'tag-accent-2' },
+  synced: { label: '已同步', tagClass: 'tag-accent' },
+  failed: { label: '同步失败', tagClass: 'tag-neutral' },
 };
 
-/** 可见性三档（PRD §4.1；内部段落不进对外文章、不翻译、不同步对外） */
-export const VISIBILITIES = ['public', 'internal', 'mixed'] as const;
-export const visibilitySchema = z.enum(VISIBILITIES);
-export type Visibility = z.infer<typeof visibilitySchema>;
+/* ══════════ 其余枚举 ══════════ */
 
-export const VISIBILITY_LABELS: Record<Visibility, string> = {
-  public: '对外公开',
-  internal: '仅客服内部',
-  mixed: '对外公开 + 内部段落',
+export const FEEDBACK_TYPES = ['差评', '信息有误', '无法解决'] as const;
+export const feedbackTypeSchema = z.enum(FEEDBACK_TYPES);
+export type FeedbackType = z.infer<typeof feedbackTypeSchema>;
+
+export const FEEDBACK_STATES = ['open', 'fixing', 'closed'] as const;
+export const feedbackStateSchema = z.enum(FEEDBACK_STATES);
+export type FeedbackState = z.infer<typeof feedbackStateSchema>;
+export const FEEDBACK_STATE_LABELS: Record<FeedbackState, string> = {
+  open: '未处理',
+  fixing: '修复中',
+  closed: '已关闭',
 };
 
-/** 审核来源五类（PRD §5.10 视图⑤ 来源徽章） */
-export const REVIEW_SOURCES = ['mining', 'manual', 'revision', 'feedback', 'import'] as const;
-export const reviewSourceSchema = z.enum(REVIEW_SOURCES);
-export type ReviewSource = z.infer<typeof reviewSourceSchema>;
+export const MISS_STATES = ['open', 'planned'] as const;
+export const missStateSchema = z.enum(MISS_STATES);
+export type MissState = z.infer<typeof missStateSchema>;
+export const MISS_STATE_LABELS: Record<MissState, string> = { open: '待处理', planned: '已排期' };
 
-export const REVIEW_SOURCE_LABELS: Record<ReviewSource, string> = {
-  mining: 'AI 挖掘',
-  manual: '人工录入',
-  revision: '版本修订',
-  feedback: '反馈修订',
-  import: '批量导入',
+export const COLLECT_TASK_STATES = ['ready', 'running', 'done', 'failed'] as const;
+export type CollectTaskState = (typeof COLLECT_TASK_STATES)[number];
+
+export const CANDIDATE_DISPOSITIONS = ['pending', 'accepted', 'dropped'] as const;
+export type CandidateDisposition = (typeof CANDIDATE_DISPOSITIONS)[number];
+
+export const TAG_TYPES = ['业务', '属性', '动作', '人群'] as const;
+export const tagTypeSchema = z.enum(TAG_TYPES);
+export type TagType = z.infer<typeof tagTypeSchema>;
+
+export const VERSION_ACTS = ['发布', '回滚', '创建'] as const;
+export type VersionAct = (typeof VERSION_ACTS)[number];
+/** 版本列表的动作显示名（原型 dtVals：发布 → 发布上线） */
+export const VERSION_ACT_LABELS: Record<VersionAct, string> = {
+  发布: '发布上线',
+  回滚: '版本回滚',
+  创建: '新建条目',
 };
 
-/** 批次状态（PRD §5.10 视图④） */
-export const BATCH_STATUSES = ['completed', 'empty', 'failed'] as const;
-export const batchStatusSchema = z.enum(BATCH_STATUSES);
-export type BatchStatus = z.infer<typeof batchStatusSchema>;
+/* ══════════ 版本号 ══════════ */
 
-export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = {
-  completed: '完成',
-  empty: '无新草稿',
-  failed: '失败',
-};
+/** 大版本 +1（审核通过发布）或小版本 +1（创建修订 / 反馈转修复） */
+export function bumpVersion(current: string, major: boolean): string {
+  const m = /v(\d+)\.(\d+)/.exec(current);
+  const maj = m ? Number(m[1]) : 0;
+  const min = m ? Number(m[2]) : 1;
+  return major ? `v${maj + 1}.0` : `v${maj}.${min + 1}`;
+}
 
-/** 候选类型（三类：新增/修订/合并） */
-export const CANDIDATE_TYPES = ['new', 'revision', 'merge'] as const;
-export const candidateTypeSchema = z.enum(CANDIDATE_TYPES);
-export type CandidateType = z.infer<typeof candidateTypeSchema>;
+export function priorVersion(current: string): string {
+  const m = /v(\d+)\.(\d+)/.exec(current);
+  const maj = m ? Number(m[1]) : 0;
+  const min = m ? Number(m[2]) : 1;
+  return min > 0 ? `v${maj}.${min - 1}` : `v${Math.max(0, maj - 1)}.0`;
+}
 
-export const CANDIDATE_TYPE_LABELS: Record<CandidateType, string> = {
-  new: '新增',
-  revision: '修订',
-  merge: '合并',
-};
+/* ══════════ 会话用户 ══════════ */
 
-/** 信号确定性档位（PRD §4.3；待核实信号不进达标判定） */
-export const SIGNAL_CERTAINTIES = ['certain', 'tier_dependent', 'unverified'] as const;
-export const signalCertaintySchema = z.enum(SIGNAL_CERTAINTIES);
-export type SignalCertainty = z.infer<typeof signalCertaintySchema>;
-
-export const SIGNAL_CERTAINTY_LABELS: Record<SignalCertainty, string> = {
-  certain: '原生 · 必得',
-  tier_dependent: '档位相关',
-  unverified: '待核实',
-};
-
-/** 版本状态 */
-export const VERSION_STATUSES = ['current', 'history', 'rolled_back', 'pending'] as const;
-export const versionStatusSchema = z.enum(VERSION_STATUSES);
-export type VersionStatus = z.infer<typeof versionStatusSchema>;
-
-export const VERSION_STATUS_LABELS: Record<VersionStatus, string> = {
-  current: '已发布',
-  history: '历史版本',
-  rolled_back: '已回滚',
-  pending: '待审核',
-};
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'super' | 'ops';
+  roleLabel: string;
+  department: string;
+  /** 审核权限是否被单独授予（ops 需要，super 恒 true） */
+  reviewGranted: boolean;
+  mustChangePassword: boolean;
+  permissions: string[];
+}

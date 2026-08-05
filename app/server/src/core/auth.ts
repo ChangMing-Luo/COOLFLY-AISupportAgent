@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import type { Role, SessionUser } from '@kb/contracts';
+import { ROLE_LABELS, type Role, type SessionUser } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { permissionsOf } from './rbac.js';
 
@@ -13,7 +13,8 @@ export interface DbUser {
   email: string;
   password_hash: string;
   role: Role;
-  library_scope: string[];
+  department: string;
+  review_granted: boolean;
   enabled: boolean;
   must_change_password: boolean;
 }
@@ -58,14 +59,17 @@ export async function loadSessionUser(sessionId: string): Promise<SessionUser | 
   );
   const row = rows[0];
   if (!row) return null;
+  const reviewGranted = row.role === 'super' || row.review_granted;
   return {
     id: row.id,
     name: row.name,
     email: row.email,
     role: row.role,
-    libraryScope: row.library_scope ?? [],
+    roleLabel: ROLE_LABELS[row.role],
+    department: row.department ?? '',
+    reviewGranted,
     mustChangePassword: row.must_change_password,
-    permissions: await permissionsOf(row.role),
+    permissions: await permissionsOf(row.role, reviewGranted),
   };
 }
 

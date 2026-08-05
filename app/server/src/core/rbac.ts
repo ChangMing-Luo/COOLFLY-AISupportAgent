@@ -41,9 +41,23 @@ export async function roleHas(role: Role, permission: Permission): Promise<boole
   return m[permission][role] === true;
 }
 
-export async function permissionsOf(role: Role): Promise<Permission[]> {
+/**
+ * 审核权限是「单独授予」项（原型 admin.perms「审核（需授权）」）：
+ * 矩阵给 ops 默认关，超管在用户页按人开 users.review_granted。
+ */
+export function hasPermission(
+  matrix: Matrix,
+  role: Role,
+  reviewGranted: boolean,
+  permission: Permission,
+): boolean {
+  if (permission === 'review.decide') return matrix[permission][role] === true || reviewGranted;
+  return matrix[permission][role] === true;
+}
+
+export async function permissionsOf(role: Role, reviewGranted: boolean): Promise<Permission[]> {
   const m = await getMatrix();
-  return PERMISSIONS.filter((p) => m[p][role]);
+  return PERMISSIONS.filter((p) => hasPermission(m, role, reviewGranted, p));
 }
 
 /** 写路由声明所需权限点；越权 403 带原因（接口层强制，不只前端禁用 —— RULE-01） */
@@ -54,7 +68,7 @@ export function requirePermission(permission: Permission) {
       await reply.code(401).send({ error: 'unauthorized', message: '未登录或会话已失效' });
       return;
     }
-    const ok = await roleHas(user.role, permission);
+    const ok = hasPermission(await getMatrix(), user.role, user.reviewGranted, permission);
     if (!ok) {
       await reply.code(403).send({
         error: 'forbidden',

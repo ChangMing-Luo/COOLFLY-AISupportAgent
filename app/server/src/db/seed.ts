@@ -1,473 +1,424 @@
-import { DEFAULT_PERMISSION_MATRIX, PERMISSIONS, ROLES } from '@kb/contracts';
+import { CATALOG, DEFAULT_PERMISSION_MATRIX, PERMISSIONS, ROLE_LABELS } from '@kb/contracts';
 import { pool, query, newId } from './pool.js';
 import { hashPassword } from '../core/auth.js';
-import { contentHash, toPlainText, toPublicHtml } from '../core/content.js';
-import { getZendesk } from '../integrations/zendesk.js';
+import { toHtml } from '../core/content.js';
 
 const INITIAL_PASSWORD = process.env.SEED_PASSWORD ?? 'Coolfly@2026';
 
-async function seedMatrix(): Promise<void> {
+/** 正文模板（原型 bodyOf / translateBody，逐字一致） */
+function bodyZhOf(categoryZh: string): string {
+  return [
+    `一、适用范围。本条款适用于 COOLFLY 平台出票的${categoryZh}订单。`,
+    '二、处理规则。旅客可在起飞前通过 App、官网或客服热线提交申请；系统将根据舱位等级、距起飞时间与航司政策自动计算结果，并在提交后 30 分钟内反馈。',
+    '三、特殊情形。因航司原因导致的变更不收取任何费用；不可抗力情形按航司公告执行，坐席须引用当次公告编号。',
+    '四、常见追问。若旅客对计算结果有异议，应引导其在订单详情页查看费用明细，必要时转人工复核，复核时限为 1 个工作日。',
+  ].join('\n\n');
+}
+
+function bodyEnOf(categoryEn: string): string {
+  return [
+    `I. Scope. These terms apply to ${categoryEn} orders ticketed on the COOLFLY platform.`,
+    'II. Handling. Passengers may submit a request before departure via the App, website or service hotline; the system calculates the outcome based on cabin class, time to departure and airline policy, and responds within 30 minutes.',
+    'III. Special cases. Changes caused by the carrier incur no fee; force-majeure cases follow the airline announcement, and agents must cite the announcement number.',
+    'IV. Follow-ups. If the passenger disputes the result, guide them to the fee breakdown on the order page and escalate to manual review when necessary (SLA: 1 business day).',
+  ].join('\n\n');
+}
+
+const TITLE_EN: Record<string, string> = {
+  '国际机票改签手续费计算规则（2026 版）': 'International Ticket Rebooking Fee Rules (2026 Ed.)',
+  婴儿及儿童票行李额度说明: 'Baggage Allowance for Infant & Child Tickets',
+  超售航班自愿放弃座位的补偿标准: 'Compensation for Voluntarily Giving Up a Seat on Oversold Flights',
+  值机失败常见原因与自助排查路径: 'Common Check-in Failures and Self-service Troubleshooting',
+  里程兑换机票的退改规则: 'Change & Refund Rules for Award (Mileage) Tickets',
+  签证拒签后的机票退款流程: 'Ticket Refund Process After Visa Denial',
+  台风天气航班大面积延误的应答话术: 'Agent Script for Large-scale Typhoon Delays',
+  '特殊旅客（孕妇 / 无成人陪伴儿童）承运条件':
+    'Carriage Conditions for Special Passengers (Pregnant / Unaccompanied Minor)',
+  支付失败但已扣款的处理时效: 'Handling Time for Failed Payment with Successful Charge',
+  电子发票开具与重开规则: 'E-invoice Issuance and Re-issuance Rules',
+  联程航班误机的保护性改签: 'Protective Rebooking for Missed Connecting Flights',
+  '酒店预订取消政策（境内 / 境外差异）': 'Hotel Booking Cancellation Policy (Domestic / Overseas)',
+};
+
+const SEED_USERS = [
+  { name: '陈默', email: 'chenmo@coolfly.com', role: 'super' as const, dept: '知识中台', review: true, enabled: true, last: '2026-08-05T08:12:00+08:00' },
+  { name: '苏见', email: 'sujian@coolfly.com', role: 'ops' as const, dept: '客服运营', review: true, enabled: true, last: '2026-08-05T10:02:00+08:00' },
+  { name: '林静', email: 'linjing@coolfly.com', role: 'ops' as const, dept: '客服运营', review: false, enabled: true, last: '2026-08-05T07:58:00+08:00' },
+  { name: '周迟', email: 'zhouchi@coolfly.com', role: 'ops' as const, dept: '客服运营', review: false, enabled: true, last: '2026-08-05T09:20:00+08:00' },
+  { name: '王一诺', email: 'wangyinuo@coolfly.com', role: 'ops' as const, dept: '产品', review: false, enabled: false, last: '2026-07-22T14:00:00+08:00' },
+];
+
+const SEED_TAGS: Array<[string, '业务' | '属性' | '动作' | '人群', string]> = [
+  ['国际机票', '业务', '林静'],
+  ['手续费', '属性', '周迟'],
+  ['改签', '动作', '林静'],
+  ['婴儿票', '人群', '苏见'],
+  ['值机', '动作', '周迟'],
+  ['退票手续费', '属性', '陈默'],
+  ['规则', '属性', '林静'],
+  ['行李', '业务', '苏见'],
+];
+
+interface SeedEntry {
+  code: string;
+  titleZh: string;
+  category: string;
+  scene: string;
+  status: 'draft' | 'pending' | 'rejected' | 'published' | 'fixing' | 'offline';
+  version: string;
+  owner: string;
+  at: string;
+  quality: number;
+  confidence: number;
+  sync: 'none' | 'pending' | 'synced' | 'failed';
+  adopt: number;
+  hits: number;
+  tags: string[];
+}
+
+const SEED_ENTRIES: SeedEntry[] = [
+  { code: 'KB-20418', titleZh: '国际机票改签手续费计算规则（2026 版）', category: '机票 · 售后', scene: '改签退票', status: 'published', version: 'v3.2', owner: '林静', at: '2026-08-04T14:22:00+08:00', quality: 78, confidence: 0.96, sync: 'failed', adopt: 31, hits: 2840, tags: ['国际机票', '改签', '手续费'] },
+  { code: 'KB-20402', titleZh: '婴儿及儿童票行李额度说明', category: '机票 · 出行前', scene: '行李服务', status: 'published', version: 'v1.4', owner: '周迟', at: '2026-08-02T09:41:00+08:00', quality: 88, confidence: 0.91, sync: 'synced', adopt: 82, hits: 5120, tags: ['婴儿票', '行李'] },
+  { code: 'KB-20517', titleZh: '超售航班自愿放弃座位的补偿标准', category: '机票 · 异常处理', scene: '航班异常', status: 'pending', version: 'v2.0', owner: '苏见', at: '2026-08-05T10:12:00+08:00', quality: 76, confidence: 0.88, sync: 'none', adopt: 0, hits: 0, tags: ['改签', '规则'] },
+  { code: 'KB-20522', titleZh: '值机失败常见原因与自助排查路径', category: '机票 · 出行前', scene: '值机登机', status: 'draft', version: 'v0.3', owner: '林静', at: '2026-08-05T08:30:00+08:00', quality: 61, confidence: 0.72, sync: 'none', adopt: 0, hits: 0, tags: ['改签', '规则'] },
+  { code: 'KB-20489', titleZh: '里程兑换机票的退改规则', category: '会员 · 权益', scene: '会员权益', status: 'rejected', version: 'v1.1', owner: '周迟', at: '2026-08-03T16:55:00+08:00', quality: 54, confidence: 0.63, sync: 'none', adopt: 0, hits: 0, tags: ['改签', '规则'] },
+  { code: 'KB-20460', titleZh: '签证拒签后的机票退款流程', category: '机票 · 售后', scene: '改签退票', status: 'published', version: 'v2.6', owner: '苏见', at: '2026-07-29T11:08:00+08:00', quality: 91, confidence: 0.93, sync: 'synced', adopt: 88, hits: 3960, tags: ['改签', '规则'] },
+  { code: 'KB-20530', titleZh: '台风天气航班大面积延误的应答话术', category: '机票 · 异常处理', scene: '航班异常', status: 'fixing', version: 'v4.1', owner: '陈默', at: '2026-08-05T09:05:00+08:00', quality: 68, confidence: 0.81, sync: 'synced', adopt: 44, hits: 6210, tags: ['改签', '规则'] },
+  { code: 'KB-20301', titleZh: '特殊旅客（孕妇 / 无成人陪伴儿童）承运条件', category: '机票 · 出行前', scene: '特殊旅客', status: 'published', version: 'v5.0', owner: '林静', at: '2026-07-18T15:30:00+08:00', quality: 96, confidence: 0.97, sync: 'synced', adopt: 94, hits: 7180, tags: ['改签', '规则'] },
+  { code: 'KB-20544', titleZh: '支付失败但已扣款的处理时效', category: '支付 · 财务', scene: '支付与发票', status: 'pending', version: 'v1.0', owner: '周迟', at: '2026-08-05T11:40:00+08:00', quality: 72, confidence: 0.85, sync: 'none', adopt: 0, hits: 0, tags: ['改签', '规则'] },
+  { code: 'KB-20255', titleZh: '电子发票开具与重开规则', category: '支付 · 财务', scene: '支付与发票', status: 'offline', version: 'v3.0', owner: '苏见', at: '2026-06-11T10:02:00+08:00', quality: 43, confidence: 0.58, sync: 'none', adopt: 51, hits: 2010, tags: ['改签', '规则'] },
+  { code: 'KB-20536', titleZh: '联程航班误机的保护性改签', category: '机票 · 异常处理', scene: '航班异常', status: 'draft', version: 'v0.1', owner: '陈默', at: '2026-08-05T13:15:00+08:00', quality: 58, confidence: 0.69, sync: 'none', adopt: 0, hits: 0, tags: ['改签', '规则'] },
+  { code: 'KB-20421', titleZh: '酒店预订取消政策（境内 / 境外差异）', category: '酒店 · 订单', scene: '酒店订单', status: 'published', version: 'v2.2', owner: '林静', at: '2026-07-26T14:00:00+08:00', quality: 85, confidence: 0.9, sync: 'synced', adopt: 76, hits: 3320, tags: ['改签', '规则'] },
+];
+
+/** KB-20418 的完整版本历史（原型 versions） */
+const SEED_VERSIONS: Array<[string, string, string, string, string, number, number]> = [
+  ['v3.2', '2026-08-04T14:22:00+08:00', '林静', '发布', '按 8 月新政更新阶梯费率，新增 24 小时内档位', 31, 2840],
+  ['v3.1', '2026-07-21T10:05:00+08:00', '苏见', '发布', '补充国际段联程特例说明', 60, 5120],
+  ['v3.0', '2026-06-30T17:40:00+08:00', '陈默', '回滚', '自 v2.8 回滚，v2.9 费率表存在错误', 55, 4310],
+  ['v2.8', '2026-06-12T09:20:00+08:00', '林静', '发布', '首次拆分国内 / 国际两套费率', 52, 3980],
+  ['v2.6', '2026-05-04T11:12:00+08:00', '周迟', '发布', '初版整理自客服工单 FAQ', 48, 3210],
+];
+
+const SEED_TASKS: Array<[string, string, string, string, string, string, number]> = [
+  ['CT-3081', '近 7 日高频未命中问题聚类', 'Zendesk 客服会话', 'ready', '林静', '2026-08-05T07:00:00+08:00', 5],
+  ['CT-3079', '8 月运价政策客诉聚类', 'Zendesk 客服会话', 'running', '周迟', '2026-08-05T09:20:00+08:00', 6],
+  ['CT-3072', '改签退票追问 Top50', 'Zendesk 工单', 'done', '苏见', '2026-08-03T18:00:00+08:00', 24],
+  ['CT-3068', '行李服务客诉抽取', 'Zendesk 客服会话', 'failed', '陈默', '2026-08-02T22:10:00+08:00', 0],
+];
+
+const SOURCE_TEXT =
+  '【Zendesk 会话 · 2026-08-04 19:22 · Zendesk 客服会话】用户：我买的是带婴儿的票，现在想改后天的，婴儿票要单独改吗？坐席：您好，婴儿票是跟随成人票的，成人票改签后婴儿票会自动改到同一航班，不需要单独操作，差价会按新航段的婴儿票价重新算。用户：那要是我只改婴儿不改大人呢？坐席：这个不支持的，婴儿票不能脱离成人票单独存在。';
+
+interface SeedCandidate {
+  code: string;
+  title: string;
+  scene: string;
+  tags: string[];
+  confidence: number;
+  answer: string;
+  dupCode?: string;
+  dupScore?: number;
+}
+
+const SEED_CANDIDATES: SeedCandidate[] = [
+  { code: 'EX-01', title: '婴儿票能否单独改签', scene: '改签退票', tags: ['婴儿票', '改签'], confidence: 0.93, answer: '婴儿票不可脱离成人票单独改签。成人票改签后，婴儿票将随成人票自动改期，差价按新航段婴儿票价重新计算。' },
+  { code: 'EX-02', title: '值机失败提示「证件信息不符」如何处理', scene: '值机登机', tags: ['值机', '证件'], confidence: 0.87, answer: '提示证件信息不符时，请核对订单证件号与实际出行证件是否一致。不一致需在起飞前 4 小时联系客服修改，修改成功后重新值机。' },
+  { code: 'EX-03', title: '国际机票改签手续费怎么算', scene: '改签退票', tags: ['国际机票', '手续费'], confidence: 0.79, answer: '国际机票改签手续费按票价档位与距起飞时间分段收取，具体比例见费率表。', dupCode: 'KB-20418', dupScore: 91 },
+  { code: 'EX-04', title: '延误多久可以申请赔偿', scene: '航班异常', tags: ['延误', '赔偿'], confidence: 0.64, answer: '因承运人原因导致的延误达到 4 小时以上，可申请补偿；天气等不可抗力不在补偿范围内。' },
+  { code: 'EX-05', title: '改签后原座位是否保留', scene: '改签退票', tags: ['改签', '选座'], confidence: 0.55, answer: '改签会重新出票，原选座失效，需在新航班重新选座。' },
+];
+
+const SEED_FEEDBACKS: Array<[string, string, '差评' | '信息有误' | '无法解决', string, string, string, 'open' | 'fixing' | 'closed']> = [
+  ['FB-9912', 'KB-20530', '差评', '话术太长，客户等不及，坐席念不完', 'ZD-88231', '2026-08-05T11:20:00+08:00', 'open'],
+  ['FB-9908', 'KB-20418', '信息有误', '手续费比例与 8 月新政策不一致', 'ZD-88190', '2026-08-05T09:48:00+08:00', 'open'],
+  ['FB-9901', 'KB-20489', '无法解决', '里程票退票规则没写清楚，客户追问三次', 'ZD-88044', '2026-08-04T20:11:00+08:00', 'open'],
+  ['FB-9894', 'KB-20255', '差评', '发票重开入口找不到', 'ZD-87920', '2026-08-04T15:02:00+08:00', 'closed'],
+];
+
+const SEED_MISSES: Array<[string, string, string, number, number, 'open' | 'planned', string]> = [
+  ['MS-441', '婴儿票能不能单独改签', '改签退票', 63, 0, 'open', '改签类 · 婴儿票与成人票联动规则缺失，用户高频追问能否单独改签，属「规则空白」型未命中。'],
+  ['MS-438', '值机失败提示证件信息不符', '值机登机', 41, 12, 'open', '值机异常 · 证件信息校验失败的自助处理路径未覆盖，属「流程缺失」型未命中。'],
+  ['MS-433', '共享航班的行李额按哪家算', '行李服务', 28, 31, 'planned', '行李规则 · 代码共享航班行李额归属承运方的判定说明不足，属「细节不全」型未命中。'],
+  ['MS-421', '里程能不能转给家人', '会员权益', 19, 8, 'open', '会员权益 · 里程转赠规则缺失，涉及亲友账户绑定与限制，属「规则空白」型未命中。'],
+];
+
+const SEED_AUDIT: Array<[string, string, string, string, string]> = [
+  ['2026-08-05T11:40:00+08:00', '周迟', '提交审核', 'KB-20544 支付失败但已扣款的处理时效', '成功'],
+  ['2026-08-05T10:12:00+08:00', '苏见', '提交审核', 'KB-20517 超售航班自愿放弃座位的补偿标准', '成功'],
+  ['2026-08-05T09:48:00+08:00', '系统', 'Zendesk 拉取', 'ZD-88190 → FB-9908', '成功'],
+  ['2026-08-04T14:22:00+08:00', '林静', '发布', 'KB-20418 v3.2', '成功'],
+  ['2026-08-04T14:23:00+08:00', '系统', 'Zendesk 同步', 'KB-20418 英文版本（失败）', '失败'],
+  ['2026-08-04T10:02:00+08:00', '苏见', '审核通过', 'KB-20418 v3.2', '成功'],
+];
+
+async function main(): Promise<void> {
+  await query(`TRUNCATE TABLE
+      sync_logs, sync_mappings, misses, feedbacks, extract_candidates, collect_tasks,
+      entry_metrics, entry_versions, entry_tags, entries, tags, scenes, categories,
+      audit_logs, permission_matrix, sessions, users
+    RESTART IDENTITY CASCADE`);
+
+  /* 用户 */
+  const pwd = await hashPassword(INITIAL_PASSWORD);
+  const userId = new Map<string, string>();
+  for (const u of SEED_USERS) {
+    const id = newId('usr');
+    userId.set(u.name, id);
+    await query(
+      `INSERT INTO users (id, name, email, password_hash, role, department, review_granted, enabled, must_change_password, last_active_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9)`,
+      [id, u.name, u.email, pwd, u.role, u.dept, u.review, u.enabled, u.last],
+    );
+  }
+
+  /* 权限矩阵 */
   for (const p of PERMISSIONS) {
-    for (const r of ROLES) {
-      // DO UPDATE 而非 DO NOTHING：种子必须把矩阵**重置**回基线。
-      // 原来是 DO NOTHING —— 只要有人（或一次改矩阵的测试）把某个权限打开过，
-      // 重跑种子也回不去，之后所有 RBAC 验收都在被污染的矩阵上跑且看不出来。
+    for (const role of ['super', 'ops'] as const) {
       await query(
         `INSERT INTO permission_matrix (permission, role, allowed) VALUES ($1,$2,$3)
-         ON CONFLICT (permission, role) DO UPDATE SET allowed = EXCLUDED.allowed`,
-        [p, r, DEFAULT_PERMISSION_MATRIX[p][r]],
+         ON CONFLICT (permission, role) DO UPDATE SET allowed = EXCLUDED.allowed, updated_at = now()`,
+        [p, role, DEFAULT_PERMISSION_MATRIX[p][role]],
       );
     }
   }
-}
 
-async function main(): Promise<void> {
-  // 安全闸：种子会直接 upsertArticle 推演示文章。带着真实 Zendesk 凭据跑，
-  // 中文演示数据会写进**生产帮助中心**——DISABLE_CRON 只挡定时任务，挡不住这里。
-  // 需要往真实环境灌初始数据时显式设 SEED_ALLOW_LIVE=1，逼使用者当场确认一次。
-  if (getZendesk().mode === 'live' && process.env.SEED_ALLOW_LIVE !== '1') {
-    console.error(
-      '拒绝执行：检测到真实 Zendesk 凭据。种子会推送演示文章到生产帮助中心。\n' +
-        '  · 只想重置本地库：先 unset ZENDESK_* 再跑，或用 ZENDESK_SANDBOX_FILE 走沙箱\n' +
-        '  · 确实要写真实环境：SEED_ALLOW_LIVE=1 pnpm db:seed',
-    );
-    process.exit(2);
-  }
-
-  await query('TRUNCATE sessions, translation_pairs, sync_tasks, sync_mappings, drift_records, entry_versions, version_metrics, entry_effect_metrics, signal_events, mining_candidates, mining_batches, revision_candidates, knowledge_gaps, no_result_keywords, coverage_scenes, signal_matrix, audit_logs CASCADE');
-  await query('DELETE FROM entries');
-  // 非种子用户（测试/手工创建的）一并清掉，否则重跑 seed 后「创建用户」类断言会撞 409
-  await query(
-    `DELETE FROM users WHERE email <> ALL($1::text[])`,
-    [['wangwen@coolfly.com', 'lixiao@coolfly.com', 'lizhen@coolfly.com', 'chendi@coolfly.com', 'ken@coolfly.com']],
-  );
-  await query('DELETE FROM chapters');
-  await query('DELETE FROM libraries');
-  await query('DELETE FROM users');
-  await seedMatrix();
-
-  // ===== 用户（RBAC 四角色真实账号；首次登录强制改密） =====
-  const pwd = await hashPassword(INITIAL_PASSWORD);
-  const users = [
-    { id: 'usr_wangwen', name: '王雯', email: 'wangwen@coolfly.com', role: 'kb_manager', must: false },
-    { id: 'usr_lixiao', name: '李骁', email: 'lixiao@coolfly.com', role: 'kb_reviewer', must: false },
-    { id: 'usr_lizhen', name: '李真', email: 'lizhen@coolfly.com', role: 'kb_reviewer', must: false },
-    { id: 'usr_chendi', name: '陈迪', email: 'chendi@coolfly.com', role: 'ai_ops', must: false },
-    { id: 'usr_ken', name: '运维 Ken', email: 'ken@coolfly.com', role: 'sys_admin', must: false },
-  ];
-  for (const u of users) {
+  /* 分类 + 场景 */
+  const catId = new Map<string, string>();
+  const catEn = new Map<string, string>();
+  const sceneId = new Map<string, string>();
+  CATALOG.forEach((c, ci) => {
+    catEn.set(c.zh, c.en);
+  });
+  let sceneSeq = 0;
+  for (let ci = 0; ci < CATALOG.length; ci += 1) {
+    const c = CATALOG[ci];
+    const id = newId('cat');
+    catId.set(c.zh, id);
     await query(
-      `INSERT INTO users (id, name, email, password_hash, role, library_scope, must_change_password, last_active_at)
-       VALUES ($1,$2,$3,$4,$5,'[]'::jsonb,$6, now())`,
-      [u.id, u.name, u.email, pwd, u.role, u.must],
+      `INSERT INTO categories (id, code, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5)`,
+      [id, `CAT-${401 + ci}`, c.zh, c.en, ci],
     );
+    for (const s of c.scenes) {
+      const sid = newId('scn');
+      sceneId.set(s.zh, sid);
+      await query(
+        `INSERT INTO scenes (id, code, category_id, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [sid, `SCENE-${201 + sceneSeq}`, id, s.zh, s.en, sceneSeq],
+      );
+      sceneSeq += 1;
+    }
   }
 
-  // ===== 知识库与结构树 =====
-  const libs = [
-    { id: 'lib_policy', name: '政策与售后知识库', note: '退款/退货/保修口径 · 含仅内部条目', internal: false, order: 1 },
-    { id: 'lib_product', name: '产品与使用知识库', note: '安装、配网、画质、会员', internal: false, order: 2 },
-    { id: 'lib_script', name: '客服话术库（仅内部）', note: '不对外公开，仅挂客服 segment', internal: true, order: 3 },
-  ];
-  for (const l of libs) {
-    await query('INSERT INTO libraries (id, name, note, internal_only, sort_order) VALUES ($1,$2,$3,$4,$5)', [
-      l.id, l.name, l.note, l.internal, l.order,
+  /* 标签 */
+  const tagId = new Map<string, string>();
+  for (let i = 0; i < SEED_TAGS.length; i += 1) {
+    const [name, type, by] = SEED_TAGS[i];
+    const id = newId('tag');
+    tagId.set(name, id);
+    await query(`INSERT INTO tags (id, code, name, type, created_by) VALUES ($1,$2,$3,$4,$5)`, [
+      id,
+      `TAG-${301 + i}`,
+      name,
+      type,
+      by,
     ]);
   }
 
-  const chapters = [
-    { id: 'ch_after', lib: 'lib_policy', parent: null, name: '售后政策', ref: null, order: 1 },
-    { id: 'ch_refund', lib: 'lib_policy', parent: 'ch_after', name: '退款与退货', ref: 'Sec 5101', order: 2 },
-    { id: 'ch_warranty', lib: 'lib_policy', parent: 'ch_after', name: '保修与换新', ref: 'Sec 5102', order: 3 },
-    { id: 'ch_order', lib: 'lib_policy', parent: null, name: '订单与物流', ref: null, order: 4 },
-    { id: 'ch_ship', lib: 'lib_policy', parent: 'ch_order', name: '发货与签收', ref: 'Sec 5110', order: 5 },
-    { id: 'ch_member', lib: 'lib_policy', parent: null, name: '会员与账户', ref: null, order: 6 },
-    { id: 'ch_billing', lib: 'lib_policy', parent: 'ch_member', name: '会员计费', ref: 'Sec 5120', order: 7 },
-    { id: 'ch_setup', lib: 'lib_product', parent: null, name: '网络与配对', ref: null, order: 8 },
-    { id: 'ch_wifi', lib: 'lib_product', parent: 'ch_setup', name: 'Wi-Fi 配对', ref: 'Sec 5130', order: 9 },
-    { id: 'ch_power', lib: 'lib_product', parent: null, name: '供电', ref: null, order: 10 },
-    { id: 'ch_solar', lib: 'lib_product', parent: 'ch_power', name: '太阳能', ref: 'Sec 5140', order: 11 },
-    { id: 'ch_script', lib: 'lib_script', parent: null, name: '内部话术', ref: null, order: 12 },
-    { id: 'ch_script_refund', lib: 'lib_script', parent: 'ch_script', name: '退款沟通话术', ref: 'Sec 5201', order: 13 },
-  ];
-  for (const c of chapters) {
+  /* 条目 */
+  const entryId = new Map<string, string>();
+  for (const e of SEED_ENTRIES) {
+    const id = newId('ent');
+    entryId.set(e.code, id);
+    const translated = e.status === 'published' || e.status === 'offline' || e.status === 'fixing';
+    const bodyZh = toHtml(bodyZhOf(e.category));
+    const bodyEn = translated ? toHtml(bodyEnOf(catEn.get(e.category) ?? e.category)) : '';
+    const titleEn = translated ? (TITLE_EN[e.titleZh] ?? '') : '';
+    const owner = userId.get(e.owner) ?? null;
     await query(
-      'INSERT INTO chapters (id, library_id, parent_id, name, zendesk_section_ref, sort_order) VALUES ($1,$2,$3,$4,$5,$6)',
-      [c.id, c.lib, c.parent, c.name, c.ref, c.order],
-    );
-  }
-
-  // ===== 条目（对齐 v3 原型 ENTRIES 语义） =====
-  interface SeedEntry {
-    id: string; code: string; title: string; lib: string; chapter: string; type: string;
-    visibility: 'public' | 'internal' | 'mixed'; status: string; enStatus: string; syncStatus: string;
-    version: number; sceneL1: string; sceneL2: string; labels: string[];
-    /** 已发布条目的 AI 摘要（发布时生成的产物；种子直接给出，供挖掘语义查重比对） */
-    aiSummary?: string;
-    dueDays: number; paragraphs: Array<{ text: string; html?: string; internal?: boolean; heading?: boolean }>;
-    owner: string;
-  }
-  const entries: SeedEntry[] = [
-    {
-      id: 'ent_0201', code: 'KB-0201', title: '退款政策', lib: 'lib_policy', chapter: 'ch_refund',
-      type: 'FAQ 政策型', visibility: 'mixed', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 2, sceneL1: '售后与退款', sceneL2: '退款时限',
-      labels: ['退款', '退货', '运费'], dueDays: 114, owner: 'usr_wangwen',
-      aiSummary: '退款分质量问题与非质量问题两档：质量问题签收后 30 天内全额退、运费公司承担；非质量问题签收后 5 天内可退、运费用户承担。会员服务按自然月退订。',
-      paragraphs: [
-        { text: '退款时限', heading: true },
-        { text: '质量问题：签收后 30 天内可申请全额退款，运费由公司承担。' },
-        { text: '非质量问题：签收后 5 天内可退，运费由用户承担。' },
-        { text: '会员服务：按自然月退订。' },
-        { text: '内部：超时个案走主管审批，额度上限 $80。', internal: true },
-      ],
-    },
-    {
-      id: 'ent_0188', code: 'KB-0188', title: '保修期与凭证要求', lib: 'lib_policy', chapter: 'ch_warranty',
-      type: 'FAQ 政策型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 3, sceneL1: '售后与退款', sceneL2: '保修换新',
-      labels: ['保修', '凭证'], dueDays: 47, owner: 'usr_wangwen',
-      aiSummary: '整机自签收起保修 12 个月、配件 6 个月；申请保修须提供订单号与设备序列号照片。',
-      paragraphs: [
-        { text: '保修范围', heading: true },
-        { text: '整机自签收之日起保修 12 个月，配件保修 6 个月。' },
-        { text: '申请保修需提供订单号与设备序列号照片。' },
-      ],
-    },
-    {
-      id: 'ent_0240', code: 'KB-0240', title: '会员退订与计费周期', lib: 'lib_policy', chapter: 'ch_billing',
-      type: 'FAQ 型', visibility: 'public', status: 'rejected', enStatus: 'pending_human', syncStatus: 'blocked', version: 2, sceneL1: '会员与账户', sceneL2: '会员计费',
-      labels: ['会员', '退订', '计费'], dueDays: -12, owner: 'usr_wangwen',
-      paragraphs: [
-        { text: '计费周期', heading: true },
-        { text: '会员按自然月计费，退订在当前周期结束时生效。' },
-      ],
-    },
-    {
-      id: 'ent_0155', code: 'KB-0155', title: '太阳能板阴天充不满电', lib: 'lib_product', chapter: 'ch_solar',
-      type: '操作流程型', visibility: 'public', status: 'published', enStatus: 'synced', syncStatus: 'synced', version: 4, sceneL1: '安装与配网', sceneL2: '太阳能供电',
-      labels: ['太阳能', '充电'], dueDays: -47, owner: 'usr_wangwen',
-      aiSummary: '太阳能板在阴天或弱光条件下充电不足的排查步骤：先查表面遮挡与积灰，再确认朝南安装且每日直射不少于 4 小时，连续阴天建议改用 USB 补电。',
-      paragraphs: [
-        { text: '排查步骤', heading: true },
-        { text: '1. 检查太阳能板表面是否有遮挡或积灰。' },
-        { text: '2. 确认安装角度朝南且每日直射不少于 4 小时。' },
-        { text: '3. 阴天连续 3 天以上建议改用 USB 补电。' },
-      ],
-    },
-    {
-      id: 'ent_0212', code: 'KB-0212', title: '退货运费承担规则', lib: 'lib_script', chapter: 'ch_script_refund',
-      type: '内部口径', visibility: 'internal', status: 'pending_review', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '售后与退款', sceneL2: '退货运费',
-      labels: ['运费', '预付面单'], dueDays: 180, owner: 'usr_wangwen',
-      paragraphs: [
-        { text: '质量问题退货：运费由公司承担，客服直接发预付面单。' },
-        { text: '非质量问题 7 天无理由：运费由用户承担。' },
-        { text: '超 30 天：走个案审批，需主管确认。' },
-      ],
-    },
-    {
-      id: 'ent_0233', code: 'KB-0233', title: '订单发出后能否改地址', lib: 'lib_policy', chapter: 'ch_ship',
-      type: 'FAQ 型', visibility: 'public', status: 'draft', enStatus: 'none', syncStatus: 'none', version: 0, sceneL1: '订单与物流', sceneL2: '地址修改',
-      labels: ['改地址', '发货'], dueDays: 180, owner: 'usr_wangwen',
-      paragraphs: [
-        { text: '订单发出前可在个人中心修改收货地址。' },
-        { text: '已发出订单需联系承运商，公司不承诺一定可改。' },
-      ],
-    },
-  ];
-
-  for (const e of entries) {
-    const body = {
-      paragraphs: e.paragraphs.map((p, i) => ({
-        id: `p_${i}`, text: p.text, html: '', internal: p.internal ?? false, heading: p.heading ?? false,
-      })),
-    };
-    await query(
-      `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
-         labels, body, status, en_status, sync_status, ai_summary, summary_source, summary_at,
-         current_version, owner_id, submitter_id, submitted_at, review_source, review_due_at, reject_reason, updated_at)
-       VALUES ($1,$2,$3,$22,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,
-               CASE WHEN $16 = 'none' THEN NULL ELSE now() END,
-               $17,$18,$18,
-               CASE WHEN $12 = 'pending_review' THEN now() ELSE NULL END,
-               'manual',
-               now() + ($19 || ' days')::interval, $20, now() - ($21 || ' hours')::interval)`,
+      `INSERT INTO entries
+        (id, code, title_zh, title_en, body_zh, body_en, category_id, scene_id, status, version,
+         sync_status, translated, en_edited, owner_id, owner_name, note, reject_reason, source,
+         confidence, quality, created_at, updated_at, published_at, submitter_id, submitted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,FALSE,$13,$14,'',$15,'人工撰写',$16,$17,$18,$18,$19,$13,$20)`,
       [
-        e.id, e.code, e.title, e.lib, e.chapter, e.type, e.visibility, e.sceneL1, e.sceneL2,
-        JSON.stringify(e.labels), JSON.stringify(body), e.status, e.enStatus, e.syncStatus,
-        e.aiSummary ?? '', e.aiSummary ? 'ai' : 'none',
-        e.version, e.owner, String(e.dueDays),
-        e.status === 'rejected' ? '计费周期与财务口径不符，请附财务确认截图' : null,
-        String(entries.indexOf(e) * 3),
-        // 英文标题与逐段译文同批产生：英文状态到「待人工校验」及之后才有
-        e.enStatus === 'synced' || e.enStatus === 'pending_human' ? EN_TITLES[e.code] ?? null : null,
+        id,
+        e.code,
+        e.titleZh,
+        titleEn,
+        bodyZh,
+        bodyEn,
+        catId.get(e.category) ?? null,
+        sceneId.get(e.scene) ?? null,
+        e.status,
+        e.version,
+        e.sync,
+        translated,
+        owner,
+        e.owner,
+        e.status === 'rejected' ? '内容与新政策不一致，费率档位需按 8 月新政更新后再提交。' : null,
+        e.confidence,
+        e.quality,
+        e.at,
+        e.status === 'published' ? e.at : null,
+        e.status === 'pending' ? e.at : null,
       ],
     );
-
-    if (e.version > 0) {
-      for (let v = 1; v <= e.version; v += 1) {
-        await query(
-          `INSERT INTO entry_versions (id, entry_id, version_no, label, body_snapshot, plain_text, status, author_id, author_name, effective_from, effective_to)
-           VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9, now() - ($10 || ' days')::interval, $11)`,
-          [
-            newId('ver'), e.id, v,
-            v === 1 && e.code === 'KB-0201' ? 'v1 退款 7 天（原始口径）' : v === 2 && e.code === 'KB-0201' ? 'v2 退款 5 天（财务口径调整）' : `v${v}`,
-            JSON.stringify(
-              v === 1 && e.code === 'KB-0201'
-                ? { paragraphs: body.paragraphs.map((p) => (p.text.includes('5 天内可退') ? { ...p, text: '非质量问题：签收后 7 天内可退，运费由用户承担。' } : p)) }
-                : body,
-            ),
-            toPlainText(body), v === e.version ? 'current' : 'history',
-            v === e.version ? 'usr_lixiao' : 'usr_wangwen', v === e.version ? '李骁' : '王雯',
-            String((e.version - v + 1) * 10), v === e.version ? null : new Date(),
-          ],
-        );
-        const metrics =
-          e.code === 'KB-0201'
-            ? [{ calls: 10000, hit: 95, solve: 90, adopt: 88 }, { calls: 8000, hit: 90, solve: 70, adopt: 61 }][v - 1]
-            : { calls: 1200 * v, hit: 88, solve: e.code === 'KB-0155' ? 41 : e.code === 'KB-0240' ? 58 : 84, adopt: 70 };
-        if (metrics) {
-          await query(
-            `INSERT INTO version_metrics (entry_id, version_no, calls, hit_rate, solve_rate, adopt_rate) VALUES ($1,$2,$3,$4,$5,$6)`,
-            [e.id, v, metrics.calls, metrics.hit, metrics.solve, metrics.adopt],
-          );
-        }
-      }
+    for (const t of e.tags) {
+      const tid = tagId.get(t);
+      if (tid) await query(`INSERT INTO entry_tags (entry_id, tag_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [id, tid]);
     }
-
-    if (e.enStatus === 'synced' || e.enStatus === 'pending_human') {
-      let seq = 0;
-      for (const p of body.paragraphs) {
-        await query(
-          `INSERT INTO translation_pairs (id, entry_id, paragraph_id, seq, zh_text, en_text, internal, human_edited, edit_note)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [
-            newId('pair'), e.id, p.id, seq, p.text,
-            p.internal ? null : englishOf(p.text),
-            p.internal,
-            p.text.includes('非质量问题'),
-            p.text.includes('非质量问题') ? '人工把 “buyer’s remorse” 改为 “change of mind”，更贴近北美用户表述（陈迪 08-01）' : null,
-          ],
-        );
-        seq += 1;
-      }
+    await query(
+      `INSERT INTO entry_metrics (entry_id, hits, views, adopt_rate, refreshed_at) VALUES ($1,$2,$3,$4,$5)`,
+      [id, e.hits, e.hits * 4, e.adopt, e.hits ? e.at : null],
+    );
+    if (e.sync === 'synced' || e.sync === 'failed') {
+      await query(
+        `INSERT INTO sync_mappings (entry_id, zendesk_article_ref, published_hash, updated_at) VALUES ($1,$2,$3,$4)`,
+        [id, e.sync === 'synced' ? `art_${e.code}` : null, null, e.at],
+      );
     }
   }
 
-  // 已同步条目：建立映射与哈希（drift 比对基准）+ 推入沙箱 Zendesk
-  const zd = getZendesk();
-  // 演示数据禁止进真实帮助中心：seed 只在沙箱模式下推送（SEED_ALLOW_LIVE=1 显式解除）
-  if (zd.mode === 'live' && process.env.SEED_ALLOW_LIVE !== '1') {
-    throw new Error(
-      'Zendesk 处于 live 模式，seed 会把演示条目推送到真实帮助中心。请清空 Zendesk 凭据后再跑 seed；确需推送则设 SEED_ALLOW_LIVE=1',
-    );
+  /* KB-20418 版本历史；其余条目补一条当前版本 */
+  const kb418 = entryId.get('KB-20418');
+  if (kb418) {
+    for (let i = SEED_VERSIONS.length - 1; i >= 0; i -= 1) {
+      const [v, at, by, act, note, adopt, hits] = SEED_VERSIONS[i];
+      await query(
+        `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name, adopt_rate, hits, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [newId('ver'), kb418, v, act, note, userId.get(by) ?? null, by, adopt, hits, at],
+      );
+    }
   }
-  const { rows: published } = await query<{ id: string; code: string; title: string; body: { paragraphs: Array<{ id: string; text: string; html: string; internal: boolean; heading: boolean }> }; visibility: string; labels: string[]; chapter_id: string; ref: string | null }>(
-    `SELECT e.id, e.code, e.title, e.body, e.visibility, e.labels, e.chapter_id, c.zendesk_section_ref AS ref
-     FROM entries e JOIN chapters c ON c.id=e.chapter_id WHERE e.sync_status='synced'`,
-  );
-  for (const p of published) {
-    const article = await zd.upsertArticle({
-      entryCode: p.code,
-      title: p.title,
-      publicHtml: toPublicHtml(p.body),
-      labels: p.labels,
-      sectionRef: p.ref ?? 'Sec 5101',
-      internalOnly: p.visibility === 'internal',
-    });
+  for (const e of SEED_ENTRIES) {
+    if (e.code === 'KB-20418') continue;
+    const id = entryId.get(e.code)!;
     await query(
-      `INSERT INTO sync_mappings (id, entry_id, chapter_id, local_label, zendesk_kind, zendesk_ref, visibility, published_hash)
-       VALUES ($1,$2,$3,$4,'article',$5,$6,$7)`,
-      [newId('map'), p.id, p.chapter_id, `${p.code} ${p.title}`, article.id, p.visibility, contentHash(toPlainText(p.body))],
-    );
-    await query(
-      `INSERT INTO sync_tasks (id, entry_id, version_no, action, target, status, languages)
-       VALUES ($1,$2,1,'更新正文 + labels',$3,'synced','中 / 英')`,
-      [newId('sync'), p.id, p.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章'],
+      `INSERT INTO entry_versions (id, entry_id, version, act, note, author_id, author_name, adopt_rate, hits, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        newId('ver'),
+        id,
+        e.version,
+        e.status === 'published' ? '发布' : '创建',
+        e.status === 'published' ? '当前线上版本' : '初始版本',
+        userId.get(e.owner) ?? null,
+        e.owner,
+        e.adopt,
+        e.hits,
+        e.at,
+      ],
     );
   }
 
-  // 效果指标（信号聚合）
-  const effects = [
-    { id: 'ent_0155', bot: 58, agent: 21, down: 9, flag: 3, solve: 41 },
-    { id: 'ent_0240', bot: 44, agent: 12, down: 6, flag: 2, solve: 58 },
-    { id: 'ent_0201', bot: 132, agent: 47, down: 11, flag: 1, solve: 70 },
-    { id: 'ent_0188', bot: 96, agent: 33, down: 3, flag: 0, solve: 84 },
-    { id: 'ent_0212', bot: 0, agent: 6, down: 0, flag: 0, solve: null },
-  ];
-  for (const m of effects) {
+  /* 采集任务 + 抽取候选 */
+  const taskId = new Map<string, string>();
+  for (const [code, title, source, state, owner, at, n] of SEED_TASKS) {
+    const id = newId('tsk');
+    taskId.set(code, id);
     await query(
-      `INSERT INTO entry_effect_metrics (entry_id, bot_refs, agent_refs, downvotes, flags, solve_rate)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [m.id, m.bot, m.agent, m.down, m.flag, m.solve],
+      `INSERT INTO collect_tasks (id, code, title, source, state, owner_id, owner_name, candidate_count, source_text, source_meta, created_at, ran_at, fail_reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12)`,
+      [
+        id,
+        code,
+        title,
+        source,
+        state,
+        userId.get(owner) ?? null,
+        owner,
+        n,
+        code === 'CT-3081' ? SOURCE_TEXT : '',
+        `来自 Zendesk · ${source} · 共 24 段 · 已解析 24 段`,
+        at,
+        state === 'failed' ? 'Zendesk 会话拉取超时（UND_ERR_CONNECT_TIMEOUT），本批次未产出候选' : null,
+      ],
+    );
+  }
+  const activeTask = taskId.get('CT-3081')!;
+  for (const c of SEED_CANDIDATES) {
+    await query(
+      `INSERT INTO extract_candidates (id, code, task_id, title, answer, scene_id, tags, confidence, dup_entry_id, dup_score, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)`,
+      [
+        newId('cnd'),
+        c.code,
+        activeTask,
+        c.title,
+        c.answer,
+        sceneId.get(c.scene) ?? null,
+        JSON.stringify(c.tags),
+        c.confidence,
+        c.dupCode ? (entryId.get(c.dupCode) ?? null) : null,
+        c.dupScore ?? null,
+        '2026-08-05T07:00:00+08:00',
+      ],
     );
   }
 
-  // 信号事件（条目级反馈列表）
-  const signalEvents = [
-    { entry: 'ent_0201', channel: '用户自助浏览', type: '文章被踩', excerpt: '5 天太短，与页面标注不一致', certainty: 'certain' },
-    { entry: 'ent_0201', channel: 'AI bot 自动回答', type: 'bot 未解决转人工', excerpt: '缺跨境订单说明', certainty: 'tier_dependent' },
-    { entry: 'ent_0155', channel: '客服主动反馈', type: '客服 flag', excerpt: '固件 2.4 后阈值变化，步骤过时', certainty: 'certain' },
-    { entry: 'ent_0240', channel: 'AI bot 自动回答', type: 'bot 未解决转人工', excerpt: '缺跨月退订示例', certainty: 'tier_dependent' },
-  ];
-  for (const s of signalEvents) {
+  /* 反馈 */
+  for (const [code, kb, type, text, conv, at, state] of SEED_FEEDBACKS) {
     await query(
-      `INSERT INTO signal_events (id, entry_id, channel, signal_type, certainty, excerpt) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [newId('sig'), s.entry, s.channel, s.type, s.certainty, s.excerpt],
+      `INSERT INTO feedbacks (id, code, entry_id, entry_code, type, text, conversation, state, occurred_at, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9)`,
+      [newId('fb'), code, entryId.get(kb) ?? null, kb, type, text, conv, state, at],
     );
   }
 
-  // 信号矩阵（四渠道，含确定性档位）
-  const matrix = [
-    { scene: 'AI bot 自动回答', channel: '在线聊天', hit: 'bot 引用了哪篇文章 + 哪个锚点', solve: 'automated resolution（确认解决或未追问）；转人工 = 未解决', cert: 'tier_dependent', order: 1 },
-    { scene: '人工工单', channel: '邮件 + 转人工', hit: '客服 Knowledge 面板引用记录', solve: '工单 solved + reopen + CSAT', cert: 'unverified', order: 2 },
-    { scene: '用户自助浏览', channel: '帮助中心', hit: '浏览与搜索点击', solve: '文章赞 / 踩；看完未提单（弱信号）', cert: 'unverified', order: 3 },
-    { scene: '客服主动反馈', channel: 'Zendesk 侧', hit: '—', solve: '客服标记文章过时 / 有问题（flag）', cert: 'certain', order: 4 },
-  ];
-  for (const m of matrix) {
+  /* 未命中 */
+  for (const [code, q, scene, n7, rate, state, summary] of SEED_MISSES) {
     await query(
-      `INSERT INTO signal_matrix (id, scene, channel, hit_signal, solve_signal, certainty, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [newId('sm'), m.scene, m.channel, m.hit, m.solve, m.cert, m.order],
+      `INSERT INTO misses (id, code, question, scene_id, count_7d, hit_rate, state, ai_summary, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
+      [newId('ms'), code, q, sceneId.get(scene) ?? null, n7, rate, state, summary],
     );
   }
 
-  // 修订候选（五来源）
-  const revisions = [
-    { src: '客服 flag', entry: 'ent_0155', topic: '太阳能板阴天充不满电 v4', note: '3 位客服标记步骤过时（固件 2.4 后阈值变化）', count: '3 flag' },
-    { src: '文章被踩', entry: 'ent_0201', topic: '退款政策 v2', note: '踩 11 次，评论集中在「5 天太短，与页面标注不一致」', count: '11 踩' },
-    { src: 'bot 未解决', entry: 'ent_0240', topic: '会员退订与计费周期 v2', note: 'bot 引用后 18 次转人工，缺跨月退订示例', count: '18 转人工' },
-    { src: '高频无覆盖', entry: null, topic: '第三方支架兼容', note: '工单 11 次 / 周，无覆盖 → 立新条', count: '11 次' },
-    { src: '搜索无结果', entry: null, topic: 'refund how long（命名不匹配）', note: '搜索 24 次无结果，已有条目 → 改标题与 labels', count: '24 次' },
-  ];
-  for (const r of revisions) {
+  /* 审计 */
+  for (const [at, who, act, obj, result] of SEED_AUDIT) {
     await query(
-      `INSERT INTO revision_candidates (id, source, entry_id, topic, signal_note, count_label) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [newId('rev'), r.src, r.entry, r.topic, r.note, r.count],
+      `INSERT INTO audit_logs (id, at, actor_id, actor_name, actor_role, action, object_type, object_code, object_label, result)
+       VALUES ($1,$2,$3,$4,$5,$6,'entry',$7,$8,$9)`,
+      [
+        newId('aud'),
+        at,
+        userId.get(who) ?? null,
+        who,
+        who === '系统' ? '系统' : ROLE_LABELS[who === '陈默' ? 'super' : 'ops'],
+        act,
+        obj.split(' ')[0],
+        obj,
+        result,
+      ],
     );
   }
 
-  // 场景覆盖 / 缺口 / 搜索无结果
-  const scenes = [
-    { name: '退款退货', n: 31, pct: 100 }, { name: '联网配对', n: 28, pct: 90 },
-    { name: '安装供电', n: 22, pct: 71 }, { name: '会员账户', n: 11, pct: 35 }, { name: '配件兼容', n: 6, pct: 19 },
-  ];
-  let so = 0;
-  for (const s of scenes) {
-    so += 1;
-    await query('INSERT INTO coverage_scenes (id, name, entry_count, coverage_pct, sort_order) VALUES ($1,$2,$3,$4,$5)', [
-      newId('cov'), s.name, s.n, s.pct, so,
-    ]);
-  }
-  const gaps = [
-    { topic: '喂鸟器极寒天气自动关机', n: '17 次 / 周', src: '工单 12 · 聊天 5', cover: '未覆盖 → 立新条', act: '新增' },
-    { topic: '跨境订单退款起算日', n: '13 次 / 周', src: '工单 11 · 聊天 2', cover: '已覆盖但答不好 → 修订', act: '修订' },
-    { topic: '第三方支架是否兼容', n: '11 次 / 周', src: '工单 8 · 聊天 3', cover: '未覆盖 → 立新条', act: '新增' },
-  ];
-  for (const g of gaps) {
-    await query('INSERT INTO knowledge_gaps (id, topic, weekly_count, source_split, coverage_verdict, action) VALUES ($1,$2,$3,$4,$5,$6)', [
-      newId('gap'), g.topic, g.n, g.src, g.cover, g.act,
-    ]);
-  }
-  const noResults = [
-    { kw: 'return shipping', n: 31, verdict: '无对应条目（内部有口径未对外）', level: 'bad' },
-    { kw: 'refund how long', n: 24, verdict: '有条目，命名不匹配', level: 'warn' },
-    { kw: 'freeze / frozen', n: 42, verdict: '无对应条目', level: 'bad' },
-  ];
-  for (const n of noResults) {
-    await query('INSERT INTO no_result_keywords (id, keyword, weekly_count, verdict, level) VALUES ($1,$2,$3,$4,$5)', [
-      newId('nr'), n.kw, n.n, n.verdict, n.level,
-    ]);
-  }
-
-  // 挖掘批次（含完成/空/失败三态）
-  const today = new Date();
-  const batches = [
-    { d: 0, email: 21, chat: 16, n: 3, status: 'completed', reason: null },
-    { d: 1, email: 18, chat: 11, n: 0, status: 'completed', reason: null },
-    { d: 2, email: 3, chat: 1, n: 0, status: 'empty', reason: null },
-    { d: 3, email: 0, chat: 0, n: 0, status: 'failed', reason: 'Zendesk API 429 限流 · 次日照常拉取' },
-  ];
-  const batchIds: string[] = [];
-  for (const b of batches) {
-    const id = newId('batch');
-    batchIds.push(id);
-    const date = new Date(today.getTime() - b.d * 86400000).toISOString().slice(0, 10);
-    await query(
-      `INSERT INTO mining_batches (id, batch_date, email_count, chat_count, candidate_count, status, fail_reason)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [id, date, b.email, b.chat, b.n, b.status, b.reason],
-    );
-  }
-  const candidates = [
-    { type: 'new', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: 17, dup: 0.42, dupWhy: '与 KB-0155「太阳能板阴天充不满电」最接近，但主题不同（低温自动关机 vs 弱光充电不足），既有条目未覆盖该现象', dupDegraded: false, gap: '未覆盖', note: '三重准入通过 → 建议立新条', target: null,
-      summary: '用户反馈 -15°C 以下设备夜间自动关机、白天回温恢复。客服口径已趋一致，但知识库无对应条目，每次手写。',
-      body: '为什么低温天气下喂鸟器会自动关机？\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。' },
-    { type: 'revision', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: 14, dup: 0.88, dupWhy: '均在描述阴天/弱光下太阳能板充电不足，KB-0155 已覆盖同一现象与处理步骤，差异仅在固件 2.4 后的充电阈值', dupDegraded: false, gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', target: 'KB-0155',
-      summary: '现有条目只写「检查遮挡」，未覆盖固件 2.4 后的充电阈值变化；客服 flag 3 次「步骤过时」。',
-      body: '补充：固件 2.4 起充电阈值由 12% 调整为 18%，阴天需连续 2 日以上才触发补电提示。' },
-    { type: 'merge', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: 11, dup: 0.91, dupWhy: '两条条目回答同一个 Wi-Fi 配对失败问题，步骤与结论高度一致，属重复建条', dupDegraded: false, gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', target: 'KB-0188',
-      summary: '两条回答同一问题，bot 引用被分流导致都拿不满样本量。',
-      body: '合并说明：保留主条目，另一条归档并在 Zendesk 端建立重定向。' },
-  ];
-  for (const c of candidates) {
-    await query(
-      `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score,
-         dedupe_reason, dedupe_degraded, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [newId('cand'), batchIds[0], c.type, c.title, c.src, c.freq, c.dup, c.dupWhy, c.dupDegraded, c.gap, c.summary, c.body, c.note, c.target],
-    );
-  }
-
-  // 审计初始记录（真实动作留痕由运行期产生，这里仅记录种子初始化）
+  /* 同步日志（对应审计里的两条 Zendesk 同步） */
   await query(
-    `INSERT INTO audit_logs (id, actor_id, actor_name, actor_role, object_type, object_id, object_label, action, category, field, before_value, after_value, note)
-     VALUES ($1,'usr_ken','运维 Ken','sys_admin','system',NULL,'知识运营中台','初始化种子数据','admin','数据集','—','飞书 120+ 篇迁移基线（首批 6 条）','初始迁移演练基线')`,
-    [newId('log')],
+    `INSERT INTO sync_logs (id, at, entry_id, entry_code, object_label, result, message, duration_ms, payload_no, actor_name)
+     VALUES ($1,$2,$3,'KB-20418','KB-20418 英文版本（失败）','失败','Zendesk 目录字段校验未通过（缺少「生效日期 / Effective date」）',157,'#88210','系统'),
+            ($4,$5,$6,'KB-20421','KB-20421 英文版本（成功）','成功','',120,'#88211','系统')`,
+    [
+      newId('slog'),
+      '2026-08-04T14:23:00+08:00',
+      entryId.get('KB-20418') ?? null,
+      newId('slog'),
+      '2026-08-04T14:23:30+08:00',
+      entryId.get('KB-20421') ?? null,
+    ],
   );
 
-  console.log('种子数据完成：');
-  console.log(`  用户 ${users.length} 个（初始密码：${INITIAL_PASSWORD}）`);
-  console.log(`  知识库 ${libs.length} 个 / 章节 ${chapters.length} 个 / 条目 ${entries.length} 条`);
-  console.log(`  挖掘批次 ${batches.length} 批（含空批次与失败批次）/ 候选 ${candidates.length} 条`);
-  console.log(`  Zendesk 沙箱已推送 ${published.length} 篇文章（drift 比对基准就位）`);
+  console.log('种子数据写入完成：');
+  console.log(`  用户 ${SEED_USERS.length} 个（初始密码：${INITIAL_PASSWORD}）`);
+  console.log(`  分类 ${CATALOG.length} / 场景 ${sceneSeq} / 标签 ${SEED_TAGS.length}`);
+  console.log(`  条目 ${SEED_ENTRIES.length} / 采集任务 ${SEED_TASKS.length} / 候选 ${SEED_CANDIDATES.length}`);
+  console.log(`  反馈 ${SEED_FEEDBACKS.length} / 未命中 ${SEED_MISSES.length} / 审计 ${SEED_AUDIT.length}`);
   await pool.end();
 }
 
-/** 英文标题（人工校验后的定稿；缺失会让英文读者看到中文标题） */
-const EN_TITLES: Record<string, string> = {
-  'KB-0155': 'Solar panel not charging fully on cloudy days',
-  'KB-0188': 'Warranty period and proof of purchase',
-  'KB-0201': 'Refund policy',
-  'KB-0212': 'Who pays return shipping',
-  'KB-0233': 'Changing the delivery address after shipment',
-  'KB-0240': 'Membership cancellation and billing cycle',
-};
-
-function englishOf(zh: string): string {
-  const map: Record<string, string> = {
-    退款时限: 'Refund window',
-    '质量问题：签收后 30 天内可申请全额退款，运费由公司承担。':
-      'Quality issues: full refund within 30 days of delivery; return shipping is covered by COOLFLY.',
-    '非质量问题：签收后 5 天内可退，运费由用户承担。':
-      'Change of mind: returns accepted within 5 days of delivery; return shipping is paid by the customer.',
-    '会员服务：按自然月退订。': 'Membership: cancellation takes effect at the end of the calendar month.',
-    保修范围: 'Warranty scope',
-    '整机自签收之日起保修 12 个月，配件保修 6 个月。':
-      'Complete units are covered for 12 months from delivery; accessories for 6 months.',
-    '申请保修需提供订单号与设备序列号照片。':
-      'Warranty claims require the order number and a photo of the device serial number.',
-    计费周期: 'Billing cycle',
-    '会员按自然月计费，退订在当前周期结束时生效。':
-      'Membership is billed by calendar month; cancellation takes effect at the end of the current cycle.',
-    排查步骤: 'Troubleshooting steps',
-    '1. 检查太阳能板表面是否有遮挡或积灰。': '1. Check the solar panel for shade or dust build-up.',
-    '2. 确认安装角度朝南且每日直射不少于 4 小时。':
-      '2. Make sure the panel faces south and gets at least 4 hours of direct sunlight per day.',
-    '3. 阴天连续 3 天以上建议改用 USB 补电。':
-      '3. After 3 or more overcast days, top up the battery over USB.',
-  };
-  return map[zh] ?? zh;
-}
-
 main().catch((err) => {
-  console.error('种子数据失败：', err);
+  console.error('种子写入失败：', err);
   process.exit(1);
 });

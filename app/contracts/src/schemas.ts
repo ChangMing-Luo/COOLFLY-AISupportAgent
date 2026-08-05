@@ -1,320 +1,122 @@
 import { z } from 'zod';
-import { roleSchema, permissionSchema } from './rbac.js';
-import {
-  entryStatusSchema,
-  enStatusSchema,
-  syncStatusSchema,
-  visibilitySchema,
-  reviewSourceSchema,
-  batchStatusSchema,
-  candidateTypeSchema,
-  signalCertaintySchema,
-  versionStatusSchema,
-} from './states.js';
+import { feedbackTypeSchema, tagTypeSchema } from './states.js';
 
-/** 建议值参数（PRD §5.10 边界数值，可配置，终稿前确认） */
+/** 可调参数（抽取阈值与查重阈值，抽取配置卡直接读它） */
 export const TUNABLES = {
+  /** 低于该置信度的候选不入库 */
+  confidenceThreshold: 0.6,
+  /** 查重相似度提示线 */
   dedupeThreshold: 0.85,
-  /** 查重粗筛上限：至多把 5 条既有条目交 LLM 判定，把调用量与库规模脱钩（技术方案 §6.2） */
+  /** 查重粗筛上限：至多把 N 条既有条目交 LLM 判定 */
   dedupeShortlist: 5,
-  frequencyThreshold: 10,
-  syncRetryLimit: 3,
-  translateFailAlert: 3,
-  reviewCycleDays: 180,
-  reviewDueSoonDays: 30,
-  rollbackAdviceDropPp: 15,
-  sampleFloor: 10,
-  lowSolveRatePct: 60,
-  driftScanCron: '0 * * * *',
-  maxLabels: 20,
-  importMaxRows: 500,
+  /** 质量告警：历史最佳版本采纳率高出当前版本 N 个百分点即告警 */
+  rollbackAdvicePp: 15,
+  /** 待修复判定：已发布且采纳率低于 N% */
+  riskyAdoptPct: 45,
+  /** 待修复判定：置信度低于 N */
+  riskyConfidence: 0.72,
 } as const;
 
-/** 段落节点：内部段落带 internal 标记，同步与翻译按标记剥离 */
-export const paragraphSchema = z.object({
-  id: z.string().min(1),
-  /** 纯文本：版本 diff / 翻译 / 搜索 / drift 哈希的基准，由 html 去标签得到 */
-  text: z.string(),
-  /** 富文本行内标记（加粗/斜体/链接/图片/列表…）；空串表示纯文本段落 */
-  html: z.string().default(''),
-  /** 内部段落：不进对外文章、不翻译、不同步对外（发布门禁第②查依据） */
-  internal: z.boolean().default(false),
-  /** 小标题：由编辑器块类型派生（heading 节点），不再是勾选框 */
-  heading: z.boolean().default(false),
-});
-export type Paragraph = z.infer<typeof paragraphSchema>;
-
-export const entryBodySchema = z.object({
-  paragraphs: z.array(paragraphSchema).min(1),
-});
-export type EntryBody = z.infer<typeof entryBodySchema>;
-
-export const entryFieldsSchema = z.object({
-  title: z.string().min(1, '标题必填'),
-  libraryId: z.string().min(1, '所属知识库必填'),
-  chapterId: z.string().min(1, '所属章节必填'),
-  entryType: z.string().min(1),
-  visibility: visibilitySchema,
-  sceneL1: z.string().min(1, '一级问题场景必填'),
-  sceneL2: z.string().min(1, '二级问题场景必填'),
-  labels: z.array(z.string()).max(TUNABLES.maxLabels, `标签最多 ${TUNABLES.maxLabels} 个`),
-  deviceModels: z.array(z.string()).default([]),
-  reviewCycleDays: z.number().int().positive().default(TUNABLES.reviewCycleDays),
-  ownerId: z.string().nullable().default(null),
-});
-export type EntryFields = z.infer<typeof entryFieldsSchema>;
-
-export const entryUpsertSchema = entryFieldsSchema.extend({
-  body: entryBodySchema,
-  expectedVersion: z.number().int().nonnegative().optional(),
-});
-export type EntryUpsert = z.infer<typeof entryUpsertSchema>;
-
-export const entryRowSchema = z.object({
-  id: z.string(),
-  code: z.string(),
-  title: z.string(),
-  path: z.string(),
-  entryType: z.string(),
-  visibility: visibilitySchema,
-  versionLabel: z.string(),
-  status: entryStatusSchema,
-  enStatus: enStatusSchema,
-  syncStatus: syncStatusSchema,
-  solveRate: z.number().nullable(),
-  sampleShort: z.boolean(),
-  reviewDueAt: z.string().nullable(),
-  reviewDueLevel: z.enum(['ok', 'warn', 'bad']),
-  updatedAt: z.string(),
-  libraryId: z.string(),
-  chapterId: z.string(),
-  sceneL1: z.string(),
-  sceneL2: z.string(),
-  labels: z.array(z.string()),
-  lockVersion: z.number().int(),
-});
-export type EntryRow = z.infer<typeof entryRowSchema>;
+/* ══════════ 认证 ══════════ */
 
 export const loginSchema = z.object({
-  email: z.string().email('邮箱格式不正确'),
-  password: z.string().min(1, '密码必填'),
+  email: z.string().email('请输入正确的邮箱'),
+  password: z.string().min(1, '请输入密码'),
 });
+export type LoginInput = z.infer<typeof loginSchema>;
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, '当前密码必填'),
-  newPassword: z.string().min(8, '新密码至少 8 位'),
+  currentPassword: z.string().min(1, '请输入当前密码'),
+  newPassword: z.string().min(10, '新密码至少 10 位'),
 });
 
-export const sessionUserSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
-  role: roleSchema,
-  libraryScope: z.array(z.string()),
-  mustChangePassword: z.boolean(),
-  permissions: z.array(permissionSchema),
+/* ══════════ 条目 ══════════ */
+
+export const entryListViewSchema = z.enum(['drafts', 'mine', 'queue', 'all', 'offline', 'sync']);
+export type EntryListView = z.infer<typeof entryListViewSchema>;
+
+export const createEntrySchema = z.object({
+  titleZh: z.string().trim().min(1, '标题不能为空').default('未命名知识'),
+  bodyZh: z.string().default(''),
+  categoryId: z.string().optional(),
+  sceneId: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+  source: z.string().optional(),
+  /** 来源联动：采纳候选 / 未命中建条目 */
+  fromCandidate: z.string().optional(),
+  fromMiss: z.string().optional(),
 });
-export type SessionUser = z.infer<typeof sessionUserSchema>;
+export type CreateEntryInput = z.infer<typeof createEntrySchema>;
+
+export const saveEntrySchema = z.object({
+  titleZh: z.string().trim().min(1, '中文标题不能为空'),
+  titleEn: z.string().default(''),
+  bodyZh: z.string().default(''),
+  bodyEn: z.string().default(''),
+  categoryId: z.string().nullable().optional(),
+  sceneId: z.string().nullable().optional(),
+  tags: z.array(z.string()).default([]),
+  note: z.string().default(''),
+  /** 英文是否经人工二次编辑（前端按内容变更判定后回传） */
+  enEdited: z.boolean().optional(),
+});
+export type SaveEntryInput = z.infer<typeof saveEntrySchema>;
 
 export const rejectSchema = z.object({
-  reason: z.string().trim().min(1, '驳回理由必填——审核意见会回传给提交人并留痕。'),
+  comment: z.string().trim().min(1, '驳回必须说明原因，意见会回写到提交人的草稿'),
 });
 
-export const submitReviewSchema = z.object({
-  source: reviewSourceSchema.default('manual'),
-  note: z.string().optional(),
+export const approveSchema = z.object({
+  comment: z.string().default(''),
 });
 
-export const createUserSchema = z.object({
-  name: z.string().min(1, '姓名必填'),
-  email: z.string().email('邮箱格式不正确'),
-  role: roleSchema,
-  libraryScope: z.array(z.string()).min(1, '必须选择知识库范围'),
-  initialPassword: z.string().min(8, '初始密码至少 8 位'),
+export const rollbackSchema = z.object({
+  version: z.string().regex(/^v\d+\.\d+$/, '版本号格式应为 vX.Y'),
 });
 
-export const matrixUpdateSchema = z.object({
-  permission: permissionSchema,
-  role: roleSchema,
+/* ══════════ 元数据 ══════════ */
+
+export const upsertCategorySchema = z.object({
+  nameZh: z.string().trim().min(1, '中文名不能为空'),
+  nameEn: z.string().trim().default(''),
+});
+
+export const upsertSceneSchema = z.object({
+  nameZh: z.string().trim().min(1, '中文名不能为空'),
+  nameEn: z.string().trim().default(''),
+  categoryId: z.string().min(1, '必须归属一个一级分类'),
+});
+
+export const upsertTagSchema = z.object({
+  name: z.string().trim().min(1, '标签名不能为空'),
+  type: tagTypeSchema.default('业务'),
+});
+
+export const mergeTagSchema = z.object({
+  targetId: z.string().min(1, '请选择目标标签'),
+});
+
+export const translateMetaSchema = z.object({
+  text: z.string().trim().min(1, '请先填写中文名'),
+  kind: z.enum(['分类', '场景']),
+});
+
+/* ══════════ 反馈 / 未命中 / 采集 ══════════ */
+
+export const createFeedbackSchema = z.object({
+  entryCode: z.string().min(1),
+  type: feedbackTypeSchema,
+  text: z.string().trim().min(1),
+  conversation: z.string().trim().min(1),
+});
+
+/* ══════════ 管理 ══════════ */
+
+export const toggleUserSchema = z.object({ enabled: z.boolean() });
+export const grantReviewSchema = z.object({ granted: z.boolean() });
+
+export const updateMatrixSchema = z.object({
+  permission: z.string().min(1),
+  role: z.enum(['super', 'ops']),
   allowed: z.boolean(),
-});
-
-export const chapterUpsertSchema = z.object({
-  libraryId: z.string().min(1),
-  parentId: z.string().nullable(),
-  name: z.string().min(1, '章节名称必填'),
-  zendeskSectionRef: z.string().nullable().default(null),
-});
-
-/** 调整层级：把章节移到另一个顶级目录下（结构深度恒为 2） */
-export const chapterMoveSchema = z.object({
-  parentId: z.string().min(1, '请选择目标目录'),
-});
-
-export const driftResolveSchema = z.object({
-  action: z.enum(['overwrite', 'pull_back']),
-});
-
-export const candidateActionSchema = z.object({
-  action: z.enum(['draft', 'attach_revision', 'merge', 'discard', 'suggest']),
-  note: z.string().optional(),
-});
-
-export const importRowSchema = z.object({
-  title: z.string(),
-  chapterName: z.string(),
-  visibility: z.string(),
-  sceneL1: z.string(),
-  sceneL2: z.string(),
-  body: z.string(),
-});
-
-export const gateResultSchema = z.object({
-  passed: z.boolean(),
-  checks: z.array(
-    z.object({
-      key: z.enum(['fields', 'internal', 'english']),
-      label: z.string(),
-      passed: z.boolean(),
-      detail: z.string(),
-      hard: z.boolean(),
-    }),
-  ),
-});
-export type GateResult = z.infer<typeof gateResultSchema>;
-
-export const auditRowSchema = z.object({
-  id: z.string(),
-  at: z.string(),
-  actorName: z.string(),
-  actorRole: roleSchema,
-  objectLabel: z.string(),
-  action: z.string(),
-  category: z.enum(['content', 'review', 'admin']),
-  field: z.string().nullable(),
-  before: z.string().nullable(),
-  after: z.string().nullable(),
-  note: z.string().nullable(),
-});
-export type AuditRow = z.infer<typeof auditRowSchema>;
-
-export const batchRowSchema = z.object({
-  id: z.string(),
-  batchDate: z.string(),
-  emailCount: z.number().int(),
-  chatCount: z.number().int(),
-  candidateCount: z.number().int(),
-  status: batchStatusSchema,
-  failReason: z.string().nullable(),
-});
-
-export const candidateRowSchema = z.object({
-  id: z.string(),
-  batchId: z.string(),
-  type: candidateTypeSchema,
-  title: z.string(),
-  sourceSummary: z.string(),
-  frequency: z.number().int(),
-  dedupeScore: z.number(),
-  /** LLM 语义查重的判定理由与比中条目；LLM 不可用时 dedupeDegraded=true 并如实标注 */
-  dedupeReason: z.string(),
-  dedupeDegraded: z.boolean(),
-  gapVerdict: z.string(),
-  aiSummary: z.string(),
-  admissionNote: z.string(),
-  targetEntryCode: z.string().nullable(),
-  disposition: z.enum(['pending', 'drafted', 'attached', 'merged', 'discarded', 'suggested']),
-});
-
-/** 条目 AI 摘要（技术方案 §6.2）：发布时由 LLM 生成，可人工校正且校正后不被覆盖 */
-export const SUMMARY_SOURCES = ['none', 'ai', 'human'] as const;
-export const summarySourceSchema = z.enum(SUMMARY_SOURCES);
-export type SummarySource = z.infer<typeof summarySourceSchema>;
-
-export const SUMMARY_SOURCE_LABELS: Record<SummarySource, string> = {
-  none: '未生成',
-  ai: 'AI 生成',
-  human: '人工校正',
-};
-
-export const entrySummarySchema = z.object({
-  text: z.string(),
-  source: summarySourceSchema,
-  generatedAt: z.string().nullable(),
-  /** 本次生成失败的时间；非空 = 界面须如实标注「摘要生成失败，保留上一次」（缺口 3） */
-  failedAt: z.string().nullable().default(null),
-  failReason: z.string().nullable().default(null),
-});
-export type EntrySummary = z.infer<typeof entrySummarySchema>;
-
-export const summaryUpdateSchema = z.object({
-  text: z.string().trim().min(1, '摘要不能为空').max(600, '摘要最多 600 字'),
-});
-
-/** 审核中心变更对照两层：摘要层 + git diff 详情层（REQ-F09-15 rev6） */
-export const diffLineSchema = z.object({
-  kind: z.enum(['ctx', 'add', 'del']),
-  beforeLine: z.number().int().nullable(),
-  afterLine: z.number().int().nullable(),
-  text: z.string(),
-  internal: z.boolean(),
-});
-
-export const reviewDiffSchema = z.object({
-  total: z.string(),
-  summary: z.array(z.object({ kind: z.enum(['add', 'del', 'mod']), text: z.string() })),
-  lines: z.array(diffLineSchema),
-  isNew: z.boolean(),
-});
-export type ReviewDiff = z.infer<typeof reviewDiffSchema>;
-
-export const signalRowSchema = z.object({
-  id: z.string(),
-  scene: z.string(),
-  channel: z.string(),
-  hitSignal: z.string(),
-  solveSignal: z.string(),
-  certainty: signalCertaintySchema,
-});
-
-export const versionRowSchema = z.object({
-  id: z.string(),
-  entryId: z.string(),
-  versionNo: z.number().int(),
-  label: z.string(),
-  status: versionStatusSchema,
-  effectiveFrom: z.string().nullable(),
-  effectiveTo: z.string().nullable(),
-  authorName: z.string(),
-  calls: z.number().int().nullable(),
-  hitRate: z.number().nullable(),
-  solveRate: z.number().nullable(),
-  adoptRate: z.number().nullable(),
-});
-
-export const syncTaskRowSchema = z.object({
-  id: z.string(),
-  entryCode: z.string(),
-  entryTitle: z.string(),
-  versionLabel: z.string(),
-  action: z.string(),
-  target: z.string(),
-  status: syncStatusSchema,
-  languages: z.string(),
-  retryCount: z.number().int(),
-  failReason: z.string().nullable(),
-  blockedReason: z.string().nullable(),
-  updatedAt: z.string(),
-});
-
-export const driftRowSchema = z.object({
-  id: z.string(),
-  entryCode: z.string(),
-  articleRef: z.string(),
-  title: z.string(),
-  changedBy: z.string(),
-  diffSummary: z.string(),
-  detectedAt: z.string(),
-  resolvedAction: z.string().nullable(),
-  resolvedBy: z.string().nullable(),
 });
