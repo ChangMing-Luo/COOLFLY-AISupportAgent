@@ -36,11 +36,6 @@ export function invalidateMatrixCache(): void {
   cache = null;
 }
 
-export async function roleHas(role: Role, permission: Permission): Promise<boolean> {
-  const m = await getMatrix();
-  return m[permission][role] === true;
-}
-
 /**
  * 审核权限是「单独授予」项（原型 admin.perms「审核（需授权）」）：
  * 矩阵给 ops 默认关，超管在用户页按人开 users.review_granted。
