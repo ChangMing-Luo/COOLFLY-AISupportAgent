@@ -1,15 +1,17 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   PERMISSION_MATRIX_ROWS,
   ROLE_LABELS,
+  createUserSchema,
   grantReviewSchema,
   toggleUserSchema,
   updateMatrixSchema,
 } from '@kb/contracts';
-import { query } from '../db/pool.js';
+import { query, newId } from '../db/pool.js';
 import { requirePermission, invalidateMatrixCache, getMatrix } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
-import { destroyUserSessions } from '../core/auth.js';
+import { destroyUserSessions, hashPassword } from '../core/auth.js';
 import { fmtShort } from '../core/fmt.js';
 import { actorOf, DomainError } from '../services/entries.js';
 
@@ -43,6 +45,27 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         status: r.enabled ? '正常' : '已停用',
       })),
     };
+  });
+
+  app.post('/api/admin/users', guard, async (req) => {
+    const body = createUserSchema.parse(req.body);
+    const { rows: dup } = await query('SELECT 1 FROM users WHERE email=$1', [body.email]);
+    if (dup.length) throw new DomainError('该邮箱已存在账号。', 409);
+    const id = newId('usr');
+    const initial = randomBytes(9).toString('base64url');
+    await query(
+      `INSERT INTO users (id, name, email, password_hash, role, department, review_granted, enabled, must_change_password)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,TRUE,TRUE)`,
+      [id, body.name, body.email, await hashPassword(initial), body.role, body.department, body.reviewGranted],
+    );
+    await writeAudit(actorOf(req.currentUser!), {
+      action: '新增用户',
+      objectType: 'user',
+      objectCode: body.email,
+      objectLabel: `${body.name}（${body.role === 'super' ? '超级管理员' : '知识运营'}）`,
+    });
+    // 初始密码只在本次响应里出现一次，不落库明文
+    return { id, initialPassword: initial };
   });
 
   app.post('/api/admin/users/:id/toggle', guard, async (req) => {

@@ -1,263 +1,229 @@
-import { useState } from 'react';
-import { zhCN } from '@kb/contracts';
-import { api } from '../api';
-import { L, StatusPill, useApp, useAsync } from '../shared';
+import { useEffect, useState } from 'react';
+import { api, type DashboardDto, type EntryDto } from '../api.js';
+import { useApp } from '../shell.js';
+import { C, Card, KpiRow, kickerStyle, tnum } from '../ui.js';
 
-/** 视图⑦ 数据看板（页面 MD §5.7）：知识库效果 / 知识缺口 / 客服工作数据（不重建 Explore） */
-interface CoverageScene {
-  name: string;
-  entryCount: number;
-  coveragePct: number;
-  low: boolean;
-}
+export function Dashboard() {
+  const app = useApp();
+  const [d, setD] = useState<DashboardDto | null>(null);
 
-interface EntryEffect {
-  entryId: string;
-  code: string;
-  title: string;
-  versionLabel: string;
-  chapter: string;
-  botRefs: number;
-  agentRefs: number;
-  downvotes: number;
-  flags: number;
-  solveRate: number | null;
-  sampleShort: boolean;
-  sampleLabel: string | null;
-  low: boolean;
-}
+  useEffect(() => {
+    api.get<DashboardDto>('/dashboard').then(setD).catch(() => undefined);
+  }, [app.rev]);
 
-interface Gap {
-  id: string;
-  topic: string;
-  weeklyCount: string;
-  sourceSplit: string;
-  coverageVerdict: string;
-  action: string;
-  disposition: string;
-}
+  if (!d) return null;
 
-interface NoResult {
-  id: string;
-  keyword: string;
-  weeklyCount: number;
-  verdict: string;
-  level: string;
-}
+  async function newDraft() {
+    const r = await api.post<{ entry: EntryDto }>('/entries', { titleZh: '未命名知识' });
+    app.refreshShell();
+    app.go('author.editor', r.entry.code);
+  }
 
-type DashTab = 'kb' | 'gap' | 'cs';
-
-const TABS: Array<{ key: DashTab; label: string }> = [
-  { key: 'kb', label: '知识库效果' },
-  { key: 'gap', label: '知识缺口' },
-  { key: 'cs', label: '客服工作数据' },
-];
-
-const GAP_DISPOSITION_LABELS: Record<string, string> = {
-  drafted: '已起草',
-  attached: '已挂修订',
-  suggested: '已转建议',
-};
-
-export function DashboardView() {
-  const { toast, goto } = useApp();
-  const [tab, setTab] = useState<DashTab>('kb');
-
-  const coverage = useAsync<CoverageScene[]>(() => api.get('/api/metrics/coverage'), []);
-  const entries = useAsync<EntryEffect[]>(() => api.get('/api/metrics/entries'), []);
-  const gaps = useAsync<Gap[]>(() => api.get('/api/metrics/gaps'), []);
-  const noResults = useAsync<NoResult[]>(() => api.get('/api/metrics/no-results'), []);
-  const exploreNote = useAsync<{ note: string }>(() => api.get('/api/metrics/explore-note'), []);
-
-  /** 缺口动作统一在反馈回流处置（服务端唯一处置入口 = /api/feedback/candidates/:id/suggest） */
-  function handleGapAction() {
-    toast('已在反馈回流视图统一处置');
-    goto('feedback');
+  async function onTodo(t: DashboardDto['todos'][number]) {
+    if (t.kind === 'review') {
+      app.openDrawer({ kind: 'review', code: t.code });
+    } else if (t.kind === 'feedback') {
+      const r = await api.post<{ entry: EntryDto }>(`/feedback/${t.code}/fix`);
+      app.refreshShell();
+      app.toast(
+        '已进入修复',
+        `${r.entry.code} ${r.entry.version} 草稿已生成（线上仍为上一版本）。修改并翻译后重新提交审核。`,
+      );
+      app.go('author.editor', r.entry.code);
+    } else {
+      app.go('author.editor', t.code);
+    }
   }
 
   return (
     <>
-      <div className="tabs" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            className={`tab${tab === t.key ? ' tab--active' : ''}`}
-            onClick={() => setTab(t.key)}
-            data-tab={t.key}
-          >
-            {t.label}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>
+        <div>
+          <div style={kickerStyle}>工作台 · {d.today}</div>
+          <h1 style={{ margin: '8px 0 0', fontWeight: 400, fontSize: 38 }}>{d.greeting}</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => app.go('collect.extract')}>
+            查看抽取候选
           </button>
-        ))}
+          <button className="btn btn-primary" onClick={newDraft}>
+            撰写新知识
+          </button>
+        </div>
       </div>
+      <hr className="hr" />
 
-      {tab === 'kb' && (
-        <>
-          <div className="card">
-            <h2 className="card__title">场景覆盖</h2>
-            {coverage.error && <div className="note note--bad">{coverage.error}</div>}
-            {coverage.loading && <div className="empty">加载中…</div>}
-            <div className="grid" style={{ gap: 8 }}>
-              {coverage.data?.map((s) => (
-                <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    style={{ flex: '0 0 88px', color: s.low ? 'var(--bad-fg)' : undefined, fontWeight: s.low ? 700 : undefined }}
-                  >
-                    {s.name}
-                  </span>
-                  <div className="bar" style={{ flex: 1 }}>
-                    <div
-                      className={`bar__fill${s.low ? ' bar__fill--bad' : ''}`}
-                      style={{ width: `${s.coveragePct}%` }}
-                    />
-                  </div>
-                  <span className="mono" style={{ flex: '0 0 110px', textAlign: 'right' }}>
-                    {s.coveragePct}% · {s.entryCount} 条
-                  </span>
+      <KpiRow items={d.kpis} columns={5} />
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 372px',
+          gap: 28,
+          marginTop: 26,
+          alignItems: 'start',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <h4 style={{ margin: 0 }}>我的待办</h4>
+            <span style={{ fontSize: 11.5, color: C.muted }}>按知识生命周期归集，处理后自动流入下一环节</span>
+          </div>
+          <div style={{ marginTop: 12, borderTop: `1px solid ${C.divider}` }}>
+            {d.todos.map((t) => (
+              <div
+                key={`${t.kind}-${t.code}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  padding: '14px 2px',
+                  borderBottom: `1px solid ${C.divider}`,
+                }}
+              >
+                <div
+                  style={{
+                    width: 78,
+                    flex: 'none',
+                    fontSize: 10.5,
+                    letterSpacing: '.1em',
+                    textTransform: 'uppercase',
+                    color: t.step === '草稿' ? C.muted : C.accent,
+                  }}
+                >
+                  {t.step}
                 </div>
-              ))}
-            </div>
-            <div className="note" style={{ marginTop: 12 }}>
-              分母 = Zendesk 工单分类分布直拉；红条 = 有工单量、无条目覆盖。
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="btn-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-              <h2 className="card__title" style={{ margin: 0 }}>条目效果列表</h2>
-              <StatusPill kind="warn" text="标红加粗：解决率 < 60%（最差浮顶）" />
-            </div>
-            {entries.error && <div className="note note--bad">{entries.error}</div>}
-            {entries.loading && <div className="empty">加载中…</div>}
-            <table>
-              <thead>
-                <tr>
-                  <th>条目</th>
-                  <th>版本</th>
-                  <th>归属章节</th>
-                  <th>bot 引用</th>
-                  <th>agent 引用</th>
-                  <th>被踩</th>
-                  <th>客服 flag</th>
-                  <th>解决率</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.data?.map((e) => (
-                  <tr
-                    key={e.entryId}
-                    className={`row--click${e.low ? ' row--alert' : ''}`}
-                    onClick={() => goto('entry', e.entryId)}
-                    data-entry={e.code}
-                  >
-                    <td>
-                      <span className="strong">{e.title}</span>
-                      <div className="meta mono">{e.code}</div>
-                    </td>
-                    <td className="mono">{e.versionLabel}</td>
-                    <td className="muted">{e.chapter}</td>
-                    <td className="mono">{e.botRefs}</td>
-                    <td className="mono">{e.agentRefs}</td>
-                    <td className="mono">{e.downvotes}</td>
-                    <td className="mono">{e.flags}</td>
-                    <td>
-                      {e.sampleShort ? (
-                        <StatusPill kind="info" text={e.sampleLabel ?? zhCN.dash.sampleShort} />
-                      ) : (
-                        <span className="mono" style={e.low ? { fontWeight: 700, color: 'var(--bad-fg)' } : undefined}>
-                          {e.solveRate === null ? '—' : `${e.solveRate}%`}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {entries.data && entries.data.length === 0 && <div className="empty">暂无条目效果数据</div>}
-          </div>
-        </>
-      )}
-
-      {tab === 'gap' && (
-        <>
-          <div className="card">
-            <h2 className="card__title">缺口 → 动作</h2>
-            {gaps.error && <div className="note note--bad">{gaps.error}</div>}
-            {gaps.loading && <div className="empty">加载中…</div>}
-            <div className="grid" style={{ gap: 10 }}>
-              {gaps.data?.map((g) => (
-                <div className="note" key={g.id} data-gap={g.id}>
-                  <div className="btn-row" style={{ justifyContent: 'space-between' }}>
-                    <span className="strong" style={{ fontSize: 15, color: 'var(--fg)' }}>{g.topic}</span>
-                    <span className="mono strong">{g.weeklyCount}</span>
-                  </div>
-                  <div className="btn-row" style={{ marginTop: 6 }}>
-                    <StatusPill kind="info" text={g.sourceSplit} />
-                    <StatusPill kind={g.coverageVerdict.includes('未覆盖') ? 'bad' : 'warn'} text={g.coverageVerdict} />
-                  </div>
-                  <div className="btn-row" style={{ marginTop: 8 }}>
-                    {g.disposition === 'pending' ? (
-                      <button type="button" className="btn btn--sm" onClick={handleGapAction}>
-                        {g.action === '新增' ? '起草新条目' : '挂为修订建议'}
-                      </button>
-                    ) : (
-                      <StatusPill kind="ok" text={GAP_DISPOSITION_LABELS[g.disposition] ?? g.disposition} />
-                    )}
-                  </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14 }}>{t.title}</div>
+                  <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{t.meta}</div>
                 </div>
-              ))}
-            </div>
-            <div className="note" style={{ marginTop: 12 }}>
-              缺口动作与反馈回流共用同一条处置通路：全部转为建议进审核队列，来源标注「反馈修订」。
-            </div>
+                <span className={`tag ${t.tagClass}`}>{t.tagText}</span>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => void onTodo(t)}
+                  style={{ fontSize: 12.5, padding: '5px 12px' }}
+                >
+                  {t.cta}
+                </button>
+              </div>
+            ))}
+            {d.todos.length === 0 ? (
+              <div style={{ padding: '46px 0', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: C.muted }}>待办已清空</div>
+                <p style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>
+                  审核与反馈队列均无积压。可前往反馈回流从 Zendesk 拉取最新客诉。
+                </p>
+                <button className="btn btn-secondary" onClick={() => app.go('feedback.list')}>
+                  查看反馈回流
+                </button>
+              </div>
+            ) : null}
           </div>
 
-          <div className="card">
-            <h2 className="card__title">搜索无结果关键词</h2>
-            {noResults.error && <div className="note note--bad">{noResults.error}</div>}
-            {noResults.loading && <div className="empty">加载中…</div>}
-            <table>
-              <thead>
-                <tr>
-                  <th>关键词</th>
-                  <th>周次数</th>
-                  <th>判定</th>
-                </tr>
-              </thead>
-              <tbody>
-                {noResults.data?.map((r) => (
-                  <tr key={r.id}>
-                    <td className="strong">{r.keyword}</td>
-                    <td className="mono">{r.weeklyCount}</td>
-                    <td>
-                      <StatusPill kind={r.level === 'bad' ? 'bad' : 'warn'} text={r.verdict} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="note" style={{ marginTop: 12 }}>
-              「有条目但没搜到」是命名 / 标签问题——改标题与 labels，不新建条目。
-            </div>
-          </div>
-        </>
-      )}
-
-      {tab === 'cs' && (
-        <div className="card">
-          <h2 className="card__title">客服工作数据</h2>
-          {exploreNote.error && <div className="note note--bad">{exploreNote.error}</div>}
-          {exploreNote.loading && <div className="empty">加载中…</div>}
-          {exploreNote.data && <div className="note">{exploreNote.data.note}</div>}
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button type="button" className="btn btn--primary" onClick={() => setTab('gap')}>
-              去知识缺口
-            </button>
+          <h4 style={{ margin: '30px 0 0' }}>知识生命周期</h4>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'stretch',
+              marginTop: 12,
+              border: `1px solid ${C.divider}`,
+              borderRadius: 'var(--radius-md)',
+              overflow: 'hidden',
+            }}
+          >
+            {d.lifecycle.map((s) => (
+              <button
+                key={s.label}
+                onClick={() => app.go(s.route)}
+                style={{
+                  flex: 1,
+                  padding: '14px 8px',
+                  background: 'transparent',
+                  border: 0,
+                  borderRight: `1px solid ${C.divider}`,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-body)',
+                  color: 'inherit',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 24,
+                    fontWeight: 400,
+                    ...tnum,
+                    color: s.n > 0 ? C.accent : C.muted,
+                  }}
+                >
+                  {s.n}
+                </div>
+                <div style={{ fontSize: 11.5, marginTop: 4 }}>{s.label}</div>
+              </button>
+            ))}
           </div>
         </div>
-      )}
+
+        <div>
+          <Card kicker="Zendesk 连接" style={{ background: C.surface }}>
+            <div
+              style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}
+            >
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 19 }}>已连接</span>
+              <span className="tag tag-accent">正常</span>
+            </div>
+            {d.zendesk.map((z) => (
+              <div
+                key={z.k}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  padding: '6px 0',
+                  borderTop: `1px solid ${C.divider}`,
+                  fontSize: 12.5,
+                }}
+              >
+                <span style={{ color: C.muted }}>{z.k}</span>
+                <span style={{ ...tnum, color: z.accent ? C.accent : C.text }}>{z.v}</span>
+              </div>
+            ))}
+            <button
+              className="btn btn-secondary btn-block"
+              style={{ marginTop: 10 }}
+              onClick={async () => {
+                const r = await api.post<{ created: number; note: string }>('/feedback/pull');
+                app.refreshShell();
+                app.toast(
+                  r.created ? `已从 Zendesk 拉取 ${r.created} 条客诉` : '本次没有新客诉',
+                  r.note,
+                  r.created ? { label: '前往反馈回流', route: 'feedback.list' } : undefined,
+                );
+              }}
+            >
+              从 Zendesk 拉取客诉
+            </button>
+          </Card>
+
+          <h4 style={{ margin: '26px 0 0' }}>最近动态</h4>
+          <div style={{ marginTop: 10, borderTop: `1px solid ${C.divider}` }}>
+            {d.recent.map((a, i) => (
+              <div
+                key={i}
+                style={{ padding: '9px 0', borderBottom: `1px solid ${C.divider}`, fontSize: 12.5 }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                  <span>
+                    {a.who} · {a.act}
+                  </span>
+                  <span style={{ ...tnum, color: C.muted, flex: 'none' }}>{a.at}</span>
+                </div>
+                <div style={{ color: C.muted, marginTop: 1 }}>{a.obj}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </>
   );
 }

@@ -1,0 +1,128 @@
+import { createContext, useContext } from 'react';
+import type { CatalogCategory, SessionUser } from './api.js';
+
+/* ══════════ 路由与导航（原型 navVals：10 组 22 路由） ══════════ */
+
+export const NAV: Array<{ key: string; label: string; children: Array<[string, string]> }> = [
+  { key: 'dash', label: '工作台', children: [] },
+  { key: 'collect', label: '知识采集', children: [['collect.extract', 'AI 抽取工作台']] },
+  {
+    key: 'author',
+    label: '知识编辑',
+    children: [
+      ['author.drafts', '我的草稿'],
+      ['author.mine', '我提交的'],
+    ],
+  },
+  {
+    key: 'review',
+    label: '审核中心',
+    children: [
+      ['review.queue', '待我审核'],
+      ['review.log', '审核记录'],
+    ],
+  },
+  {
+    key: 'kb',
+    label: '知识库',
+    children: [
+      ['kb.list', '全部知识'],
+      ['kb.offline', '已下线'],
+    ],
+  },
+  {
+    key: 'publish',
+    label: '发布与同步',
+    children: [
+      ['publish.channels', 'Zendesk 同步'],
+      ['publish.logs', '同步日志'],
+    ],
+  },
+  {
+    key: 'feedback',
+    label: '反馈回流',
+    children: [
+      ['feedback.list', '用户反馈'],
+      ['feedback.miss', '未命中问题'],
+    ],
+  },
+  {
+    key: 'meta',
+    label: '元数据中心',
+    children: [
+      ['meta.tree', '知识分类'],
+      ['meta.scenes', '问题场景'],
+      ['meta.tags', '知识标签'],
+    ],
+  },
+  { key: 'analytics', label: '数据分析', children: [['analytics.health', '知识健康度']] },
+  {
+    key: 'admin',
+    label: '系统管理',
+    children: [
+      ['admin.users', '用户与角色'],
+      ['admin.perms', '权限矩阵'],
+      ['admin.audit', '操作审计'],
+    ],
+  },
+];
+
+/** 定制视图路由 → 视图名（其余走通用列表页） */
+export const BESPOKE: Record<string, string> = {
+  'collect.extract': 'extract',
+  'author.editor': 'editor',
+  'kb.detail': 'detail',
+  'analytics.health': 'health',
+  'review.detail': 'reviewPage',
+};
+
+export interface ToastNext {
+  label: string;
+  route: string;
+  sel?: string;
+}
+
+export type DrawerState =
+  | { kind: 'review'; code: string }
+  | { kind: 'meta'; metaKind: '分类' | '场景' | '标签'; id: string | null; zh: string; en: string; parent: string; parentId: string; type: string }
+  | { kind: 'miss'; code: string }
+  | {
+      kind: 'info';
+      title: string;
+      meta: string;
+      rows: Array<{ k: string; v: string }>;
+      body?: string;
+      /** 记录详情里的可执行动作（如权限矩阵「调整」） */
+      action?: { label: string; run: () => Promise<void> };
+    }
+  | { kind: 'user' }
+  | null;
+
+export type ModalState =
+  | { type: 'rollback'; code: string; version: string; adopt: number }
+  | { type: 'offline'; code: string }
+  | { type: 'switch' }
+  | { type: 'mergeTag'; id: string; name: string }
+  | null;
+
+export interface Ctx {
+  user: SessionUser;
+  catalog: CatalogCategory[];
+  route: string;
+  sel: string | null;
+  go: (route: string, sel?: string | null) => void;
+  toast: (title: string, detail: string, next?: ToastNext) => void;
+  openDrawer: (d: DrawerState) => void;
+  openModal: (m: ModalState) => void;
+  refreshShell: () => void;
+  /** 全局刷新计数：视图以它作为 useEffect 依赖来重新拉数据 */
+  rev: number;
+}
+
+export const AppCtx = createContext<Ctx | null>(null);
+
+export function useApp(): Ctx {
+  const ctx = useContext(AppCtx);
+  if (!ctx) throw new Error('AppCtx 未挂载');
+  return ctx;
+}

@@ -112,6 +112,14 @@ export const createFeedbackSchema = z.object({
 
 /* ══════════ 管理 ══════════ */
 
+export const createUserSchema = z.object({
+  name: z.string().trim().min(1, '姓名不能为空'),
+  email: z.string().email('请输入正确的邮箱'),
+  department: z.string().trim().default(''),
+  role: z.enum(['super', 'ops']).default('ops'),
+  reviewGranted: z.boolean().default(false),
+});
+
 export const toggleUserSchema = z.object({ enabled: z.boolean() });
 export const grantReviewSchema = z.object({ granted: z.boolean() });
 

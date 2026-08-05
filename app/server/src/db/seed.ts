@@ -323,7 +323,8 @@ async function main(): Promise<void> {
   for (const e of SEED_ENTRIES) {
     const id = newId('ent');
     entryId.set(e.code, id);
-    const translated = e.status === 'published' || e.status === 'offline' || e.status === 'fixing';
+    // 待审条目必然已通过提交闸（缺英文不可提交），所以 pending 也必须是已翻译的
+    const translated = ['published', 'offline', 'fixing', 'pending'].includes(e.status);
     const bodyZh = toHtml(ENTRY_BODIES[e.code] ?? bodyZhOf(e.category));
     const bodyEn = translated
       ? toHtml(VERSION_BODIES[e.version]?.en ?? bodyEnOf(catEn.get(e.category) ?? e.category))

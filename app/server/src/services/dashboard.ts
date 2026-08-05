@@ -147,8 +147,15 @@ export async function dashboard(user: SessionUser): Promise<DashboardDto> {
       { label: '反馈', n: feedbacks.length, route: 'feedback.list' },
     ],
     zendesk: [
-      { k: '实例', v: process.env.ZENDESK_SUBDOMAIN ? `${process.env.ZENDESK_SUBDOMAIN}.zendesk.com` : '沙箱实例', accent: false },
-      { k: '连接模式', v: zd.mode === 'live' ? '真实实例' : '沙箱', accent: zd.mode !== 'live' },
+      {
+        k: '实例',
+        // 沙箱模式必须在界面上如实可见，不能让人误以为已连真实帮助中心
+        v:
+          zd.mode === 'live'
+            ? `${process.env.ZENDESK_SUBDOMAIN}.zendesk.com`
+            : `${process.env.ZENDESK_SUBDOMAIN ?? 'coolfly'}.zendesk.com（沙箱）`,
+        accent: zd.mode !== 'live',
+      },
       { k: '上次拉取', v: pullRows[0].at ? fmtShort(pullRows[0].at) : '尚未拉取', accent: false },
       { k: '待同步知识', v: String(all.filter((d) => d.syncStatus === 'pending').length), accent: false },
       { k: '同步失败', v: String(syncFailed.length), accent: syncFailed.length > 0 },

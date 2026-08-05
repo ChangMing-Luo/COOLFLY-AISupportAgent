@@ -31,6 +31,13 @@ import { translateEntry, editorSuggestions } from '../services/translation.js';
 import { listFeedbacks } from '../services/feedback.js';
 import { catalogTree } from '../services/meta.js';
 import { dashboard, search } from '../services/dashboard.js';
+import { getLlm } from '../integrations/llm.js';
+
+/** 翻译控制台显示的引擎名：真实模式给模型 id，本地模式如实标注 */
+function llmLabel(): string {
+  const llm = getLlm();
+  return llm.mode === 'qwen' ? (process.env.QWEN_MODEL ?? 'qwen3.5-plus') : '本地确定性模式（未配置大模型）';
+}
 
 const VIEW_SQL: Record<string, string> = {
   drafts: `WHERE e.status IN ('draft','rejected','fixing') ORDER BY e.updated_at DESC`,
@@ -123,6 +130,7 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       sceneId: entry.scene_id,
       suggestions: await editorSuggestions(entry),
       catalog: await catalogTree(),
+      llmLabel: llmLabel(),
     };
   });
 
