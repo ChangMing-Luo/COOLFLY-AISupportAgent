@@ -300,7 +300,7 @@ export async function resolveDrift(
       .map((text, i) => ({ id: `p_pull_${i}`, text, internal: false, heading: false }));
     await query(
       `UPDATE entries SET body=$2::jsonb, status='pending_review', review_source='feedback',
-         submitter_id=$3, submitted_at=now(), updated_at=now(), vector_status='stale' WHERE id=$1`,
+         submitter_id=$3, submitted_at=now(), updated_at=now() WHERE id=$1`,
       [d.entry_id, JSON.stringify({ paragraphs: paragraphs.length ? paragraphs : [{ id: 'p_pull_0', text: '（Zendesk 端内容为空）', internal: false, heading: false }] }), user.id],
     );
   }

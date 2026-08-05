@@ -76,4 +76,3 @@ export const PERMISSION_DENIED_TEXT: Record<Permission, string> = {
   'audit.viewAll': '全量审计日志仅知识审核员与系统管理员可查。',
 };
 
-export const FOUR_EYES_TEXT = '四眼原则：不可审核自己提交的条目，须由另一名知识审核员处理。';

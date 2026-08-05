@@ -2,7 +2,9 @@ import type { PoolClient } from 'pg';
 import {
   canTransitionEntry,
   entryUpsertSchema,
+  summaryUpdateSchema,
   type EntryBody,
+  type EntrySummary,
   type EntryStatus,
   type EntryRow,
   type SessionUser,
@@ -12,7 +14,6 @@ import {
 import { query, withTransaction, newId } from '../db/pool.js';
 import { writeAudit, fieldDiff } from '../core/audit.js';
 import { toPlainText } from '../core/content.js';
-import { embed, toPgVector } from '../integrations/embedding.js';
 
 export class DomainError extends Error {
   constructor(
@@ -40,7 +41,9 @@ interface EntryDbRow {
   status: EntryStatus;
   en_status: string;
   sync_status: string;
-  vector_status: string;
+  ai_summary: string;
+  summary_source: string;
+  summary_at: Date | null;
   review_source: string;
   submitter_id: string | null;
   reviewer_id: string | null;
@@ -91,7 +94,6 @@ export function toEntryRow(r: EntryDbRow): EntryRow {
     status: r.status,
     enStatus: r.en_status as EntryRow['enStatus'],
     syncStatus: r.sync_status as EntryRow['syncStatus'],
-    vectorStatus: r.vector_status as EntryRow['vectorStatus'],
     solveRate: refs < TUNABLES.sampleFloor ? null : solve,
     sampleShort: refs < TUNABLES.sampleFloor,
     reviewDueAt: r.review_due_at ? r.review_due_at.toISOString() : null,
@@ -200,7 +202,7 @@ export async function saveEntry(
            status=$12, en_status = CASE WHEN en_status IN ('none','translating') THEN en_status ELSE 'stale' END,
            sync_status = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN 'blocked' ELSE sync_status END,
            blocked_reason = CASE WHEN sync_status IN ('synced','failed','queued','running') THEN $13 ELSE blocked_reason END,
-           vector_status='stale', review_cycle_days=$14, owner_id=$15,
+           review_cycle_days=$14, owner_id=$15,
            lock_version = lock_version + 1, updated_at = now()
          WHERE id=$1`,
         [
@@ -332,41 +334,41 @@ export async function submitForReview(
   });
 }
 
-/** 向量重建（内部工具：查重 / 缺口聚类 / 代理评测） */
-export async function rebuildVector(user: SessionUser, entryId: string): Promise<{ status: string }> {
+/** 条目 AI 摘要（技术方案 §6.2）：读取供工作台面板与挖掘查重使用 */
+export async function getSummary(entryId: string): Promise<EntrySummary> {
+  const { rows } = await query<{ ai_summary: string; summary_source: string; summary_at: Date | null }>(
+    'SELECT ai_summary, summary_source, summary_at FROM entries WHERE id=$1',
+    [entryId],
+  );
+  const e = rows[0];
+  if (!e) throw new DomainError('条目不存在', 404);
+  return {
+    text: e.ai_summary,
+    source: e.summary_source as EntrySummary['source'],
+    generatedAt: e.summary_at ? e.summary_at.toISOString() : null,
+  };
+}
+
+/** 人工校正摘要——校正后 source='human'，后续发布不再被 AI 覆盖 */
+export async function updateSummary(user: SessionUser, entryId: string, payload: unknown): Promise<EntrySummary> {
+  const { text } = summaryUpdateSchema.parse(payload);
   const { rows } = await query<EntryDbRow>('SELECT * FROM entries WHERE id=$1', [entryId]);
   const e = rows[0];
   if (!e) throw new DomainError('条目不存在', 404);
-  const text = `${e.title}\n${toPlainText(e.body)}\n${(e.labels ?? []).join(' ')}`;
-  const vec = embed(text);
   await query(
-    `INSERT INTO entry_vectors (entry_id, embedding, source_text, built_at)
-     VALUES ($1, $2::vector, $3, now())
-     ON CONFLICT (entry_id) DO UPDATE SET embedding=EXCLUDED.embedding, source_text=EXCLUDED.source_text, built_at=now()`,
-    [entryId, toPgVector(vec), text],
+    `UPDATE entries SET ai_summary=$2, summary_source='human', summary_at=now(), updated_at=now() WHERE id=$1`,
+    [entryId, text],
   );
-  await query(`UPDATE entries SET vector_status='ready', updated_at=now() WHERE id=$1`, [entryId]);
   await writeAudit(user, {
     objectType: 'entry',
     objectId: entryId,
     objectLabel: `${e.code} ${e.title}`,
-    action: '重建向量',
+    action: '人工校正 AI 摘要',
     category: 'content',
-    field: '向量状态',
-    before: e.vector_status,
-    after: 'ready',
+    field: '摘要来源',
+    before: e.summary_source,
+    after: 'human',
+    note: '后续发布不再被 AI 结果覆盖',
   });
-  return { status: 'ready' };
-}
-
-/** 代理评测：以标题为问法对本台索引做召回验证（结果固定标注代理性质） */
-export async function proxyRecall(entryId: string): Promise<number | null> {
-  const { rows } = await query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM entry_vectors v
-     JOIN entries e ON e.id = v.entry_id
-     WHERE v.entry_id = $1`,
-    [entryId],
-  );
-  const has = Number(rows[0]?.count ?? '0') > 0;
-  return has ? 1 : null;
+  return getSummary(entryId);
 }

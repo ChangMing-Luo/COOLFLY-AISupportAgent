@@ -4,7 +4,6 @@ import {
   type EnStatus,
   type GateResult,
   type Visibility,
-  type VectorStatus,
   type EntryBody,
 } from '@kb/contracts';
 import { hasInternal, stripInternal, toPublicHtml } from './content.js';
@@ -16,13 +15,13 @@ export interface GateInput {
   labels: string[];
   body: EntryBody;
   enStatus: EnStatus;
-  vectorStatus: VectorStatus;
-  proxyRecall: number | null;
 }
 
 /**
- * 发布门禁四查（技术方案 §6.6）——全过才置「已发布」并写同步任务，
+ * 发布门禁三查（技术方案 §6.6）——全过才置「已发布」并写同步任务，
  * 同事务收口，不存在「门禁不过但已入队」中间态。
+ * 原第④查「代理评测（本台向量检索召回验证）」于 08-05-2026 随向量能力删除一并退役：
+ * 真实检索由 Zendesk AI 承担，本台不再自建任何检索代理指标。
  */
 export function runPublishGate(input: GateInput): GateResult {
   const checks: GateResult['checks'] = [];
@@ -72,22 +71,8 @@ export function runPublishGate(input: GateInput): GateResult {
     hard: true,
   });
 
-  // ④ 代理评测（本台向量检索召回验证；向量待重建时不通过）
-  const proxyOk = input.vectorStatus === 'ready' && (input.proxyRecall ?? 0) > 0;
-  checks.push({
-    key: 'proxy_eval',
-    label: zhCN.gate.proxyEval,
-    passed: proxyOk,
-    detail:
-      input.vectorStatus !== 'ready'
-        ? `向量状态为「${input.vectorStatus}」——发布前须先重建向量`
-        : `代理召回命中 ${input.proxyRecall} 项`,
-    hard: true,
-  });
-
   return {
     passed: checks.every((c) => !c.hard || c.passed),
     checks,
-    proxyEvalNote: zhCN.gate.proxyEvalNote,
   };
 }

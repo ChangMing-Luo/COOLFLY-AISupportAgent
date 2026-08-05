@@ -1,19 +1,19 @@
 import {
   canTransitionEntry,
   rejectSchema,
-  zhCN,
   type GateResult,
+  type ReviewDiff,
   type SessionUser,
   type EntryBody,
   type Visibility,
   type EnStatus,
-  type VectorStatus,
 } from '@kb/contracts';
 import { withTransaction, query, newId } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
 import { runPublishGate } from '../core/gate.js';
 import { toPlainText } from '../core/content.js';
-import { DomainError, proxyRecall } from './entries.js';
+import { getLlm } from '../integrations/llm.js';
+import { DomainError } from './entries.js';
 
 interface ReviewRow {
   id: string;
@@ -24,8 +24,9 @@ interface ReviewRow {
   labels: string[];
   chapter_id: string;
   en_status: EnStatus;
-  vector_status: VectorStatus;
   body: EntryBody;
+  ai_summary: string;
+  summary_source: string;
   submitter_id: string | null;
   current_version: number;
   review_source: string;
@@ -44,7 +45,9 @@ export async function reviewQueue(): Promise<
     visibility: string;
     versionLabel: string;
     status: string;
-    changeSummary: Array<{ field: string; before: string; after: string }>;
+    /** 摘要层：一行总览 + 逐项一句话概述（详情层走 GET /review/:id/diff） */
+    diffTotal: string;
+    changeSummary: Array<{ kind: 'add' | 'del' | 'mod'; text: string }>;
   }>
 > {
   const { rows } = await query<{
@@ -83,25 +86,107 @@ export async function reviewQueue(): Promise<
     visibility: r.visibility,
     versionLabel: r.current_version > 0 ? `v${r.current_version + 1}（修订 v${r.current_version}）` : 'v1（新建）',
     status: r.status,
-    changeSummary: buildChangeSummary(r.prev_body, r.body),
+    diffTotal: buildDiff(r.prev_body, r.body).total,
+    changeSummary: buildDiff(r.prev_body, r.body).summary,
   }));
 }
 
-function buildChangeSummary(
-  prev: EntryBody | null,
-  next: EntryBody,
-): Array<{ field: string; before: string; after: string }> {
-  if (!prev) return [{ field: '新建条目', before: '—', after: `${next.paragraphs.length} 个段落` }];
-  const before = toPlainText(prev).split('\n');
-  const after = toPlainText(next).split('\n');
-  const out: Array<{ field: string; before: string; after: string }> = [];
-  const max = Math.max(before.length, after.length);
-  for (let i = 0; i < max; i += 1) {
-    const b = before[i] ?? '（无）';
-    const a = after[i] ?? '（已删除）';
-    if (b !== a) out.push({ field: `第 ${i + 1} 段`, before: b, after: a });
+/**
+ * 变更对照两层（REQ-F09-15 rev6）：
+ * total/summary = 摘要层（大概摘要），lines = 详情层（git diff 风格逐行）。
+ * 按段落做最长公共子序列对齐——同一次请求算出两层，避免两处口径漂移。
+ */
+export function buildDiff(prev: EntryBody | null, next: EntryBody): ReviewDiff {
+  const after = next.paragraphs;
+  if (!prev) {
+    return {
+      total: `新建条目 · ${after.length} 个段落`,
+      summary: after.slice(0, 6).map((p) => ({ kind: 'add' as const, text: `新增段落：${clip(p.text)}` })),
+      lines: after.map((p, i) => ({
+        kind: 'add' as const,
+        beforeLine: null,
+        afterLine: i + 1,
+        text: p.text,
+        internal: p.internal,
+      })),
+      isNew: true,
+    };
   }
-  return out.slice(0, 8);
+  const before = prev.paragraphs;
+  const lcs = longestCommon(before.map((p) => p.text), after.map((p) => p.text));
+  const lines: ReviewDiff['lines'] = [];
+  const summary: ReviewDiff['summary'] = [];
+  let bi = 0;
+  let ai = 0;
+  const emitDel = (idx: number): void => {
+    lines.push({ kind: 'del', beforeLine: idx + 1, afterLine: null, text: before[idx]!.text, internal: before[idx]!.internal });
+  };
+  const emitAdd = (idx: number): void => {
+    lines.push({ kind: 'add', beforeLine: null, afterLine: idx + 1, text: after[idx]!.text, internal: after[idx]!.internal });
+  };
+  for (const common of [...lcs, null]) {
+    const delStart = bi;
+    const addStart = ai;
+    while (bi < before.length && before[bi]!.text !== common) { emitDel(bi); bi += 1; }
+    while (ai < after.length && after[ai]!.text !== common) { emitAdd(ai); ai += 1; }
+    const dels = bi - delStart;
+    const adds = ai - addStart;
+    if (dels > 0 && adds > 0) {
+      summary.push({ kind: 'mod', text: `${clip(before[delStart]!.text)} → ${clip(after[addStart]!.text)}` });
+    } else if (dels > 0) {
+      summary.push({ kind: 'del', text: `删除段落：${clip(before[delStart]!.text)}` });
+    } else if (adds > 0) {
+      summary.push({ kind: 'add', text: `新增段落：${clip(after[addStart]!.text)}` });
+    }
+    if (common !== null) {
+      lines.push({ kind: 'ctx', beforeLine: bi + 1, afterLine: ai + 1, text: common, internal: after[ai]!.internal });
+      bi += 1;
+      ai += 1;
+    }
+  }
+  const changed = lines.filter((l) => l.kind !== 'ctx').length;
+  return {
+    total: changed === 0 ? '正文无改动' : `正文 ${summary.length} 处改动 · ${changed} 行增删`,
+    summary: summary.slice(0, 8),
+    lines,
+    isNew: false,
+  };
+}
+
+function clip(text: string): string {
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+}
+
+/** 最长公共子序列（段落粒度），用于 diff 对齐 */
+function longestCommon(a: string[], b: string[]): string[] {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+    }
+  }
+  const out: string[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { out.push(a[i]!); i += 1; j += 1; }
+    else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i += 1;
+    else j += 1;
+  }
+  return out;
+}
+
+/** 详情层：审核中心「查看具体变更」按需拉取 */
+export async function entryDiff(entryId: string): Promise<ReviewDiff> {
+  const { rows } = await query<{ body: EntryBody; prev_body: EntryBody | null }>(
+    `SELECT e.body,
+            (SELECT v.body_snapshot FROM entry_versions v WHERE v.entry_id = e.id AND v.status='current' ORDER BY v.version_no DESC LIMIT 1) AS prev_body
+     FROM entries e WHERE e.id=$1`,
+    [entryId],
+  );
+  const r = rows[0];
+  if (!r) throw new DomainError('条目不存在', 404);
+  return buildDiff(r.prev_body, r.body);
 }
 
 async function loadForReview(client: import('pg').PoolClient, entryId: string): Promise<ReviewRow> {
@@ -111,13 +196,15 @@ async function loadForReview(client: import('pg').PoolClient, entryId: string): 
   return e;
 }
 
-/** 审核通过——四眼原则：提交人 = 当前审核员则拒绝（RULE-02 / AC-P-23） */
+/**
+ * 审核通过（RULE-02 / AC-P-23 rev6）。
+ * 08-05-2026：四眼原则已取消——审核员可审核自己提交的条目，接口不再拒绝。
+ * 制衡改为事后审计：自审事实写进审计日志备注，操作日志里可查。
+ */
 export async function approveEntry(user: SessionUser, entryId: string): Promise<{ status: string }> {
   return withTransaction(async (client) => {
     const e = await loadForReview(client, entryId);
-    if (e.submitter_id && e.submitter_id === user.id) {
-      throw new DomainError(zhCN.ironLaw.fourEyes, 403, { rule: 'four_eyes' });
-    }
+    const selfReview = !!e.submitter_id && e.submitter_id === user.id;
     if (!canTransitionEntry(e.status as never, 'approved')) {
       throw new DomainError(`当前状态「${e.status}」不可审核通过`, 409);
     }
@@ -136,7 +223,7 @@ export async function approveEntry(user: SessionUser, entryId: string): Promise<
         field: '状态',
         before: e.status,
         after: 'approved',
-        note: '四眼原则校验通过（提交人 ≠ 审核人）',
+        note: selfReview ? '自审通过（提交人 = 审核人，四眼原则已于 08-05-2026 取消）' : '提交人 ≠ 审核人',
       },
       client,
     );
@@ -186,20 +273,18 @@ export async function previewGate(entryId: string): Promise<GateResult> {
     labels: e.labels ?? [],
     body: e.body,
     enStatus: e.en_status,
-    vectorStatus: e.vector_status,
-    proxyRecall: await proxyRecall(entryId),
   });
 }
 
 /**
  * 发布——同步队列的唯一写入源（RULE-02）。
- * 门禁四查全过才置「已发布」并写同步任务，同事务收口。
+ * 门禁三查全过才置「已发布」并写同步任务，同事务收口。
+ * 发布同时生成条目 AI 摘要（人工校正过的不覆盖，技术方案 §6.2）。
  */
 export async function publishEntry(
   user: SessionUser,
   entryId: string,
 ): Promise<{ status: string; gate: GateResult; taskId?: string }> {
-  const recall = await proxyRecall(entryId);
   return withTransaction(async (client) => {
     const e = await loadForReview(client, entryId);
     if (e.status !== 'approved') {
@@ -212,8 +297,6 @@ export async function publishEntry(
       labels: e.labels ?? [],
       body: e.body,
       enStatus: e.en_status,
-      vectorStatus: e.vector_status,
-      proxyRecall: recall,
     });
 
     if (!gate.passed) {
@@ -246,6 +329,30 @@ export async function publishEntry(
          review_due_at = now() + (review_cycle_days || ' days')::interval, updated_at=now() WHERE id=$1`,
       [entryId, nextVersion],
     );
+
+    // AI 摘要：发布时生成（人工校正过的不覆盖）。LLM 失败不阻塞发布——只留痕，摘要保持原样。
+    if (e.summary_source !== 'human') {
+      try {
+        const text = await getLlm().summarizeEntry(e.title, toPlainText(e.body));
+        await client.query(
+          `UPDATE entries SET ai_summary=$2, summary_source='ai', summary_at=now() WHERE id=$1`,
+          [entryId, text],
+        );
+      } catch (err) {
+        await writeAudit(
+          user,
+          {
+            objectType: 'entry',
+            objectId: entryId,
+            objectLabel: `${e.code} ${e.title}`,
+            action: 'AI 摘要生成失败',
+            category: 'content',
+            note: `${(err as Error).message}——保留上一次摘要，不阻塞发布`,
+          },
+          client,
+        );
+      }
+    }
 
     const target = e.visibility === 'internal' ? '内部知识 · 仅客服 segment' : '帮助中心 · 对外文章';
     const taskId = newId('sync');

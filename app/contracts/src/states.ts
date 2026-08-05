@@ -106,19 +106,6 @@ export const SYNC_STATUS_LABELS: Record<SyncStatus, string> = {
   archived: '已归档',
 };
 
-/** 向量状态机（PRD §4.1；向量只服务本台内部） */
-export const VECTOR_STATUSES = ['none', 'building', 'ready', 'stale', 'failed'] as const;
-export const vectorStatusSchema = z.enum(VECTOR_STATUSES);
-export type VectorStatus = z.infer<typeof vectorStatusSchema>;
-
-export const VECTOR_STATUS_LABELS: Record<VectorStatus, string> = {
-  none: '未向量化',
-  building: '向量化中',
-  ready: '已向量化',
-  stale: '待重建',
-  failed: '向量失败',
-};
-
 /** 可见性三档（PRD §4.1；内部段落不进对外文章、不翻译、不同步对外） */
 export const VISIBILITIES = ['public', 'internal', 'mixed'] as const;
 export const visibilitySchema = z.enum(VISIBILITIES);

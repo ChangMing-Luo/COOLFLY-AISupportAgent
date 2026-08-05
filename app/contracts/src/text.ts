@@ -39,7 +39,6 @@ export const zhCN = {
   },
   ironLaw: {
     publishBlocked: '发布权限仅知识审核员——统一过审铁律：任何角色无绕过审核的发布路径。',
-    fourEyes: '四眼原则：不可审核自己提交的条目，须由另一名知识审核员处理。',
     readOnlyEditor: '当前角色（AI 运营）对编辑器只读，无法修改内容。',
     rejectReasonRequired: '驳回理由必填——审核意见会回传给提交人并留痕。',
     matrixAdminOnly: '权限矩阵仅系统管理员可修改',
@@ -48,18 +47,19 @@ export const zhCN = {
     fields: '格式与字段完整性（标题/章节/可见性/标签已填）',
     internal: '敏感信息与内部口径（内部段落已标记，不会进对外文章）',
     english: '英文版本状态（未确认则同步将被阻断）',
-    proxyEval: '代理评测（本台向量检索召回验证）',
-    proxyEvalNote: '代理指标不等于 Zendesk AI 真实表现，如实标注。',
-    passed: '门禁通过：正文已保存、英文已确认、向量已就绪，可发布并同步。',
+    passed: '门禁通过：正文已保存、英文已确认，可发布并同步。',
   },
   translation: {
     staleHint: '中文已变更 → 英文置为待重新校验，同步阻断',
     internalSkip: '内部段落不翻译、不同步到对外帮助中心',
     confirmRequired: '英文「已确认」前不可同步到 Zendesk（人工校验 100% 铁律）',
   },
-  vector: {
-    staleHint: '内容已变更，向量落后于正文——发布前必须重建，否则查重与代理评测跑的是旧内容',
-    excluded: '不参与查重与代理评测（会漏判重复建条）',
+  summary: {
+    purpose: '只服务本台内部：AI 对话挖掘做语义查重的比对基准，与 Zendesk AI 索引无关',
+    generatedOnPublish: '摘要在条目发布时由 LLM 依标题与正文生成；可人工改写，改写后不再被 AI 覆盖',
+    notPublished: '本条目尚未发布，摘要将在首次发布时生成',
+    humanEdited: '摘要已人工校正：后续发布不会用 AI 结果覆盖',
+    generateFailed: '本次摘要生成失败（LLM 不可用），保留上一次摘要——不阻塞发布',
   },
   sync: {
     stateMachine:
@@ -71,7 +71,8 @@ export const zhCN = {
       '映射 Zendesk：知识库 → Help Center brand、目录 → Category、章节 → Section、条目 → Article、条目内锚点 → 文章内 anchor',
   },
   mine: {
-    admission: '沉淀判断三重准入：①频次达阈值 ②语义查重 ③缺口判定',
+    admission: '沉淀判断三重准入：①频次达阈值 ②LLM 语义查重 ③缺口判定',
+    dedupeDegraded: '语义查重未生效——当前按字面相似度粗判，结果仅供参考',
     dedupeHigh: '查重 ≥0.85 → 不新建，挂修订',
     discarded: '已丢弃候选（留痕）：同主题再达阈值会重新出现',
     emptyBatch: '无新候选：均未达频次阈值，如实标注',
