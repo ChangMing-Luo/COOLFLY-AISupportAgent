@@ -2,13 +2,18 @@
 
 > 本台账在改任何代码前重建，逐项记录本轮真实执行状态与证据。仅本轮命令输出/退出码/API 结果/截图可记 `pass`；推测倒填、旧证据、"应该通过"均不允许。
 >
-> **本轮 = 08-05-2026 四项变更返工轮**：①删除向量设计与技术栈集成 ②知识库总览结构树 UX/UI 对齐 v3 原型（三级折叠树）③取消四眼原则（审核员可自审）④审核中心变更对照改「摘要 + git diff」两层。开放点拍板：发布门禁四查→三查、挖掘查重改 LLM 两段式语义判定、授权破坏性 DDL。上一轮（08-04）台账 17/17 全 pass 的结论**不继承**——契约已改（新 sha256），全部 17 行重新置 `pending` 后重跑。
+> **08-05-2026 共三轮，本台账为累计结果**：
+> - **一轮（四项变更）**：删向量 / 结构树三级对齐原型 / 取消四眼 / 审核变更对照改「摘要 + git diff」两层；开放点拍板=门禁四查→三查、挖掘查重改 LLM 两段式语义判定、授权破坏性 DDL。
+> - **二轮（用户反馈）**：修「新建条目串旧数据」与「审核中心两栏不对齐」两个 Bug；正文编辑面改双语富文本编辑器（左中文右英文逐行对齐，去掉「小标题」「内部段落」两个勾选框）；合入协作者 PR#1（英文标题）。
+> - **三轮（本次）**：补**条目下线**入口（`published→offline` 此前在状态机内合法却无任何入口可达）+ **一键批量导入**入口（后端能力已有、缺前端）。新增验收行 `FLOW-08`。
+>
+> 上一轮台账结论**不继承**——契约每次改动都换 sha256，全部行重置 `pending` 后重跑。
 
-- contract_sha256: sha256:d06ed4f05ed3c2568abb265afdd92427c3b859d1e65eddfba3da29ff5eb66940
+- contract_sha256: sha256:00e6676406d7645e6a3eeb9251b003fad76c8d5ce0a5a345a53be75fe869b01b
 - run_started_at: 2026-08-05T03:33:16Z
-- source_contract: `output/tests/TDD验收契约.md`（revision 6 · 17 条 required：SMOKE×2 / FLOW×7 / DESIGN×1 / RULE×7 · 43 required source）
+- source_contract: `output/tests/TDD验收契约.md`（revision 8 · 18 条 required：SMOKE×2 / FLOW×8 / DESIGN×1 / RULE×7 · 43 required source）
 - 被测系统：`app/`（@kb/contracts + @kb/server + @kb/web），生产模式 `node dist/index.js` @ :3311，PostgreSQL 16 @ localhost:5432/kb_console（**vector 扩展、entry_vectors 表、vector_status 列均已 DROP**，表数 23 → 22）
-- 验收命令入口：`pnpm -r typecheck` / `pnpm build` / `pnpm --filter @kb/server test`（vitest 69 项）/ `node e2e/flows.mjs`（Playwright 8 条旅程）/ curl / psql / 截图对 + 独立视觉验收官
+- 验收命令入口：`pnpm -r typecheck` / `pnpm build` / `pnpm --filter @kb/server test`（vitest 92 项）/ `node e2e/flows.mjs`（Playwright 8 条旅程）/ curl / psql / 截图对 + 独立视觉验收官
 
 ## 验收台账
 
@@ -23,6 +28,7 @@
 | FLOW-05 | pass | 数据看板三页签 + 反馈回流信号矩阵（四渠道 + 确定性档位 + 五来源候选） | `PASS FLOW-05 低覆盖场景可见=true、样本积累中=true、缺口与无结果关键词=true、客服工作数据仅 Explore 指向=true、信号四渠道=true、确定性档位=true、五来源候选=true` |
 | FLOW-06 | pass | 翻译状态机：AI 翻译→待人工校验→确认；内部段落不翻译；中文改动→英文 stale + 同步阻断；**门禁三查** | `PASS FLOW-06 翻译后=pending_human、内部段落未翻译=true、人工确认=confirmed、中文改动后英文=stale、**门禁三查=fields/internal/english**`（不含 proxy_eval）；vitest 断言英文未确认时 `runSyncTask` → blocked（reason=英文未确认）且不入队 |
 | FLOW-07 | pass | 总览三库 / **三级结构树**（工具条 + 仅已发布 + 调整层级）/ Section 映射 / 组合筛选 / 复核三档 / 含条目章节禁删 | `PASS FLOW-07 三库可切换=true、仅内部库说明=true、Section 映射标识=true、映射说明条=true、超期标注=true、筛选器=4 个、**「仅已发布」徽章=true、结构工具条三按钮=true、三级树条目行=1 个（折叠后 0）、调整层级=200/移动生效=true**、含条目章节删除拦截=409「该章节下仍有 2 个条目、0 个子章节——请先移空…」`；审计实证 `王雯 | 调整章节层级 | 所属目录 | 售后政策 → 订单与物流` |
+| FLOW-08 | pass | 条目下线：越权/非法态拦截 + published→offline + 归档同步任务 + Zendesk 端归档非删除 + 版本指标保留 + 可重新上架 | vitest `FLOW-08` 4 项全过：知识管理员下线 → 403；草稿态下线 → 409「已发布」；审核员下线 → 200 `{status:offline}`，条目 status=offline / sync_status=archived，同步任务 action 含「归档」且状态 archived，**沙箱文章仍存在且 `draft=true`（未被物理删除）**，`entry_versions` 计数 >0，审计留痕 `下线条目 | 状态 | published → offline`；下线后 PUT 条目 → 200 且状态回 `editing`（非单向陷阱） |
 | DESIGN-01 | pass | 20 张截图对 + **两轮**独立视觉验收官逐图核对 | baseline/actual 各 10 张 @ `tests/visual/`。**第 1 轮 fail, blocking=3**：B-01 工作台角色说明仍写「四眼原则——自己提交的条目须另一名审核员通过」（真缺陷，`contracts/src/rbac.ts:17` 漏改）；B-02 审核中心为空态，变更摘要层与「查看具体变更」入口无从对照；B-03 门禁三查无证据且条目工作台门禁区定格「门禁检查加载中…」。**修复**：改角色说明文案；种子 KB-0212 改待审使队列非空；截图脚本改为 review 选中首条并展开 diff、entry 进既有条目；新建条目门禁区改说明性文案；顺带清运行时向量残留文案（保存 toast + 审计备注）与候选卡重复提示。**第 2 轮 pass, blocking=0**（reviewer=independent-visual，逐张 Read 20 图 + 7 处 2 倍裁切放大）：B-01/B-02/B-03 均实证已修复；五项变更逐项达标——删向量（十图无「向量/代理评测/pgvector」，挖掘改「② LLM 语义查重」）、三级树（副标+「仅已发布」徽章+三按钮工具条+逐级缩进+Sec 映射+文档图标，**操作按钮未常驻、无中文换行无逐字竖排，上上轮 B-01 未复现**）、去四眼（「通过」按钮实心可点未置灰）、两层 diff（摘要徽章「新建条目 · 3 个段落」+3 条概述 + git diff 行号槽/绿底 `+`/图例）、门禁三查（恰好三项，无第四项）。新增 non-blocking：N-01 本轮数据态只有新建条目故 diff 无红底删除行实拍、N-02 仅内部库说明文案重复一次、N-03 待审队列表头中文断行（可读可点）、N-04/N-05 复核临期徽章与审核历史卡未进取证视口、N-06 sync drift 告警条为数据态差异 |
 | RULE-01 | pass | 四角色逐项越权走查（界面禁用 + 接口层拒绝） | curl 实测 **8/8 越权全 403**：AI运营改正文/审核/同步重试、知识管理员审核/发布、审核员改矩阵/建用户、系统管理员审核内容；只读 `GET /api/rbac/matrix` → 200；新增端点同样受控：AI运营 `PATCH /kb/chapters/:id/parent` → 403「目录与章节管理权限仅知识管理员与知识审核员。」；vitest `RULE-01` 13 项全过 |
 | RULE-02 | pass | 发布路径唯一性 + **审核员自审放行且留痕**（四眼原则已取消）+ 未过审不外泄 | curl 实测：审核员自建自提自审 → `POST /api/review/:id/approve` **HTTP 200** `{"status":"approved"}`；审计留痕 `李骁 | 审核通过 | 自审通过（提交人 = 审核人，四眼原则已于 08-05-2026 取消）`；同一条目 `sync_tasks` 计数=0（仅过审不入队，发布 API 仍是唯一写入源）；知识管理员发布 → 403 铁律文案；vitest 跳过审核直接发布 → 409「只有审核通过的条目才能发布」 |
@@ -34,9 +40,9 @@
 
 ## 统计
 
-- 总数：17
+- 总数：18
 - pending：0
-- pass：17
+- pass：18
 - fail：0
 
 ## 本轮验证命令与结果汇总（最终干净重跑，2026-08-05T05:03Z）
@@ -48,9 +54,9 @@
 | 构建 | `pnpm build`（contracts→web→server） | exit=0，vite 126 modules |
 | 迁移 | `pnpm --filter @kb/server db:migrate` | exit=0，**22 张表**（含删向量破坏性 DDL，幂等） |
 | 种子 | `pnpm --filter @kb/server db:seed` | exit=0，5 用户 / 3 库 / 13 章节 / 6 条目 / 4 批次 / 3 篇沙箱文章 |
-| 单元+集成 | `pnpm --filter @kb/server test`（vitest） | exit=0，**69 passed (69)**，2 文件 |
+| 单元+集成 | `pnpm --filter @kb/server test`（vitest） | exit=0，**92 passed (92)**，3 文件 |
 | 生产启动 | `node dist/index.js` @ :3311 | healthz 200 `{status:ok, zendesk:sandbox, llm:local}`，根路径 200，运行期 level≥50 计数=0 |
-| E2E | `node e2e/flows.mjs`（Playwright Chromium） | exit=0，**8/8 通过**（SMOKE-02 + FLOW-01…07） |
+| E2E | `node e2e/flows.mjs`（Playwright Chromium） | exit=0，**8/8 通过**（SMOKE-02 + FLOW-01…07；FLOW-08 由 vitest 集成覆盖） |
 | 视觉 | `node e2e/capture.mjs` + 独立视觉验收官（两轮） | 20 张截图对；第 1 轮 review=fail/blocking=3 → 修复 → 第 2 轮 **review=pass; blocking=0** |
 | 接口越权 | curl 四角色 × 8 类越权动作 + 新端点 | 8/8 → 403；新增 `PATCH /kb/chapters/:id/parent` 越权 → 403；只读矩阵 → 200 |
 | 审计不可变 | psql UPDATE/DELETE 尝试 | 均被数据库规则拒绝，条数与内容不变 |
@@ -62,6 +68,9 @@
 2. **角色说明残留四眼原则文案**：`contracts/src/rbac.ts` 的 `ROLE_NOTES.kb_reviewer` 未随本轮改动更新，工作台仍向用户宣告「自己提交的条目须另一名审核员通过」，与实际行为（可自审）矛盾。由 DESIGN-01 第 1 轮视觉验收官发现。
 3. **新建条目门禁区永久停在「门禁检查加载中…」**：新条目本就没有门禁可跑，`gate` 恒为 null 导致加载态不结束。改为说明性文案。
 4. **运行时可见文案的向量残留**：保存草稿 toast 与审计日志备注仍写「向量置待重建」。已清理。
+5. **权限矩阵种子只增不改**（二轮发现）：`seedMatrix()` 用 `ON CONFLICT DO NOTHING`，矩阵被改过一次就永远回不到基线——任何一次改矩阵的测试或手工操作之后，RBAC 验收都在污染态上跑且看不出来（实测时 AI 运营已能回滚、审核员能改矩阵，13 项越权断言全线失真）。改为 `DO UPDATE` 重置语义。**这条影响验收可信度本身，是本轮最重要的修复。**
+6. **导入正文永远只有一段**（三轮发现）：`routes/kb.ts` 的 `split('\\n')` 切的是字面量反斜杠 n 而非换行符，导致批量导入的文档全部压成单段、`内部：` 前缀永远匹配不上。RULE-03 原来只断言成功/失败行数，没断言分段，故一直没被抓到。铁律未破——混合可见性未标内部段落会被门禁第②查硬拦，不会漏到 Zendesk。已修并补回归断言。
+7. **下线曾是单向陷阱**（三轮发现）：`saveEntry` 的 nextStatus 未覆盖 `offline`，下线后任何保存都撞非法流转 409，条目将永远无法重新上架。补 `offline → editing`。
 
 ## 不满足上线条件项（如实记录，非验收失败项）
 
