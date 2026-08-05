@@ -372,6 +372,11 @@ let provider: LlmProvider | null = null;
 
 export function getLlm(): LlmProvider {
   if (provider) return provider;
+  // 强制本地：同 ZENDESK_FORCE_SANDBOX，供 E2E 与离线开发使用（避免真金白银的调用）
+  if (process.env.LLM_FORCE_LOCAL === '1') {
+    provider = new LocalProvider();
+    return provider;
+  }
   const key = process.env.QWEN_API_KEY;
   provider = key ? new QwenProvider(key) : new LocalProvider();
   return provider;
