@@ -5,7 +5,7 @@ import { requireLogin } from '../core/auth.js';
 import { requirePermission } from '../core/rbac.js';
 import { writeAudit } from '../core/audit.js';
 import { DomainError, getEntry, listEntries, rebuildVector, saveEntry, submitForReview } from '../services/entries.js';
-import { confirmTranslation, editPair, listPairs, translate } from '../services/translation.js';
+import { confirmTranslation, editEnTitle, editPair, listPairs, translate } from '../services/translation.js';
 
 export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/kb/libraries', { preHandler: requireLogin }, async () => {
@@ -131,6 +131,13 @@ export async function registerKbRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/kb/entries/:id/translate', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
     const { id } = req.params as { id: string };
     return translate(req.currentUser!, id);
+  });
+
+  // 注意：须在 /translation/:pairId 之前注册，否则 'title' 会被当作 pairId 匹配
+  app.put('/api/kb/entries/:id/translation/title', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { enTitle, note } = req.body as { enTitle: string; note?: string };
+    return editEnTitle(req.currentUser!, id, enTitle, note?.trim() || '人工修订英文标题（不改政策口径）');
   });
 
   app.put('/api/kb/entries/:id/translation/:pairId', { preHandler: [requireLogin, requirePermission('entry.write')] }, async (req) => {

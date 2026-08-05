@@ -16,6 +16,7 @@ export interface GateInput {
   labels: string[];
   body: EntryBody;
   enStatus: EnStatus;
+  enTitle: string | null;
   vectorStatus: VectorStatus;
   proxyRecall: number | null;
 }
@@ -62,13 +63,19 @@ export function runPublishGate(input: GateInput): GateResult {
     hard: true,
   });
 
-  // ③ 英文版本状态：未「已确认」→ 阻断
-  const enOk = enAllowsSync(input.enStatus);
+  // ③ 英文版本状态：未「已确认」或英文标题缺失 → 阻断（标题同属人工校验范围）
+  const enStatusOk = enAllowsSync(input.enStatus);
+  const enTitleOk = Boolean(input.enTitle?.trim());
+  const enOk = enStatusOk && enTitleOk;
   checks.push({
     key: 'english',
     label: zhCN.gate.english,
     passed: enOk,
-    detail: enOk ? '英文已确认，可随同步推送 en-us' : '英文未确认——同步将被阻断（人工校验 100% 铁律）',
+    detail: !enStatusOk
+      ? '英文未确认——同步将被阻断（人工校验 100% 铁律）'
+      : !enTitleOk
+        ? '英文标题缺失——译文会挂中文标题，同步将被阻断'
+        : '英文标题与正文均已确认，可随同步推送 en-us',
     hard: true,
   });
 

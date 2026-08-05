@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS entries (
   id             TEXT PRIMARY KEY,
   code           TEXT NOT NULL UNIQUE,
   title          TEXT NOT NULL,
+  -- 英文标题：与正文译文同属「英文人工校验 100%」铁律范围，缺失则同步阻断
+  en_title       TEXT,
   library_id     TEXT NOT NULL REFERENCES libraries(id) ON DELETE RESTRICT,
   chapter_id     TEXT NOT NULL REFERENCES chapters(id) ON DELETE RESTRICT,
   entry_type     TEXT NOT NULL DEFAULT 'FAQ 型',
@@ -304,3 +306,6 @@ CREATE TABLE IF NOT EXISTS entry_vectors (
   source_text TEXT NOT NULL DEFAULT '',
   built_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============ 增量列（CREATE TABLE IF NOT EXISTS 不会给既有库补列，故显式 ALTER） ============
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS en_title TEXT;

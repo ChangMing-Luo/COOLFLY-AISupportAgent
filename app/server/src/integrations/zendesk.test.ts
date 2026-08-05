@@ -211,6 +211,21 @@ describe('locale 配置', () => {
     expect(trans.translation.locale).toBe('en-us');
   });
 
+  it('传了 enTitle 时英文译文用英文标题，而非回退中文标题', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().upsertArticle({
+      ...PUSH,
+      enTitle: 'Refund policy',
+      enBodyHtml: '<p>Full refund within 30 days.</p>',
+    });
+    const trans = calls.find((c) => c.url.includes('/translations.json'))!.body as {
+      translation: { title: string };
+    };
+    expect(trans.translation.title).toBe('Refund policy');
+    expect(trans.translation.title).not.toBe(PUSH.title);
+  });
+
   it('ZENDESK_LOCALE 生效', async () => {
     process.env.ZENDESK_LOCALE = 'zh-tw';
     const calls = stubFetch();

@@ -4,16 +4,20 @@ import { writeAudit } from '../core/audit.js';
 import { getLlm } from '../integrations/llm.js';
 import { DomainError } from './entries.js';
 
+/** 标题在翻译管道里的段落标识——与正文段落 id 不冲突，仅用于 LLM 调用与结果回填 */
+const TITLE_SEGMENT_ID = '__title__';
+
 interface Row {
   id: string;
   code: string;
   title: string;
+  en_title: string | null;
   body: EntryBody;
   en_status: EnStatus;
 }
 
 async function load(entryId: string): Promise<Row> {
-  const { rows } = await query<Row>('SELECT id, code, title, body, en_status FROM entries WHERE id=$1', [entryId]);
+  const { rows } = await query<Row>('SELECT id, code, title, en_title, body, en_status FROM entries WHERE id=$1', [entryId]);
   const e = rows[0];
   if (!e) throw new DomainError('条目不存在', 404);
   return e;
@@ -48,12 +52,15 @@ export async function translate(user: SessionUser, entryId: string): Promise<{ e
   const e = await load(entryId);
   await setEnStatus(entryId, e.en_status, 'translating');
   const llm = getLlm();
-  const segments = e.body.paragraphs
-    .filter((p) => !p.internal)
-    .map((p) => ({ paragraphId: p.id, zh: p.text }));
+  // 标题与正文同批翻译：英文标题同属「人工校验 100%」范围，缺了英文读者会看到中文标题
+  const segments = [
+    { paragraphId: TITLE_SEGMENT_ID, zh: e.title },
+    ...e.body.paragraphs.filter((p) => !p.internal).map((p) => ({ paragraphId: p.id, zh: p.text })),
+  ];
   try {
     const result = await llm.translateToEnglish(segments);
     const map = new Map(result.map((r) => [r.paragraphId, r.en]));
+    await query('UPDATE entries SET en_title=$2 WHERE id=$1', [entryId, map.get(TITLE_SEGMENT_ID) ?? null]);
     await query('DELETE FROM translation_pairs WHERE entry_id=$1', [entryId]);
     let seq = 0;
     for (const p of e.body.paragraphs) {
@@ -108,9 +115,31 @@ export async function editPair(
   });
 }
 
+/** 人工修订英文标题（与逐段修订同规则：可改表述、不改政策口径、修订留痕） */
+export async function editEnTitle(
+  user: SessionUser,
+  entryId: string,
+  enTitle: string,
+  note: string,
+): Promise<{ enTitle: string }> {
+  const text = enTitle.trim();
+  if (!text) throw new DomainError('英文标题不能为空', 400);
+  const e = await load(entryId);
+  await query('UPDATE entries SET en_title=$2, updated_at=now() WHERE id=$1', [entryId, text]);
+  await writeAudit(user, {
+    objectType: 'entry', objectId: entryId, objectLabel: `${e.code} ${e.title}`,
+    action: '人工修订英文标题', category: 'content', field: '英文标题',
+    before: e.en_title ?? '（空）', after: text, note,
+  });
+  return { enTitle: text };
+}
+
 /** 标记已确认——人工校验 100% 铁律的唯一放行点 */
 export async function confirmTranslation(user: SessionUser, entryId: string): Promise<{ enStatus: EnStatus }> {
   const e = await load(entryId);
+  if (!e.en_title?.trim()) {
+    throw new DomainError('英文标题未生成或为空，无法确认——英文读者会看到中文标题', 409);
+  }
   const { rows } = await query<{ missing: string }>(
     `SELECT COUNT(*)::text AS missing FROM translation_pairs WHERE entry_id=$1 AND internal=FALSE AND (en_text IS NULL OR en_text='')`,
     [entryId],

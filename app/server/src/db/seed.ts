@@ -163,10 +163,10 @@ async function main(): Promise<void> {
       })),
     };
     await query(
-      `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
+      `INSERT INTO entries (id, code, title, en_title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
          labels, body, status, en_status, sync_status, vector_status, current_version, owner_id, submitter_id,
          review_due_at, reject_reason, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$17,
+       VALUES ($1,$2,$3,$21,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16,$17,$17,
                now() + ($18 || ' days')::interval, $19, now() - ($20 || ' hours')::interval)`,
       [
         e.id, e.code, e.title, e.lib, e.chapter, e.type, e.visibility, e.sceneL1, e.sceneL2,
@@ -174,6 +174,8 @@ async function main(): Promise<void> {
         e.vectorStatus, e.version, e.owner, String(e.dueDays),
         e.status === 'rejected' ? '计费周期与财务口径不符，请附财务确认截图' : null,
         String(entries.indexOf(e) * 3),
+        // 英文标题与逐段译文同批产生：英文状态到「待人工校验」及之后才有
+        e.enStatus === 'synced' || e.enStatus === 'pending_human' ? EN_TITLES[e.code] ?? null : null,
       ],
     );
 
@@ -412,6 +414,16 @@ async function main(): Promise<void> {
   console.log(`  Zendesk 沙箱已推送 ${published.length} 篇文章（drift 比对基准就位）`);
   await pool.end();
 }
+
+/** 英文标题（人工校验后的定稿；缺失会让英文读者看到中文标题） */
+const EN_TITLES: Record<string, string> = {
+  'KB-0155': 'Solar panel not charging fully on cloudy days',
+  'KB-0188': 'Warranty period and proof of purchase',
+  'KB-0201': 'Refund policy',
+  'KB-0212': 'Who pays return shipping',
+  'KB-0233': 'Changing the delivery address after shipment',
+  'KB-0240': 'Membership cancellation and billing cycle',
+};
 
 function englishOf(zh: string): string {
   const map: Record<string, string> = {

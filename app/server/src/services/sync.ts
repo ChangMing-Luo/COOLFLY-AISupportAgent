@@ -31,12 +31,13 @@ interface TaskRow {
   labels: string[];
   body: EntryBody;
   en_status: EnStatus;
+  en_title: string | null;
   chapter_id: string;
   section_ref: string | null;
 }
 
 const TASK_SELECT = `
-  SELECT t.*, e.code, e.title, e.visibility, e.labels, e.body, e.en_status, e.chapter_id,
+  SELECT t.*, e.code, e.title, e.en_title, e.visibility, e.labels, e.body, e.en_status, e.chapter_id,
          c.zendesk_section_ref AS section_ref
   FROM sync_tasks t
   JOIN entries e ON e.id = t.entry_id
@@ -125,6 +126,20 @@ export async function runSyncTask(taskId: string): Promise<{ status: string; rea
     .map((p) => `<p>${p.en_text}</p>`)
     .join('\n');
 
+  const pushEn = t.languages.includes('英') && enBody !== '';
+  // 英文标题缺失即阻断：否则 en-us 译文会挂着中文标题推到帮助中心（英文读者可见）
+  if (pushEn && !t.en_title?.trim()) {
+    await query(
+      `UPDATE sync_tasks SET status='blocked', blocked_reason=$2, updated_at=now() WHERE id=$1`,
+      [taskId, '英文标题缺失——译文会挂中文标题，同步阻断'],
+    );
+    await query(`UPDATE entries SET sync_status='blocked', blocked_reason=$2 WHERE id=$1`, [
+      t.entry_id,
+      '英文标题缺失——同步阻断',
+    ]);
+    return { status: 'blocked', reason: '英文标题缺失' };
+  }
+
   try {
     const article = await zd.upsertArticle({
       entryCode: t.code,
@@ -133,7 +148,8 @@ export async function runSyncTask(taskId: string): Promise<{ status: string; rea
       labels: t.labels ?? [],
       sectionRef: t.section_ref,
       internalOnly,
-      enBodyHtml: t.languages.includes('英') && enBody ? enBody : undefined,
+      enTitle: pushEn ? (t.en_title ?? undefined) : undefined,
+      enBodyHtml: pushEn ? enBody : undefined,
     });
 
     const hash = contentHash(toPlainText(t.body));
