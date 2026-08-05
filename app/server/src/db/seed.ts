@@ -366,21 +366,22 @@ async function main(): Promise<void> {
     );
   }
   const candidates = [
-    { type: 'new', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: 17, dup: 0.42, gap: '未覆盖', note: '三重准入通过 → 建议立新条', target: null,
+    { type: 'new', title: '喂鸟器在极寒天气下自动关机', src: '17 会话 · 工单 12 / 聊天 5', freq: 17, dup: 0.42, dupWhy: '与 KB-0155「太阳能板阴天充不满电」最接近，但主题不同（低温自动关机 vs 弱光充电不足），既有条目未覆盖该现象', dupDegraded: false, gap: '未覆盖', note: '三重准入通过 → 建议立新条', target: null,
       summary: '用户反馈 -15°C 以下设备夜间自动关机、白天回温恢复。客服口径已趋一致，但知识库无对应条目，每次手写。',
       body: '为什么低温天气下喂鸟器会自动关机？\n1. -15°C 以下电池触发低温保护，设备自动断电，回温后自行恢复。\n2. 需连续供电请加装保温罩，并换用低温型号电池（BT-LOW）。\n3. 关机期间录像中断，历史录像不受影响。' },
-    { type: 'revision', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: 14, dup: 0.88, gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', target: 'KB-0155',
+    { type: 'revision', title: '太阳能板阴天充不满电（挂到 KB-0155）', src: '14 会话 · 工单 5 / 聊天 9', freq: 14, dup: 0.88, dupWhy: '均在描述阴天/弱光下太阳能板充电不足，KB-0155 已覆盖同一现象与处理步骤，差异仅在固件 2.4 后的充电阈值', dupDegraded: false, gap: '已覆盖但答不好', note: '查重 ≥ 0.85 → 不新建，挂修订', target: 'KB-0155',
       summary: '现有条目只写「检查遮挡」，未覆盖固件 2.4 后的充电阈值变化；客服 flag 3 次「步骤过时」。',
       body: '补充：固件 2.4 起充电阈值由 12% 调整为 18%，阴天需连续 2 日以上才触发补电提示。' },
-    { type: 'merge', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: 11, dup: 0.91, gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', target: 'KB-0188',
+    { type: 'merge', title: '两条 Wi-Fi 配对条目内容重叠', src: '本台查重发现', freq: 11, dup: 0.91, dupWhy: '两条条目回答同一个 Wi-Fi 配对失败问题，步骤与结论高度一致，属重复建条', dupDegraded: false, gap: '重复建条', note: '合并后另一条 Zendesk 归档并重定向', target: 'KB-0188',
       summary: '两条回答同一问题，bot 引用被分流导致都拿不满样本量。',
       body: '合并说明：保留主条目，另一条归档并在 Zendesk 端建立重定向。' },
   ];
   for (const c of candidates) {
     await query(
-      `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [newId('cand'), batchIds[0], c.type, c.title, c.src, c.freq, c.dup, c.gap, c.summary, c.body, c.note, c.target],
+      `INSERT INTO mining_candidates (id, batch_id, type, title, source_summary, frequency, dedupe_score,
+         dedupe_reason, dedupe_degraded, gap_verdict, ai_summary, draft_body, admission_note, target_entry_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [newId('cand'), batchIds[0], c.type, c.title, c.src, c.freq, c.dup, c.dupWhy, c.dupDegraded, c.gap, c.summary, c.body, c.note, c.target],
     );
   }
 

@@ -10,11 +10,12 @@ export async function listBatches(): Promise<
   Array<{ id: string; batchDate: string; emailCount: number; chatCount: number; candidateCount: number; status: string; failReason: string | null }>
 > {
   const { rows } = await query<{
-    id: string; batch_date: Date; email_count: number; chat_count: number; candidate_count: number; status: string; fail_reason: string | null;
-  }>('SELECT * FROM mining_batches ORDER BY batch_date DESC');
+    id: string; batch_date: string; email_count: number; chat_count: number; candidate_count: number; status: string; fail_reason: string | null;
+  }>(`SELECT id, to_char(batch_date, 'YYYY-MM-DD') AS batch_date, email_count, chat_count, candidate_count, status, fail_reason
+      FROM mining_batches ORDER BY batch_date DESC`);
   return rows.map((b) => ({
     id: b.id,
-    batchDate: b.batch_date.toISOString().slice(0, 10),
+    batchDate: b.batch_date,
     emailCount: b.email_count,
     chatCount: b.chat_count,
     candidateCount: b.candidate_count,
@@ -223,8 +224,8 @@ export async function disposeCandidate(
   const sourceLabel = action === 'suggest' ? 'feedback' : action === 'attach_revision' ? 'revision' : 'mining';
   await query(
     `INSERT INTO entries (id, code, title, library_id, chapter_id, entry_type, visibility, scene_l1, scene_l2,
-       labels, body, status, review_source, submitter_id, submitted_at, vector_status)
-     VALUES ($1,$2,$3,$4,$5,'FAQ 型','public','设备使用','其他',$6::jsonb,$7::jsonb,'pending_review',$8,$9,now(),'stale')`,
+       labels, body, status, review_source, submitter_id, submitted_at)
+     VALUES ($1,$2,$3,$4,$5,'FAQ 型','public','设备使用','其他',$6::jsonb,$7::jsonb,'pending_review',$8,$9,now())`,
     [
       entryId, code, c.title, libs[0]!.id, chaps[0]!.id,
       JSON.stringify(['AI 挖掘', c.type === 'revision' ? '修订建议' : '新增']),

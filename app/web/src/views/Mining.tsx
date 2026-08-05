@@ -127,7 +127,12 @@ export function MiningView() {
 
   return (
     <>
-      <div className="note">{zhCN.mine.admission}</div>
+      <div className="note">
+        {zhCN.mine.admission}
+        {(candidates.data ?? []).some((c) => c.dedupeDegraded) && (
+          <div className="note note--warn" style={{ marginTop: 8 }}>{zhCN.mine.dedupeDegraded}</div>
+        )}
+      </div>
 
       <div
         className="grid"
