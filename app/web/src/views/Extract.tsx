@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type CandidateDto, type CollectTaskDto, type EntryDto } from '../api.js';
+import { api, type CandidateDto, type CollectTaskDto } from '../api.js';
 import { useApp } from '../shell.js';
 import { C, Card, Empty, kickerStyle, tnum } from '../ui.js';
 
@@ -47,17 +47,6 @@ export function Extract() {
 
   if (!d) return null;
   const t = d.task;
-
-  async function accept(c: CandidateDto) {
-    const r = await api.post<{ entry: EntryDto }>(`/collect/candidates/${c.code}/accept`);
-    setD(await api.get<Payload>('/collect/task'));
-    app.refreshShell();
-    app.toast(
-      '已生成草稿',
-      `${r.entry.code} 已建，来源 ${t?.code ?? '抽取任务'}。补全正文并翻译为英文后即可提交审核。`,
-      { label: '编辑该草稿', route: 'author.editor', sel: r.entry.code },
-    );
-  }
 
   async function drop(c: CandidateDto) {
     setD(await api.post<Payload>(`/collect/candidates/${c.code}/drop`, { reason: '人工丢弃' }));
@@ -276,7 +265,7 @@ export function Extract() {
                   >
                     {c.dupTitle}
                   </a>{' '}
-                  相似度 {c.dupScore}，生成草稿后会作为该知识的新版本处理。
+                  相似度 {c.dupScore}，采纳后会作为该知识的新版本处理。
                 </div>
               ) : null}
 
@@ -293,8 +282,8 @@ export function Extract() {
                 <button className="btn btn-ghost" onClick={() => void drop(c)}>
                   丢弃
                 </button>
-                <button className="btn btn-primary" onClick={() => void accept(c)}>
-                  生成草稿
+                <button className="btn btn-primary" onClick={() => app.openModal({ type: 'adopt', code: c.code })}>
+                  采纳
                 </button>
               </div>
             </div>
@@ -304,7 +293,7 @@ export function Extract() {
             <Empty
               dashed
               title="候选已全部处理"
-              desc="本次抽取的候选已生成草稿或丢弃。可点右上角「立即拉取」再跑一次，或到「我的草稿」补全内容。"
+              desc="本次抽取的候选已采纳或丢弃。可点右上角「立即拉取」再跑一次，或到「我的草稿」补全内容。"
               cta="前往我的草稿"
               onCta={() => app.go('author.drafts')}
             />

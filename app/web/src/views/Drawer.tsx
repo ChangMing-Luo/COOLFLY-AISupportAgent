@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type CandidateDto, type CandidateSourceDto, type MissDto } from '../api.js';
+import { api, type CandidateDto, type CandidateSourceDto, type MissDto, type ReviewRequestDto } from '../api.js';
 import { useApp, type DrawerState } from '../shell.js';
 import { C, tnum } from '../ui.js';
 import { ChecksCard, CommentBox, DiffBlock, doApprove, doReject, useReview } from './ReviewPage.js';
@@ -29,6 +29,7 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
   const [comment, setComment] = useState('');
   const [review] = useReview(state?.kind === 'review' ? state.code : null);
   const [miss, setMiss] = useState<MissDto | null>(null);
+  const [request, setRequest] = useState<ReviewRequestDto | null>(null);
   const [sources, setSources] = useState<{ candidate: CandidateDto; sources: CandidateSourceDto[] } | null>(null);
   const [metaZh, setMetaZh] = useState('');
   const [metaEn, setMetaEn] = useState('');
@@ -60,6 +61,13 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
       api
         .get<{ candidate: CandidateDto; sources: CandidateSourceDto[] }>(`/collect/candidates/${state.code}/sources`)
         .then(setSources)
+        .catch(() => undefined);
+    }
+    if (state?.kind === 'reviewRequest') {
+      setRequest(null);
+      api
+        .get<{ request: ReviewRequestDto }>(`/reviews/${state.code}`)
+        .then((d) => setRequest(d.request))
         .catch(() => undefined);
     }
     if (state?.kind === 'miss') {
@@ -103,6 +111,62 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
         },
       },
     ];
+  } else if (state.kind === 'reviewRequest') {
+    kicker = `审核 · ${state.code}`;
+    title = request ? `${request.objectTypeLabel}${request.actionLabel} · ${request.objectLabel}` : '加载中…';
+    meta = request
+      ? `${request.submitter} 提交 · ${request.submittedAtFull} · 对象 ${request.objectCode}${request.autoApproved ? ' · 自动过审' : ''}`
+      : '';
+    actions =
+      request?.status === 'pending'
+        ? [
+            {
+              l: '驳回',
+              cls: 'btn-secondary',
+              on: async () => {
+                if (!comment.trim()) {
+                  app.toast('请填写驳回意见', '驳回必须说明原因，意见会回写给提交人。');
+                  return;
+                }
+                setBusy(true);
+                try {
+                  await api.post(`/reviews/${state.code}/reject`, { comment });
+                  app.refreshShell();
+                  app.toast('已驳回', `${state.code} 已驳回，变更不会生效。`);
+                  onClose();
+                } catch (e) {
+                  app.toast('驳回失败', e instanceof Error ? e.message : '未知错误');
+                } finally {
+                  setBusy(false);
+                }
+              },
+            },
+            {
+              l: '通过并生效',
+              cls: 'btn-primary',
+              on: async () => {
+                setBusy(true);
+                try {
+                  const r = await api.post<{ sync?: { ok: boolean; message: string } }>(
+                    `/reviews/${state.code}/approve`,
+                    { comment },
+                  );
+                  app.refreshShell();
+                  app.toast(
+                    r.sync && !r.sync.ok ? '已通过，但 Zendesk 同步失败' : '已通过并生效',
+                    r.sync?.message ?? '变更已生效。',
+                    { label: '查看同步日志', route: 'publish.logs' },
+                  );
+                  onClose();
+                } catch (e) {
+                  app.toast('审核失败', e instanceof Error ? e.message : '未知错误');
+                } finally {
+                  setBusy(false);
+                }
+              },
+            },
+          ]
+        : [{ l: '关闭', cls: 'btn-secondary', on: onClose }];
   } else if (state.kind === 'meta') {
     const isTag = state.metaKind === '标签';
     kicker = `${state.id ? '编辑' : '新增'}${state.metaKind}${isTag ? ' · 本地维护' : ' · 中英双语'}`;
@@ -120,26 +184,39 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
         on: async () => {
           setBusy(true);
           try {
+            type MetaSaveRes = {
+              review: { code: string; applied: boolean; message: string };
+              sync?: { ok: boolean; message: string };
+            };
+            let res: MetaSaveRes | null = null;
             if (state.metaKind === '分类') {
               const body = { nameZh: metaZh, nameEn: metaEn };
-              if (state.id) await api.put(`/meta/categories/${state.id}`, body);
-              else await api.post('/meta/categories', body);
+              res = state.id
+                ? await api.put<MetaSaveRes>(`/meta/categories/${state.id}`, body)
+                : await api.post<MetaSaveRes>('/meta/categories', body);
             } else if (state.metaKind === '场景') {
               const body = { nameZh: metaZh, nameEn: metaEn, categoryId: metaParentId };
-              if (state.id) await api.put(`/meta/scenes/${state.id}`, body);
-              else await api.post('/meta/scenes', body);
+              res = state.id
+                ? await api.put<MetaSaveRes>(`/meta/scenes/${state.id}`, body)
+                : await api.post<MetaSaveRes>('/meta/scenes', body);
             } else {
               const body = { name: metaZh, type: metaType };
               if (state.id) await api.put(`/meta/tags/${state.id}`, body);
               else await api.post('/meta/tags', body);
             }
             app.refreshShell();
-            app.toast(
-              '已保存',
-              isTag
-                ? `${state.metaKind}「${metaZh}」已保存（本地，不翻译）。`
-                : `${state.metaKind}「${metaZh}」英文名「${metaEn}」已保存，将同步至 Zendesk 目录。`,
-            );
+            if (isTag) {
+              app.toast('已保存', `标签「${metaZh}」已保存（本地，不翻译）。`);
+            } else {
+              const rev = res!.review;
+              app.toast(
+                rev.applied ? '已保存并生效' : '已提交审核',
+                rev.applied
+                  ? `${state.metaKind}「${metaZh}」已生效。${res!.sync?.message ?? ''}`
+                  : `${state.metaKind}「${metaZh}」已提交审核（${rev.code}），通过后才会写入 Zendesk 目录。`,
+                rev.applied ? undefined : { label: '前往审核中心', route: 'review.queue' },
+              );
+            }
             onClose();
           } catch (e) {
             app.toast('保存失败', e instanceof Error ? e.message : '未知错误');
@@ -286,6 +363,52 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
               <DiffBlock lines={review.diff.lines} compact />
               <h5 style={{ margin: '20px 0 8px' }}>审核意见</h5>
               <CommentBox value={comment} onChange={setComment} compact />
+            </>
+          ) : null}
+
+          {state.kind === 'reviewRequest' && request ? (
+            <>
+              <table className="table" style={{ marginBottom: 18 }}>
+                <tbody>
+                  {[
+                    ['审核编号', request.code],
+                    ['对象类型', `${request.objectTypeLabel} · ${request.actionLabel}`],
+                    ['一级分类', request.dimCategory],
+                    ['二级场景', request.dimScene],
+                    ['知识正文', request.dimBody],
+                    ['结论', `${request.statusLabel}${request.autoApproved ? '（自动过审）' : ''}`],
+                    ['审核人 / 时间', `${request.reviewer || '—'} · ${request.reviewedAt}`],
+                    ['意见', request.comment || '—'],
+                  ].map(([k, v]) => (
+                    <tr key={k}>
+                      <td style={{ padding: '9px 12px', width: '30%', fontSize: 12.5, color: C.muted }}>{k}</td>
+                      <td style={{ padding: '9px 12px', fontSize: 13, textWrap: 'pretty' }}>{v}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <h5 style={{ margin: '0 0 8px' }}>变更内容</h5>
+              <pre
+                style={{
+                  border: `1px solid ${C.divider}`,
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 13px',
+                  fontSize: 12,
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-wrap',
+                  margin: 0,
+                }}
+              >
+                {JSON.stringify({ 变更前: request.before, 变更后: request.payload }, null, 2)}
+              </pre>
+
+              {request.status === 'pending' ? (
+                <>
+                  <h5 style={{ margin: '20px 0 8px' }}>审核意见</h5>
+                  <CommentBox value={comment} onChange={setComment} compact />
+                </>
+              ) : null}
             </>
           ) : null}
 

@@ -21,7 +21,8 @@ export function Dashboard() {
 
   async function onTodo(t: DashboardDto['todos'][number]) {
     if (t.kind === 'review') {
-      app.openDrawer({ kind: 'review', code: t.code });
+      // 正文审核走 diff 抽屉；分类 / 场景 / 回滚是审核请求（RV-xxxx），走请求抽屉
+      app.openDrawer(t.code.startsWith('RV-') ? { kind: 'reviewRequest', code: t.code } : { kind: 'review', code: t.code });
     } else if (t.kind === 'feedback') {
       const r = await api.post<{ entry: EntryDto }>(`/feedback/${t.code}/fix`);
       app.refreshShell();

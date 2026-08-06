@@ -92,6 +92,8 @@ export interface ToastNext {
 
 export type DrawerState =
   | { kind: 'review'; code: string }
+  /** 统一审核请求详情（分类 / 场景 / 回滚等非正文对象） */
+  | { kind: 'reviewRequest'; code: string }
   | { kind: 'meta'; metaKind: '分类' | '场景' | '标签'; id: string | null; zh: string; en: string; parent: string; parentId: string; type: string }
   | { kind: 'miss'; code: string }
   | { kind: 'sources'; code: string }
@@ -121,6 +123,12 @@ export type ModalState =
   | { type: 'offline'; code: string }
   | { type: 'switch' }
   | { type: 'mergeTag'; id: string; name: string }
+  /** 采纳向导：确认分类 → 场景 → 正文 → 总览与提交 */
+  | { type: 'adopt'; code: string }
+  /** 分类 / 场景下架的二次确认：会如实列出对 Zendesk 的删除后果 */
+  | { type: 'unpublishMeta'; kind: 'categories' | 'scenes'; id: string; name: string }
+  | { type: 'batchDelete'; codes: string[] }
+  | { type: 'batchShelf'; codes: string[]; action: 'offline' | 'restore' }
   | null;
 
 /** 长操作的分步进度（拉取 / 抽取 / 发布同步 / 导入），逐步落在模态里 */

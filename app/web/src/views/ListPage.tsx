@@ -8,7 +8,7 @@ import {
   type FeedbackDto,
   type MissDto,
   type PermissionRowDto,
-  type ReviewLogDto,
+  type ReviewRequestDto,
   type CandidateDto,
   type SceneMetaDto,
   type SyncLogDto,
@@ -40,6 +40,8 @@ interface Cfg {
   rows: Row[];
   filters: Array<{ l: string; test?: (r: Row) => boolean }>;
   actions: Array<{ l: string; cls: string; on: () => void | Promise<void> }>;
+  /** 勾选后出现的批量动作；有值即渲染勾选列 */
+  bulk?: Array<{ l: string; cls: string; on: (codes: string[]) => void }>;
   emptyTitle?: string;
   emptyDesc?: string;
   emptyCta?: string;
@@ -51,8 +53,8 @@ const SOURCE: Record<string, string> = {
   'collect.trash': '/collect/trash',
   'author.drafts': '/entries?view=drafts',
   'author.mine': '/entries?view=mine',
-  'review.queue': '/entries?view=queue',
-  'review.log': '/review/log',
+  'review.queue': '/reviews/pending',
+  'review.log': '/reviews/records',
   'kb.list': '/entries?view=all',
   'kb.offline': '/entries?view=offline',
   'publish.channels': '/entries?view=sync',
@@ -71,10 +73,16 @@ export function ListPage() {
   const app = useApp();
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [filterIdx, setFilterIdx] = useState(0);
+  const [picked, setPicked] = useState<string[]>([]);
 
   useEffect(() => {
     setFilterIdx(0);
+    setPicked([]);
   }, [app.route]);
+
+  useEffect(() => {
+    setPicked([]);
+  }, [app.rev]);
 
   useEffect(() => {
     const src = SOURCE[app.route];
@@ -99,6 +107,9 @@ export function ListPage() {
   const active = filters[idx];
   const rows = active.test ? cfg.rows.filter(active.test) : cfg.rows;
   const empty = rows.length === 0;
+  const bulk = cfg.bulk ?? [];
+  const chosen = picked.filter((id) => rows.some((r) => r.id === id));
+  const allPicked = rows.length > 0 && chosen.length === rows.length;
 
   return (
     <>
@@ -127,12 +138,34 @@ export function ListPage() {
           ))}
         </div>
         <div style={{ flex: 1 }} />
+        {bulk.length && chosen.length ? (
+          <>
+            <span style={{ fontSize: 12, color: C.muted, ...tnum }}>已选 {chosen.length} 条</span>
+            {bulk.map((b) => (
+              <button key={b.l} className={`btn ${b.cls}`} style={{ fontSize: 12 }} onClick={() => b.on(chosen)}>
+                {b.l}
+              </button>
+            ))}
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setPicked([])}>
+              取消选择
+            </button>
+          </>
+        ) : null}
         <span style={{ fontSize: 12, color: C.muted, ...tnum }}>{rows.length} 条记录</span>
       </div>
 
       <table className="table">
         <thead>
           <tr>
+            {bulk.length ? (
+              <th style={{ width: 34 }}>
+                <input
+                  type="checkbox"
+                  checked={allPicked}
+                  onChange={() => setPicked(allPicked ? [] : rows.map((r) => r.id))}
+                />
+              </th>
+            ) : null}
             <th style={{ width: '34%' }}>{cfg.headers[0]}</th>
             <th style={{ width: '13%' }}>{cfg.headers[1]}</th>
             <th style={{ width: '11%' }}>{cfg.headers[2]}</th>
@@ -144,6 +177,17 @@ export function ListPage() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
+              {bulk.length ? (
+                <td style={{ padding: 'var(--rp,11px) var(--space-2)' }}>
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(r.id)}
+                    onChange={() =>
+                      setPicked(picked.includes(r.id) ? picked.filter((x) => x !== r.id) : [...picked, r.id])
+                    }
+                  />
+                </td>
+              ) : null}
               <td style={{ padding: 'var(--rp,11px) var(--space-2)' }}>
                 <button
                   onClick={() => r.open?.()}
@@ -218,6 +262,13 @@ export function ListPage() {
       ) : null}
     </>
   );
+}
+
+/** 审核列表表头：待审看提交人，记录看结论；两者都带分类 / 场景 / 正文三维 */
+function queh(queue: boolean): [string, string, string, string, string] {
+  return queue
+    ? ['审核对象', '分类 / 场景', '维度', '提交人 / 时间', '知识正文']
+    : ['审核对象', '分类 / 场景', '结论', '审核人 / 时间', '知识正文'];
 }
 
 /* ══════════ 每个路由的列表配置（对应原型 listCfg） ══════════ */
@@ -314,6 +365,10 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
               { l: '待审核', test: (x) => x.c3 === '待审核' },
               { l: '已发布', test: (x) => x.c3 === '已发布' },
             ],
+      bulk:
+        r === 'author.drafts'
+          ? [{ l: '批量删除', cls: 'btn-secondary', on: (codes) => app.openModal({ type: 'batchDelete', codes }) }]
+          : undefined,
       actions: [
         { l: '一键导入', cls: 'btn-secondary', on: () => app.go('author.import') },
         // 直接进手动录入页；不再跳去 AI 抽取页（那是定时任务产出的候选池）
@@ -329,79 +384,60 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
     };
   }
 
-  if (r === 'review.queue') {
-    const list = (data.entries as EntryDto[]) ?? [];
-    return {
-      kicker: '审核中心',
-      title: '待我审核',
-      desc: '审核通过后知识立即发布，并把英文版本同步写入 Zendesk；驳回需填写意见，草稿回到提交人手中。',
-      headers: ['标题', '提交人', '状态', '提交时间', 'AI 置信'],
-      rows: list.map((d) => ({
-        ...entryRow(d),
-        c2: d.ownerName,
-        c5: d.confidencePct,
-        acts: [{ l: '审核', on: () => app.openDrawer({ kind: 'review', code: d.code }) }],
-      })),
-      filters: [
-        { l: '全部' },
-        { l: '高置信 ≥85%', test: (x) => parseInt(String(x.c5), 10) >= 85 },
-        { l: '待复核 <85%', test: (x) => parseInt(String(x.c5), 10) < 85 },
-      ],
-      actions: [],
-      emptyTitle: '待审队列已清空',
-      emptyDesc: '没有等待审核的知识。新提交会实时出现在这里，并在工作台待办中提醒。',
-      emptyCta: '返回工作台',
-      emptyOn: () => app.go('dash'),
+  if (r === 'review.queue' || r === 'review.log') {
+    const list = (data.requests as ReviewRequestDto[]) ?? [];
+    const queue = r === 'review.queue';
+    const openReq = (q: ReviewRequestDto): void => {
+      if (q.objectType === 'entry' && q.status === 'pending' && q.action !== 'rollback') {
+        app.openDrawer({ kind: 'review', code: q.objectCode });
+        return;
+      }
+      app.openDrawer({ kind: 'reviewRequest', code: q.code });
     };
-  }
-
-  if (r === 'review.log') {
-    const logs = (data.logs as ReviewLogDto[]) ?? [];
     return {
       kicker: '审核中心',
-      title: '审核记录',
-      desc: '所有审核结论留痕，可回溯到具体版本与意见。',
-      headers: ['标题', '审核人', '结论', '时间', '版本'],
-      rows: logs.map((l) => ({
-        id: l.id,
-        c1: l.obj,
-        sub: l.act,
-        c2: l.who,
-        c3: l.verdict,
-        tagCls: l.verdict === '驳回' ? 'tag-neutral' : 'tag-accent',
-        c4: l.at,
-        c5: l.version,
-        acts: [
-          {
-            l: '查看',
-            on: () =>
-              app.openDrawer({
-                kind: 'info',
-                title: '审核结论',
-                meta: l.id,
-                rows: [
-                  { k: '记录标识', v: l.id },
-                  { k: '发生时间', v: l.at },
-                  { k: '审核人', v: l.who },
-                  { k: '结论', v: l.verdict },
-                  { k: '关联对象', v: l.obj },
-                  { k: '版本', v: l.version },
-                ],
-                body: '审核结论来自审计日志（append-only）。同一条目的多次审核会各留一条记录，可据此回溯每一次通过或驳回的时间、审核人与意见。',
-              }),
-          },
-        ],
+      title: queue ? '待我审核' : '审核记录',
+      desc: queue
+        ? '分类、场景与知识正文共用一条审核流水线。通过后分类 / 场景写入 Zendesk 目录，知识正文发布并同步英文版本；驳回需填意见。'
+        : '所有审核结论留痕，含分类、场景、知识正文三个维度，可回溯到具体对象与意见。自动过审的记录同样在列。',
+      headers: queh(queue),
+      rows: list.map((q) => ({
+        id: q.code,
+        c1: q.objectLabel,
+        sub: `${q.code} · ${q.objectTypeLabel}${q.actionLabel} · ${q.objectCode}`,
+        c2: `${q.dimCategory} / ${q.dimScene}`,
+        c3: queue ? q.objectTypeLabel : q.statusLabel,
+        tagCls: queue
+          ? q.objectType === 'entry'
+            ? 'tag-accent'
+            : 'tag-outline'
+          : q.status === 'rejected'
+            ? 'tag-neutral'
+            : 'tag-accent',
+        c4: queue ? `${q.submitter} · ${q.submittedAt}` : `${q.reviewer || q.submitter} · ${q.reviewedAt}`,
+        c5: q.dimBody,
+        open: () => openReq(q),
+        acts: [{ l: queue ? '审核' : '查看', on: () => openReq(q) }],
       })),
-      filters: [
-        { l: '全部' },
-        { l: '通过', test: (x) => x.c3 === '通过' },
-        { l: '驳回', test: (x) => x.c3 === '驳回' },
-      ],
+      filters: queue
+        ? [
+            { l: '全部' },
+            { l: '知识正文', test: (x) => x.c3 === '知识正文' },
+            { l: '知识分类', test: (x) => x.c3 === '知识分类' },
+            { l: '问题场景', test: (x) => x.c3 === '问题场景' },
+          ]
+        : [
+            { l: '全部' },
+            { l: '通过', test: (x) => x.c3 === '通过' },
+            { l: '驳回', test: (x) => x.c3 === '驳回' },
+          ],
       actions: [],
-      emptyTitle: '暂无审核记录',
-      emptyDesc: '完成第一次审核后，结论会记录在这里。',
-      emptyCta: '前往待审队列',
-      emptyOn: () => app.go('review.queue'),
+      emptyTitle: queue ? '待审队列已清空' : '暂无审核记录',
+      emptyDesc: queue
+        ? '没有等待审核的分类、场景或知识。新提交会实时出现在这里，并在工作台待办中提醒。'
+        : '完成第一次审核后，结论会记录在这里。',
+      emptyCta: queue ? '返回工作台' : '前往待审队列',
+      emptyOn: () => app.go(queue ? 'dash' : 'review.queue'),
     };
   }
 
@@ -446,6 +482,22 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
               { l: '已发布', test: (x) => x.c3 === '已发布' },
               { l: '待审核', test: (x) => x.c3 === '待审核' },
               { l: '修复中', test: (x) => x.c3 === '修复中' },
+            ],
+      bulk:
+        r === 'kb.offline'
+          ? [
+              {
+                l: '批量恢复',
+                cls: 'btn-secondary',
+                on: (codes) => app.openModal({ type: 'batchShelf', codes, action: 'restore' }),
+              },
+            ]
+          : [
+              {
+                l: '批量下架',
+                cls: 'btn-secondary',
+                on: (codes) => app.openModal({ type: 'batchShelf', codes, action: 'offline' }),
+              },
             ],
       actions:
         r === 'kb.offline'
@@ -660,15 +712,15 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
     return {
       kicker: '元数据中心',
       title: '知识分类（一级）',
-      desc: '一级分类对应 Zendesk 目录。用户录入中文，大模型翻译为英文并支持二次编辑；同步到 Zendesk 时使用英文名称。',
+      desc: '一级分类对应 Zendesk 目录。新增、更新与上下架都走审核，通过后才写入 Zendesk；下架会删除对应的 Zendesk Category，需二次确认。',
       headers: ['分类（中文）', 'English', '状态', '二级场景', '知识数'],
       rows: list.map((c) => ({
         id: c.id,
         c1: c.nameZh,
         sub: `${c.code} · Zendesk Category ${c.zendeskRef ?? '未同步'}`,
         c2: c.nameEn || '未翻译',
-        c3: c.active ? '已上架' : '已下架',
-        tagCls: c.active ? 'tag-accent' : 'tag-neutral',
+        c3: c.pendingReview ? '审核中' : c.statusLabel,
+        tagCls: c.pendingReview ? 'tag-outline' : c.status === 'published' ? 'tag-accent' : 'tag-neutral',
         c4: `${c.sceneCount} 个`,
         c5: c.entryCount,
         open: () =>
@@ -679,13 +731,17 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
             on: () =>
               app.openDrawer({ kind: 'meta', metaKind: '分类', id: c.id, zh: c.nameZh, en: c.nameEn, parent: '', parentId: '', type: '业务' }),
           },
-          { l: c.active ? '下架' : '上架', on: () => toggleMeta(app, 'categories', c.id, '分类', c.nameZh, c.active) },
+          {
+            l: c.status === 'published' ? '下架' : '上架',
+            on: () => shelfMeta(app, 'categories', c.id, '分类', c.nameZh, c.status),
+          },
           { l: '查看场景', on: () => app.go('meta.scenes') },
         ],
       })),
       filters: [
         { l: '全部' },
         { l: '已上架', test: (x) => x.c3 === '已上架' },
+        { l: '审核中', test: (x) => x.c3 === '审核中' },
         { l: '已下架', test: (x) => x.c3 === '已下架' },
       ],
       actions: [
@@ -704,15 +760,15 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
     return {
       kicker: '元数据中心',
       title: '问题场景（二级）',
-      desc: '二级场景挂在一级分类下，同样对应 Zendesk 目录，需中英双语。每条知识必须归属一个场景，场景覆盖率直接影响召回。',
+      desc: '二级场景挂在一级分类下，对应 Zendesk 的 Section。新增与上下架同样走审核；下架会先归档其下文章再删除 Section，需二次确认。所属分类必须已发布才能操作场景。',
       headers: ['场景（中文）', 'English', '状态', '上级分类', '知识数'],
       rows: list.map((s) => ({
         id: s.id,
         c1: s.nameZh,
         sub: `${s.code} · Zendesk Section ${s.zendeskRef ?? '未同步'}`,
         c2: s.nameEn || '未翻译',
-        c3: s.active ? '已上架' : '已下架',
-        tagCls: s.active ? 'tag-accent' : 'tag-neutral',
+        c3: s.pendingReview ? '审核中' : s.statusLabel,
+        tagCls: s.pendingReview ? 'tag-outline' : s.status === 'published' ? 'tag-accent' : 'tag-neutral',
         c4: s.categoryZh,
         c5: s.entryCount,
         open: () =>
@@ -741,13 +797,17 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
                 type: '业务',
               }),
           },
-          { l: s.active ? '下架' : '上架', on: () => toggleMeta(app, 'scenes', s.id, '场景', s.nameZh, s.active) },
+          {
+            l: s.status === 'published' ? '下架' : '上架',
+            on: () => shelfMeta(app, 'scenes', s.id, '场景', s.nameZh, s.status),
+          },
           { l: '查看知识', on: () => app.go('kb.list') },
         ],
       })),
       filters: [
         { l: '全部' },
         { l: '已上架', test: (x) => x.c3 === '已上架' },
+        { l: '审核中', test: (x) => x.c3 === '审核中' },
         { l: '已下架', test: (x) => x.c3 === '已下架' },
       ],
       actions: [
@@ -794,7 +854,7 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
             on: () =>
               app.openDrawer({ kind: 'meta', metaKind: '标签', id: t.id, zh: t.name, en: '', parent: '', parentId: '', type: t.type }),
           },
-          { l: t.active ? '下架' : '上架', on: () => toggleMeta(app, 'tags', t.id, '标签', t.name, t.active) },
+          { l: t.active ? '下架' : '上架', on: () => toggleTag(app, t.id, t.name, t.active) },
           { l: '合并', on: () => app.openModal({ type: 'mergeTag', id: t.id, name: t.name }) },
         ],
       })),
@@ -1066,18 +1126,43 @@ export async function draftFromMiss(app: Ctx, code: string): Promise<void> {
   app.go('author.editor', r.entry.code);
 }
 
-async function toggleMeta(
-  app: Ctx,
-  kind: 'categories' | 'scenes' | 'tags',
-  id: string,
-  label: string,
-  name: string,
-  wasActive: boolean,
-): Promise<void> {
-  await api.post(`/meta/${kind}/${id}/toggle`);
+async function toggleTag(app: Ctx, id: string, name: string, wasActive: boolean): Promise<void> {
+  await api.post(`/meta/tags/${id}/toggle`);
   app.refreshShell();
   app.toast(
     wasActive ? '已下架' : '已上架',
-    `${label}「${name}」已${wasActive ? '下架，不再对客展示' : '上架，恢复对客展示'}。`,
+    `标签「${name}」已${wasActive ? '下架，不再参与本地检索与推荐' : '上架'}。`,
   );
+}
+
+/**
+ * 分类 / 场景上下架：走审核，且下架必须二次确认——
+ * 下架会删除 Zendesk 目录，删掉就找不回来了（用户要求 5）。
+ */
+async function shelfMeta(
+  app: Ctx,
+  kind: 'categories' | 'scenes',
+  id: string,
+  label: string,
+  name: string,
+  status: string,
+): Promise<void> {
+  if (status === 'published') {
+    app.openModal({ type: 'unpublishMeta', kind, id, name });
+    return;
+  }
+  try {
+    const r = await api.post<{
+      review: { code: string; applied: boolean; message: string };
+      sync?: { ok: boolean; message: string };
+    }>(`/meta/${kind}/${id}/toggle`);
+    app.refreshShell();
+    app.toast(
+      r.review.applied ? `${label}已上架` : '上架已提交审核',
+      r.sync ? `${r.review.message} ${r.sync.message}` : r.review.message,
+      r.review.applied ? undefined : { label: '前往审核中心', route: 'review.queue' },
+    );
+  } catch (e) {
+    app.toast('上架失败', e instanceof Error ? e.message : '未知错误');
+  }
 }

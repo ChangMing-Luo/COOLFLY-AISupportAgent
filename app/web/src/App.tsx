@@ -23,6 +23,7 @@ import { ReviewPage } from './views/ReviewPage.js';
 import { Health } from './views/Health.js';
 import { Drawer } from './views/Drawer.js';
 import { Modal } from './views/Modal.js';
+import { Adopt } from './views/Adopt.js';
 
 interface ToastItem {
   id: number;
@@ -520,7 +521,11 @@ export function App() {
         </div>
 
         {drawer ? <Drawer state={drawer} onClose={() => setDrawer(null)} /> : null}
-        {modal ? <Modal state={modal} onClose={() => setModal(null)} /> : null}
+        {modal?.type === 'adopt' ? (
+          <Adopt code={modal.code} onClose={() => setModal(null)} />
+        ) : modal ? (
+          <Modal state={modal} onClose={() => setModal(null)} />
+        ) : null}
         {progress ? <Progress state={progress} onClose={() => setProgress(null)} /> : null}
 
         {/* ══ Toast ══ */}

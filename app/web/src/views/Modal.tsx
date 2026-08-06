@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type SessionUser, type TagDto } from '../api.js';
+import { api, type BatchResultDto, type MetaImpactDto, type SessionUser, type TagDto } from '../api.js';
 import { useApp, type ModalState } from '../shell.js';
 import { C } from '../ui.js';
 
@@ -12,6 +12,7 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
   const [err, setErr] = useState('');
   const [tags, setTags] = useState<TagDto[]>([]);
   const [targetId, setTargetId] = useState('');
+  const [impact, setImpact] = useState<MetaImpactDto | null>(null);
 
   useEffect(() => {
     if (state?.type === 'switch') {
@@ -22,6 +23,13 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
           const other = d.accounts.find((a) => a.email !== app.user.email);
           setEmail(other?.email ?? '');
         })
+        .catch(() => undefined);
+    }
+    if (state?.type === 'unpublishMeta') {
+      setImpact(null);
+      api
+        .get<MetaImpactDto>(`/meta/${state.kind}/${state.id}/impact`)
+        .then(setImpact)
         .catch(() => undefined);
     }
     if (state?.type === 'mergeTag') {
@@ -90,6 +98,80 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
         setBusy(false);
       }
     };
+  } else if (state.type === 'unpublishMeta') {
+    const label = state.kind === 'categories' ? '分类' : '场景';
+    title = `下架${label}「${state.name}」`;
+    body = `下架需要二次确认：确认后会提交一条${label}下架的审核请求，通过后本地下架并**删除对应的 Zendesk 目录**。`;
+    warn = '删除 Zendesk 目录不可撤销，重新上架会在 Zendesk 侧新建一个目录（ID 与原来不同）。';
+    confirmLabel = '确认下架';
+    onConfirm = async () => {
+      setBusy(true);
+      try {
+        const r = await api.post<{ review: { code: string; applied: boolean; message: string }; sync?: { ok: boolean; message: string } }>(
+          `/meta/${state.kind}/${state.id}/toggle`,
+        );
+        app.refreshShell();
+        app.toast(
+          r.review.applied ? `${label}已下架` : '下架已提交审核',
+          r.sync ? `${r.review.message} ${r.sync.message}` : r.review.message,
+          r.review.applied ? { label: '查看同步日志', route: 'publish.logs' } : { label: '前往审核中心', route: 'review.queue' },
+        );
+        onClose();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '下架失败');
+      } finally {
+        setBusy(false);
+      }
+    };
+  } else if (state.type === 'batchDelete') {
+    title = `批量删除 ${state.codes.length} 条草稿`;
+    body = `将删除：${state.codes.join('、')}。仅本人的草稿 / 已驳回 / 修复中条目可删，其余会被逐条拒绝并说明原因。`;
+    warn = '删除后草稿内容与版本记录一并移除，不可恢复。';
+    confirmLabel = '确认删除';
+    onConfirm = async () => {
+      setBusy(true);
+      try {
+        const r = await api.post<BatchResultDto>('/entries/batch/delete', { codes: state.codes });
+        app.refreshShell();
+        app.toast(
+          '批量删除完成',
+          `成功 ${r.ok.length} 条${r.failed.length ? `，失败 ${r.failed.length} 条：${r.failed.map((f) => `${f.code}（${f.reason}）`).join('；')}` : ''}。`,
+        );
+        onClose();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '删除失败');
+      } finally {
+        setBusy(false);
+      }
+    };
+  } else if (state.type === 'batchShelf') {
+    const act = state.action === 'offline' ? '下架' : '恢复';
+    title = `批量${act} ${state.codes.length} 条知识`;
+    body =
+      state.action === 'offline'
+        ? `将逐条下架并在 Zendesk 归档（draft=true）：${state.codes.join('、')}。版本、双语与反馈完整保留。`
+        : `将把 ${state.codes.join('、')} 恢复为草稿，需重新提交审核后才会再次发布。`;
+    warn = state.action === 'offline' ? '下架后这些知识不再对客展示，也不参与召回。' : '';
+    confirmLabel = `确认${act}`;
+    onConfirm = async () => {
+      setBusy(true);
+      try {
+        const r = await api.post<BatchResultDto>('/entries/batch/shelf', {
+          codes: state.codes,
+          action: state.action,
+        });
+        app.refreshShell();
+        app.toast(
+          `批量${act}完成`,
+          `成功 ${r.ok.length} 条${r.failed.length ? `，失败 ${r.failed.length} 条：${r.failed.map((f) => `${f.code}（${f.reason}）`).join('；')}` : ''}。`,
+        );
+        onClose();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : `${act}失败`);
+      } finally {
+        setBusy(false);
+      }
+    };
   } else if (state.type === 'mergeTag') {
     title = `合并标签「${state.name}」`;
     body = '合并后，源标签的全部引用会自动改写到目标标签，源标签下架并保留合并痕迹。';
@@ -148,6 +230,38 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {state.type === 'unpublishMeta' ? (
+          <div style={{ border: `1px solid ${C.divider}`, borderRadius: 'var(--radius-sm)', padding: '10px 13px' }}>
+            <div style={{ fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase', color: C.accent, marginBottom: 6 }}>
+              下架后果
+            </div>
+            {impact ? (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: C.muted700, lineHeight: 1.9 }}>
+                {impact.lines.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            ) : (
+              <div style={{ fontSize: 12.5, color: C.muted }}>正在核对影响面…</div>
+            )}
+          </div>
+        ) : null}
+
+        {err && state.type !== 'switch' ? (
+          <div
+            style={{
+              borderLeft: `2px solid ${C.accent}`,
+              background: 'var(--color-accent-100)',
+              padding: '10px 14px',
+              fontSize: 12.5,
+              color: 'var(--color-accent-900)',
+              textWrap: 'pretty',
+            }}
+          >
+            {err}
+          </div>
         ) : null}
 
         {state.type === 'mergeTag' ? (

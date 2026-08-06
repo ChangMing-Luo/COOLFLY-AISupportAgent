@@ -256,6 +256,9 @@ export interface CategoryDto {
   nameZh: string;
   nameEn: string;
   active: boolean;
+  status: string;
+  statusLabel: string;
+  pendingReview: string | null;
   sceneCount: number;
   entryCount: number;
   zendeskRef: string | null;
@@ -267,6 +270,9 @@ export interface SceneMetaDto {
   nameZh: string;
   nameEn: string;
   active: boolean;
+  status: string;
+  statusLabel: string;
+  pendingReview: string | null;
   categoryId: string;
   categoryZh: string;
   entryCount: number;
@@ -331,6 +337,62 @@ export interface ReviewLogDto {
   obj: string;
   objCode: string | null;
   version: string;
+}
+
+/** 统一审核请求：分类 / 场景 / 知识正文共用 */
+export interface ReviewRequestDto {
+  id: string;
+  code: string;
+  objectType: 'category' | 'scene' | 'entry';
+  objectTypeLabel: string;
+  objectId: string;
+  objectCode: string;
+  objectLabel: string;
+  action: string;
+  actionLabel: string;
+  status: 'pending' | 'approved' | 'rejected';
+  statusLabel: string;
+  autoApproved: boolean;
+  submitter: string;
+  submittedAt: string;
+  submittedAtFull: string;
+  reviewer: string;
+  reviewedAt: string;
+  comment: string;
+  payload: Record<string, unknown>;
+  before: Record<string, unknown>;
+  dimCategory: string;
+  dimScene: string;
+  dimBody: string;
+}
+
+export interface AdoptPlanDto {
+  code: string;
+  nodes: Array<{ key: 'category' | 'scene' | 'body' | 'overview'; title: string; hint: string }>;
+  category: { id: string | null; nameZh: string; nameEn: string; fromLibrary: boolean };
+  scene: { id: string | null; nameZh: string; nameEn: string; categoryId: string | null; fromLibrary: boolean };
+  body: { titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+  mentionCount: number;
+  summary: string;
+}
+
+export interface AdoptResultDto {
+  entryCode: string;
+  reviews: Array<{ code: string; dimension: string; status: string; note: string }>;
+  message: string;
+}
+
+export interface MetaImpactDto {
+  name: string;
+  scenes: number;
+  entries: number;
+  zendeskRef: string | null;
+  lines: string[];
+}
+
+export interface BatchResultDto {
+  ok: string[];
+  failed: Array<{ code: string; reason: string }>;
 }
 
 export interface SyncLogDto {

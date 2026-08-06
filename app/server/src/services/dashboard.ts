@@ -79,18 +79,22 @@ export async function dashboard(user: SessionUser): Promise<DashboardDto> {
   );
 
   const rollbackCount = pending.filter((d) => d.pendingKind === 'rollback').length;
+  // 待审队列现在含分类 / 场景 / 正文三类对象，KPI 与待办按统一审核请求计数
+  const { listPending } = await import('./reviews.js');
+  const requests = await listPending();
+  const taxonomyPending = requests.filter((q) => q.objectType !== 'entry').length;
 
   const todos: DashboardDto['todos'] = [];
-  for (const d of pending.slice(0, 2)) {
+  for (const q of requests.slice(0, 2)) {
     todos.push({
       step: '审核',
-      title: d.titleZh,
-      meta: `${d.code} · ${d.ownerName} 提交 · ${d.updatedAt}`,
+      title: q.objectLabel,
+      meta: `${q.code} · ${q.objectTypeLabel}${q.actionLabel} · ${q.submitter} 提交 · ${q.submittedAt}`,
       tagClass: 'tag-outline',
       tagText: '待审核',
       cta: '审核',
       kind: 'review',
-      code: d.code,
+      code: q.objectType === 'entry' && q.action !== 'rollback' ? q.objectCode : q.code,
     });
   }
   for (const f of openFb.slice(0, 2)) {
@@ -125,8 +129,13 @@ export async function dashboard(user: SessionUser): Promise<DashboardDto> {
     kpis: [
       {
         label: '待我审核',
-        value: pending.length,
-        delta: rollbackCount ? `其中 ${rollbackCount} 条为回滚审核` : '全部为内容审核',
+        value: requests.length,
+        delta:
+          taxonomyPending > 0
+            ? `其中 ${taxonomyPending} 条为分类 / 场景`
+            : rollbackCount
+              ? `其中 ${rollbackCount} 条为回滚审核`
+              : '全部为内容审核',
       },
       { label: '我的草稿', value: drafts.length, delta: rejected.length ? `含 ${rejected.length} 条被驳回` : '无被驳回' },
       { label: '待处理反馈', value: openFb.length, delta: '来自 Zendesk 客诉' },
@@ -141,7 +150,7 @@ export async function dashboard(user: SessionUser): Promise<DashboardDto> {
     lifecycle: [
       { label: '采集', n: Number(candRows[0].n), route: 'collect.extract' },
       { label: '草稿', n: drafts.length, route: 'author.drafts' },
-      { label: '待审', n: pending.length, route: 'review.queue' },
+      { label: '待审', n: requests.length, route: 'review.queue' },
       { label: '已发布', n: all.filter((d) => d.status === 'published').length, route: 'kb.list' },
       { label: '同步', n: all.filter((d) => d.syncStatus === 'synced').length, route: 'publish.channels' },
       { label: '反馈', n: feedbacks.length, route: 'feedback.list' },
@@ -164,7 +173,7 @@ export async function dashboard(user: SessionUser): Promise<DashboardDto> {
     stat: {
       total: all.length,
       publishedToday: Number(todayRows[0].n),
-      todo: pending.length + openFb.length + openMiss,
+      todo: requests.length + openFb.length + openMiss,
     },
   };
 }
