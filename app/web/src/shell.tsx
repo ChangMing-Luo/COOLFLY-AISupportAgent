@@ -95,7 +95,16 @@ export type DrawerState =
       /** 记录详情里的可执行动作（如权限矩阵「调整」） */
       action?: { label: string; run: () => Promise<void> };
     }
-  | { kind: 'user' }
+  | {
+      kind: 'user';
+      /** 有 id = 编辑既有账号；无 id = 新增 */
+      id?: string;
+      name?: string;
+      email?: string;
+      department?: string;
+      role?: 'super' | 'ops';
+      reviewGranted?: boolean;
+    }
   | null;
 
 export type ModalState =

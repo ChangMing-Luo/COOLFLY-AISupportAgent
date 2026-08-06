@@ -47,6 +47,13 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
       setMetaType(state.type);
       setMetaParentId(state.parentId);
     }
+    if (state?.kind === 'user') {
+      setUserName(state.name ?? '');
+      setUserEmail(state.email ?? '');
+      setUserDept(state.department ?? '客服运营');
+      setUserRole(state.role ?? 'ops');
+      setUserReview(state.reviewGranted ?? false);
+    }
     if (state?.kind === 'miss') {
       api
         .get<{ misses: MissDto[] }>('/misses')
@@ -170,32 +177,46 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
       });
     }
   } else if (state.kind === 'user') {
-    kicker = '新增用户 · 系统管理';
-    title = '新增用户';
-    meta = '角色决定可见模块与可执行操作';
+    const editing = Boolean(state.id);
+    kicker = `${editing ? '编辑' : '新增'}用户 · 系统管理`;
+    title = editing ? (state.name ?? '编辑用户') : '新增用户';
+    meta = editing ? (state.email ?? '') : '角色决定可见模块与可执行操作';
     actions = [
       { l: '取消', cls: 'btn-secondary', on: onClose },
       {
-        l: '创建账号',
+        l: editing ? '保存' : '创建账号',
         cls: 'btn-primary',
         on: async () => {
           setBusy(true);
           try {
-            const r = await api.post<{ initialPassword: string }>('/admin/users', {
-              name: userName,
-              email: userEmail,
-              department: userDept,
-              role: userRole,
-              reviewGranted: userReview,
-            });
-            app.refreshShell();
-            app.toast(
-              '账号已创建',
-              `初始密码：${r.initialPassword}（仅显示这一次，请转交本人并要求首次登录后修改）。`,
-            );
+            if (editing) {
+              await api.put(`/admin/users/${state.id}`, {
+                name: userName,
+                department: userDept,
+                role: userRole,
+              });
+              if (userRole === 'ops' && userReview !== state.reviewGranted) {
+                await api.post(`/admin/users/${state.id}/review-grant`, { granted: userReview });
+              }
+              app.refreshShell();
+              app.toast('已保存', `${userName} 的资料与角色已更新，权限即时生效。`);
+            } else {
+              const r = await api.post<{ initialPassword: string }>('/admin/users', {
+                name: userName,
+                email: userEmail,
+                department: userDept,
+                role: userRole,
+                reviewGranted: userReview,
+              });
+              app.refreshShell();
+              app.toast(
+                '账号已创建',
+                `初始密码：${r.initialPassword}（仅显示这一次，请转交本人并要求首次登录后修改）。`,
+              );
+            }
             onClose();
           } catch (e) {
-            app.toast('创建失败', e instanceof Error ? e.message : '未知错误');
+            app.toast(editing ? '保存失败' : '创建失败', e instanceof Error ? e.message : '未知错误');
           } finally {
             setBusy(false);
           }
@@ -453,13 +474,14 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
                 <input className="input" value={userName} onChange={(e) => setUserName(e.target.value)} />
               </div>
               <div className="field" style={{ marginTop: 12 }}>
-                <label>邮箱（登录账号）</label>
+                <label>邮箱（登录账号）{state.id ? ' · 创建后不可改' : ''}</label>
                 <input
                   className="input"
                   type="email"
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
                   placeholder="name@coolfly.com"
+                  disabled={Boolean(state.id)}
                 />
               </div>
               <div className="field" style={{ marginTop: 12 }}>
@@ -485,7 +507,9 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
                 </label>
               ) : null}
               <p style={{ fontSize: 12, color: C.muted, marginTop: 14, textWrap: 'pretty' }}>
-                创建后系统生成一次性初始密码并在提示中显示，本人首次登录须修改。账号状态、审核授权与停用均可在列表中调整，全部动作写入审计。
+                {state.id
+                  ? '姓名、部门与角色可随时调整，改动即时生效并写入审计。邮箱是登录标识，创建后不可修改。'
+                  : '创建后系统生成一次性初始密码并在提示中显示，本人首次登录须修改。账号状态、审核授权与停用均可在列表中调整，全部动作写入审计。'}
               </p>
             </>
           ) : null}

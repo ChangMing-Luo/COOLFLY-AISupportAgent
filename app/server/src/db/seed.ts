@@ -23,8 +23,9 @@ interface BootstrapUser {
 }
 
 const USERS: BootstrapUser[] = [
-  { name: '超级管理员', email: 'admin@coolfly.com', role: 'super', department: '知识中台', review: true },
-  { name: '知识运营', email: 'ops@coolfly.com', role: 'ops', department: '客服运营', review: true },
+  // 顶栏是「姓名 / 角色」两行，姓名与角色同名会显示成重复的两行，故用职务化的短名
+  { name: '管理员', email: 'admin@coolfly.com', role: 'super', department: '知识中台', review: true },
+  { name: '运营', email: 'ops@coolfly.com', role: 'ops', department: '客服运营', review: true },
 ];
 
 /** 16 字符强随机密码，仅在创建时输出一次，库里只存 argon2 哈希 */

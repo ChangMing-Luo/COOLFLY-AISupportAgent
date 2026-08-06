@@ -7,6 +7,7 @@ import {
   grantReviewSchema,
   toggleUserSchema,
   updateMatrixSchema,
+  updateUserSchema,
 } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { requirePermission, invalidateMatrixCache, getMatrix } from '../core/rbac.js';
@@ -66,6 +67,23 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     });
     // 初始密码只在本次响应里出现一次，不落库明文
     return { id, initialPassword: initial };
+  });
+
+  app.put('/api/admin/users/:id', guard, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = updateUserSchema.parse(req.body);
+    const { rows } = await query<{ name: string }>(
+      'UPDATE users SET name=$2, department=$3, role=$4 WHERE id=$1 RETURNING name',
+      [id, body.name, body.department, body.role],
+    );
+    if (!rows[0]) throw new DomainError('用户不存在', 404);
+    await writeAudit(actorOf(req.currentUser!), {
+      action: '编辑用户',
+      objectType: 'user',
+      objectCode: id,
+      objectLabel: `${body.name}（${body.role === 'super' ? '超级管理员' : '知识运营'} · ${body.department}）`,
+    });
+    return { ok: true };
   });
 
   app.post('/api/admin/users/:id/toggle', guard, async (req) => {

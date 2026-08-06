@@ -120,6 +120,12 @@ export const createUserSchema = z.object({
   reviewGranted: z.boolean().default(false),
 });
 
+export const updateUserSchema = z.object({
+  name: z.string().trim().min(1, '姓名不能为空'),
+  department: z.string().trim().default(''),
+  role: z.enum(['super', 'ops']),
+});
+
 export const toggleUserSchema = z.object({ enabled: z.boolean() });
 export const grantReviewSchema = z.object({ granted: z.boolean() });
 

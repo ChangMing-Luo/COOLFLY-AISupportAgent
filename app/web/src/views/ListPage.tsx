@@ -796,31 +796,17 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
         c5: u.status,
         acts: [
           {
-            l: u.reviewGranted && u.role === 'ops' ? '收回审核' : u.role === 'ops' ? '授予审核' : '编辑',
-            on: async () => {
-              if (u.role === 'super') {
-                app.openDrawer({
-                  kind: 'info',
-                  title: u.name,
-                  meta: u.uid,
-                  rows: [
-                    { k: '账号', v: u.email },
-                    { k: '部门', v: u.department },
-                    { k: '角色', v: u.roleLabel },
-                    { k: '最近登录', v: u.lastActive },
-                    { k: '状态', v: u.status },
-                  ],
-                  body: '超级管理员默认拥有全部权限，包含系统管理与审核。角色调整需在权限矩阵中进行。',
-                });
-                return;
-              }
-              await api.post(`/admin/users/${u.id}/review-grant`, { granted: !u.reviewGranted });
-              app.refreshShell();
-              app.toast(
-                u.reviewGranted ? '已收回审核权限' : '已授予审核权限',
-                `${u.name} ${u.reviewGranted ? '不再可以审核知识' : '现在可以在审核中心通过或驳回知识'}。`,
-              );
-            },
+            l: '编辑',
+            on: () =>
+              app.openDrawer({
+                kind: 'user',
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                department: u.department,
+                role: u.role,
+                reviewGranted: u.reviewGranted,
+              }),
           },
           {
             l: u.enabled ? '停用' : '启用',
