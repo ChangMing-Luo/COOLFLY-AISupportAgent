@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "kb-server",
-      "runtimeExecutable": "corepack",
-      "runtimeArgs": ["pnpm", "-C", "app", "--filter", "@kb/server", "dev"],
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "app", "--filter", "@kb/server", "dev"],
       "port": 3311
     },
     {
       "name": "kb-web",
-      "runtimeExecutable": "corepack",
-      "runtimeArgs": ["pnpm", "-C", "app", "--filter", "@kb/web", "dev"],
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "app", "--filter", "@kb/web", "dev"],
       "port": 5311
     }
   ]
