@@ -160,6 +160,9 @@ export async function approve(user: SessionUser, code: string, comment: string):
     objectLabel: `${code} ${next}`,
     version: next,
   });
+  // 因反馈发起的修订一旦发布，那些「修复中」的反馈就该结案——闭环⑤的最后一步
+  const { closeFixedFeedbacks } = await import('./feedback.js');
+  await closeFixedFeedbacks(entry.id, code, next);
   await pushEntry(actorOf(user), code);
   return findEntry(code);
 }

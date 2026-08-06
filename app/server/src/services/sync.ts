@@ -185,6 +185,12 @@ export async function syncScene(actor: AuditActor, sceneId: string): Promise<Str
  * 正常路径已在保存分类/场景时同步过，这里只是最后一道保险。
  */
 export async function ensureSectionRef(sceneId: string): Promise<string> {
+  // 懒创建之前先过门禁：这里是「现建 Category/Section」的路径，不看生命周期的话，
+  // 一条残留的 published 条目就能把已下架的分类/场景在 Zendesk 上重新建出来——
+  // 本地写着「已下架」，帮助中心却重新有了目录和文章。
+  const { assertScenePublished } = await import('./gates.js');
+  await assertScenePublished(sceneId);
+
   const { rows } = await query<{
     scene_ref: string | null;
     scene_name_en: string;
@@ -306,7 +312,14 @@ export async function pushEntry(
   }
 }
 
-/** 下线：Zendesk 侧归档（draft=true），不做物理删除 */
+/**
+ * 下线：Zendesk 侧归档（draft=true），不做物理删除。
+ *
+ * **失败必须抛错**。原来 catch 里只写一条同步日志就正常返回，调用方照样把条目置成
+ * offline——限流或断网时就成了「中台显示已下线、文章仍对客可见」，与 08-06 修掉的
+ * 「PUT 返 200 但不生效」是同一个合规后果，只是换成失败被静默吞掉。而且已下线的条目
+ * 无法再走 retrySync（那里要求 status='published'），连补一次归档的通道都没有。
+ */
 export async function archiveEntry(actor: AuditActor, entry: EntryRow): Promise<void> {
   const { rows } = await query<{ zendesk_article_ref: string | null }>(
     'SELECT zendesk_article_ref FROM sync_mappings WHERE entry_id=$1',
@@ -339,6 +352,10 @@ export async function archiveEntry(actor: AuditActor, entry: EntryRow): Promise<
       actorName: actor.name,
       action: 'archive',
     });
+    throw new DomainError(
+      `Zendesk 归档失败，为避免「中台已下线、线上仍可见」，本次下线未生效：${message}`,
+      502,
+    );
   }
 }
 

@@ -1,5 +1,6 @@
 import { TUNABLES, type SessionUser } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
+import { withCodeRetry } from '../core/codes.js';
 import { writeAudit, SYSTEM_ACTOR } from '../core/audit.js';
 import { desensitize, toPlainText } from '../core/content.js';
 import { fmtShort } from '../core/fmt.js';
@@ -330,13 +331,16 @@ async function matchExisting(dims: Dimensions): Promise<string> {
  */
 export async function runCollect(ownerName = '系统', ownerId: string | null = null): Promise<CollectTaskDto | null> {
   const id = newId('tsk');
-  const code = await nextTaskCode();
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-  await query(
-    `INSERT INTO collect_tasks (id, code, title, source, state, owner_id, owner_name, ran_at)
-     VALUES ($1,$2,$3,'Zendesk 客服会话','running',$4,$5,now())`,
-    [id, code, '近 7 日 Zendesk 客诉聚类', ownerId, ownerName],
-  );
+  const code = await withCodeRetry(async () => {
+    const next = await nextTaskCode();
+    await query(
+      `INSERT INTO collect_tasks (id, code, title, source, state, owner_id, owner_name, ran_at)
+       VALUES ($1,$2,$3,'Zendesk 客服会话','running',$4,$5,now())`,
+      [id, next, '近 7 日 Zendesk 客诉聚类', ownerId, ownerName],
+    );
+    return next;
+  });
 
   try {
     const conv = await getZendesk().fetchConversations(since);
@@ -410,7 +414,10 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
       const dupHit = best.score >= TUNABLES.dedupeThreshold * 0.6;
 
       const candId = newId('cnd');
-      await query(
+      // cron（每日 07:00）与运营手点「立即拉取」可能同时在跑，取号必须能重试，
+      // 否则后到的一批会整个落进 catch，任务标 failed、fail_reason 是一句裸的 duplicate key
+      await withCodeRetry(async () =>
+        query(
         `INSERT INTO extract_candidates
            (id, code, task_id, title, answer, summary, category_id, scene_id, category_hint, scene_hint,
             tags, confidence, mention_count, sentiment, dup_entry_id, dup_score,
@@ -438,6 +445,7 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
           trash.hit,
           trash.hit ? new Date() : null,
         ],
+        ),
       );
 
       // 把命中的每一条会话挂到候选下，界面可点开逐条查看。
@@ -614,6 +622,21 @@ export async function adoptPlan(code: string): Promise<AdoptPlan> {
   };
 }
 
+/** 按中文名找已存在的分类/场景（场景需限定在父分类下），用于向导重试时复用而不是再建一个 */
+async function findTaxonomyByName(
+  table: 'categories' | 'scenes',
+  nameZh: string,
+  categoryId: string | null,
+): Promise<{ id: string; status: string } | null> {
+  const { rows } = await query<{ id: string; status: string }>(
+    table === 'scenes'
+      ? `SELECT id, status FROM scenes WHERE name_zh=$1 AND category_id=$2 ORDER BY created_at LIMIT 1`
+      : `SELECT id, status FROM categories WHERE name_zh=$1 ORDER BY created_at LIMIT 1`,
+    table === 'scenes' ? [nameZh.trim(), categoryId] : [nameZh.trim()],
+  );
+  return rows[0] ?? null;
+}
+
 export interface AdoptInput {
   category: { id: string | null; nameZh: string; nameEn: string };
   scene: { id: string | null; nameZh: string; nameEn: string };
@@ -662,20 +685,35 @@ export async function adoptCandidate(user: SessionUser, code: string, input: Ado
     reviews.push({ code: rec.code, dimension: '知识分类', status: rec.statusLabel, note: '沿用已发布分类' });
   } else {
     if (!input.category.nameZh.trim()) throw new DomainError('请确认一级分类。', 400);
-    const r = await upsertCategory(user, null, input.category.nameZh, input.category.nameEn);
-    categoryId = r.item.id;
-    reviews.push({
-      code: r.review.code,
-      dimension: '知识分类',
-      status: r.review.applied ? '通过' : '待审核',
-      note: r.review.message,
-    });
-    if (!r.review.applied) {
-      return {
-        entryCode: '',
-        reviews,
-        message: `新分类「${input.category.nameZh}」已提交审核（${r.review.code}）。分类通过后才能在其下创建场景与知识，请审核通过后回到本页重新采纳。`,
-      };
+    // 同名复用：向导在等审核时会提前返回，用户过后重进会再走一遍这里。
+    // 不查同名的话，每中断-重试一轮就多一行同名分类和一条审核请求，
+    // 全批过审后 Zendesk 上会出现重名 Category。
+    const existing = await findTaxonomyByName('categories', input.category.nameZh, null);
+    if (existing) {
+      categoryId = existing.id;
+      if (existing.status !== 'published') {
+        return {
+          entryCode: '',
+          reviews,
+          message: `分类「${input.category.nameZh}」已提交过审核（${existing.status === 'pending' ? '审核中' : '尚未上架'}），请等它通过后再回到本页采纳，不必重复新建。`,
+        };
+      }
+    } else {
+      const r = await upsertCategory(user, null, input.category.nameZh, input.category.nameEn);
+      categoryId = r.item.id;
+      reviews.push({
+        code: r.review.code,
+        dimension: '知识分类',
+        status: r.review.applied ? '通过' : '待审核',
+        note: r.review.message,
+      });
+      if (!r.review.applied) {
+        return {
+          entryCode: '',
+          reviews,
+          message: `新分类「${input.category.nameZh}」已提交审核（${r.review.code}）。分类通过后才能在其下创建场景与知识，请审核通过后回到本页重新采纳。`,
+        };
+      }
     }
   }
 
@@ -697,20 +735,32 @@ export async function adoptCandidate(user: SessionUser, code: string, input: Ado
     reviews.push({ code: rec.code, dimension: '问题场景', status: rec.statusLabel, note: '沿用已发布场景' });
   } else {
     if (!input.scene.nameZh.trim()) throw new DomainError('请确认二级场景。', 400);
-    const r = await upsertScene(user, null, input.scene.nameZh, input.scene.nameEn, categoryId!);
-    sceneId = r.item.id;
-    reviews.push({
-      code: r.review.code,
-      dimension: '问题场景',
-      status: r.review.applied ? '通过' : '待审核',
-      note: r.review.message,
-    });
-    if (!r.review.applied) {
-      return {
-        entryCode: '',
-        reviews,
-        message: `新场景「${input.scene.nameZh}」已提交审核（${r.review.code}）。场景通过后才能在其下创建知识，请审核通过后回到本页重新采纳。`,
-      };
+    const existing = await findTaxonomyByName('scenes', input.scene.nameZh, categoryId!);
+    if (existing) {
+      sceneId = existing.id;
+      if (existing.status !== 'published') {
+        return {
+          entryCode: '',
+          reviews,
+          message: `场景「${input.scene.nameZh}」已提交过审核（${existing.status === 'pending' ? '审核中' : '尚未上架'}），请等它通过后再回到本页采纳，不必重复新建。`,
+        };
+      }
+    } else {
+      const r = await upsertScene(user, null, input.scene.nameZh, input.scene.nameEn, categoryId!);
+      sceneId = r.item.id;
+      reviews.push({
+        code: r.review.code,
+        dimension: '问题场景',
+        status: r.review.applied ? '通过' : '待审核',
+        note: r.review.message,
+      });
+      if (!r.review.applied) {
+        return {
+          entryCode: '',
+          reviews,
+          message: `新场景「${input.scene.nameZh}」已提交审核（${r.review.code}）。场景通过后才能在其下创建知识，请审核通过后回到本页重新采纳。`,
+        };
+      }
     }
   }
 

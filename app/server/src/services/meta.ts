@@ -34,7 +34,7 @@ export const META_STATUS_LABEL: Record<string, string> = {
 /** 待审请求索引：一次查完，避免列表里 N+1 */
 async function pendingIndex(objectType: 'category' | 'scene'): Promise<Map<string, string>> {
   const { rows } = await query<{ object_id: string; code: string }>(
-    `SELECT object_id, code FROM review_requests WHERE object_type=$1 AND status='pending'`,
+    `SELECT object_id, code FROM review_requests WHERE object_type=$1 AND status IN ('pending','processing')`,
     [objectType],
   );
   return new Map(rows.map((r) => [r.object_id, r.code]));

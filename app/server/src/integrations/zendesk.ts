@@ -471,28 +471,7 @@ class LiveZendesk implements ZendeskClient {
         400,
       );
     }
-    let articleId: string;
-    let updatedAt: string;
-    if (input.articleRef) {
-      // 更新路径：文章的标题与正文存在 translation 里，对象端点只改元数据
-      await this.upsertTranslation(input.articleRef, this.locale, input.title, input.publicHtml);
-      const meta = await this.call<{ article: { id: number; updated_at: string } }>(
-        `/help_center/articles/${input.articleRef}.json`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({
-            article: {
-              section_id: Number(input.sectionRef),
-              label_names: input.labels,
-              user_segment_id: input.internalOnly ? segmentId : null,
-              draft: false,
-            },
-          }),
-        },
-      );
-      articleId = String(meta.article.id);
-      updatedAt = meta.article.updated_at;
-    } else {
+    const create = async (): Promise<{ id: string; updatedAt: string }> => {
       const payload = {
         article: {
           title: input.title,
@@ -506,8 +485,44 @@ class LiveZendesk implements ZendeskClient {
         `/help_center/sections/${input.sectionRef}/articles.json`,
         { method: 'POST', body: JSON.stringify(payload) },
       );
-      articleId = String(data.article.id);
-      updatedAt = data.article.updated_at;
+      return { id: String(data.article.id), updatedAt: data.article.updated_at };
+    };
+
+    let articleId: string;
+    let updatedAt: string;
+    if (input.articleRef) {
+      try {
+        // 更新路径：文章的标题与正文存在 translation 里，对象端点只改元数据
+        await this.upsertTranslation(input.articleRef, this.locale, input.title, input.publicHtml);
+        const meta = await this.call<{ article: { id: number; updated_at: string } }>(
+          `/help_center/articles/${input.articleRef}.json`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              article: {
+                section_id: Number(input.sectionRef),
+                label_names: input.labels,
+                user_segment_id: input.internalOnly ? segmentId : null,
+                draft: false,
+              },
+            }),
+          },
+        );
+        articleId = String(meta.article.id);
+        updatedAt = meta.article.updated_at;
+      } catch (err) {
+        // 文章在 Zendesk 侧已不存在（分类/场景被删会连带硬删其下文章）——
+        // 拿着这个死 id 重试，PUT 与 POST translations 都会 404，同步就永久卡在失败。
+        // 此时唯一正确的动作是重新建一篇，并让调用方把新 id 写回映射。
+        if (!(err instanceof ZendeskApiError) || err.status !== 404) throw err;
+        const created = await create();
+        articleId = created.id;
+        updatedAt = created.updatedAt;
+      }
+    } else {
+      const created = await create();
+      articleId = created.id;
+      updatedAt = created.updatedAt;
     }
     if (input.enBodyHtml) {
       await this.upsertTranslation(articleId, EN_LOCALE, input.enTitle ?? input.title, input.enBodyHtml);

@@ -1,4 +1,11 @@
-import { bumpVersion, MISS_STATE_LABELS, FEEDBACK_STATE_LABELS, type SessionUser } from '@kb/contracts';
+import {
+  bumpVersion,
+  canTransition,
+  ENTRY_STATUS_META,
+  MISS_STATE_LABELS,
+  FEEDBACK_STATE_LABELS,
+  type SessionUser,
+} from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { writeAudit, SYSTEM_ACTOR } from '../core/audit.js';
 import { desensitize, toPlainText } from '../core/content.js';
@@ -176,6 +183,27 @@ function hashCode(s: string): number {
   return h;
 }
 
+/**
+ * 修复发布后关闭该条目上「修复中」的反馈——这是反馈闭环的最后一步。
+ * 原来只有「忽略」一条路能写 closed，且它要求 state='open'，于是走过「去修复」的反馈
+ * 永远停在修复中：既关不掉、也点不了忽略（会报 404），运营无法区分真在修与早修完。
+ */
+export async function closeFixedFeedbacks(entryId: string, entryCode: string, version: string): Promise<number> {
+  const { rowCount } = await query(
+    `UPDATE feedbacks SET state='closed', handled_at=now() WHERE entry_id=$1 AND state='fixing'`,
+    [entryId],
+  );
+  if (rowCount) {
+    await writeAudit(SYSTEM_ACTOR, {
+      action: '反馈闭环',
+      objectType: 'feedback',
+      objectCode: entryCode,
+      objectLabel: `${entryCode} ${version} 发布后关闭 ${rowCount} 条修复中的反馈`,
+    });
+  }
+  return rowCount ?? 0;
+}
+
 export async function ignoreFeedback(user: SessionUser, code: string): Promise<void> {
   const { rows } = await query<{ entry_code: string }>(
     `UPDATE feedbacks SET state='closed', handled_by=$2, handled_at=now()
@@ -199,7 +227,26 @@ export async function fixFeedback(user: SessionUser, code: string): Promise<Entr
   );
   const fb = rows[0];
   if (!fb) throw new DomainError('反馈不存在。', 404);
+  // 幂等：已在修复或已关闭的反馈不能再点一次。否则每点一次都 bumpVersion，
+  // 版本号会在没有任何实际修订的情况下空跳（v3.2 → v3.3 → v3.4），note 也被反复覆盖。
+  if (fb.state !== 'open') {
+    throw new DomainError(
+      fb.state === 'fixing' ? '该反馈已在修复中，请直接到编辑器继续修订。' : '该反馈已关闭。',
+      409,
+    );
+  }
   const entry = await findEntry(fb.entry_code);
+  // 状态守卫：pending → fixing / offline → fixing 都是非法流转。
+  // 前者会把条目从审核队列里抽走、留下一条永远批不掉的审核请求；
+  // 后者能让已归档文章绕过「恢复→草稿→重走流程」直接被重新发布上线。
+  if (!canTransition(entry.status, 'fixing')) {
+    throw new DomainError(
+      `知识 ${entry.code} 当前为「${ENTRY_STATUS_META[entry.status].label}」，不能直接转修复。${
+        entry.status === 'pending' ? '请先等待审核结论。' : '请先在已下线列表中恢复为草稿。'
+      }`,
+      409,
+    );
+  }
   const next = entry.status === 'published' ? bumpVersion(entry.version, false) : entry.version;
   // 置「修复中」而不是「草稿」——六态里 fixing 的定义就是「正在根据反馈修订」，
   // 写成 draft 会让这个状态永远不可达，界面上也分不清「自发修订」与「被投诉后修复」。
@@ -308,12 +355,24 @@ export async function refreshMisses(): Promise<number> {
 }
 
 export async function createDraftFromMiss(user: SessionUser, code: string): Promise<EntryRow> {
-  const { rows } = await query<{ id: string; question: string; scene_id: string | null; state: string }>(
-    'SELECT id, question, scene_id, state FROM misses WHERE code=$1',
-    [code],
-  );
+  const { rows } = await query<{
+    id: string;
+    question: string;
+    scene_id: string | null;
+    state: string;
+    entry_id: string | null;
+  }>('SELECT id, question, scene_id, state, entry_id FROM misses WHERE code=$1', [code]);
   const m = rows[0];
   if (!m) throw new DomainError('未命中问题不存在。', 404);
+  // 已排期且草稿还在 → 不重复建（原来可重复点，misses.entry_id 被最后一次覆盖，先建的条目失去回链）。
+  // 已排期但草稿已被删（外键 ON DELETE SET NULL 把 entry_id 置空）→ 允许重建，
+  // 否则这条知识缺口会永久卡在「已排期」，既不出现在待办、也无法再建草稿。
+  if (m.state === 'planned' && m.entry_id) {
+    const { rows: linked } = await query<{ code: string }>('SELECT code FROM entries WHERE id=$1', [m.entry_id]);
+    if (linked[0]) {
+      throw new DomainError(`该未命中问题已建过条目 ${linked[0].code}，请直接编辑它。`, 409);
+    }
+  }
   const { rows: sc } = m.scene_id
     ? await query<{ category_id: string }>('SELECT category_id FROM scenes WHERE id=$1', [m.scene_id])
     : { rows: [] as Array<{ category_id: string }> };

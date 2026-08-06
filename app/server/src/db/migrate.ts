@@ -61,6 +61,16 @@ async function main(): Promise<void> {
     UPDATE scenes     SET status='offline'   WHERE status <> 'offline' AND NOT active;
   `);
 
+  // 审核请求新增 processing 态（审核人原子认领，防 approve/reject 并发裁决分叉）。
+  // CHECK 约束在已存在的表上不会被 CREATE TABLE IF NOT EXISTS 更新，须显式重建。
+  await pool.query(`
+    ALTER TABLE review_requests DROP CONSTRAINT IF EXISTS review_requests_status_check;
+    ALTER TABLE review_requests ADD CONSTRAINT review_requests_status_check
+      CHECK (status IN ('pending','processing','approved','rejected'));
+  `);
+  // 升级前若有请求卡在 processing（进程被杀），放回待审由人重新处理
+  await pool.query(`UPDATE review_requests SET status='pending' WHERE status='processing'`);
+
   // 审计日志 append-only：数据库层拒绝 UPDATE / DELETE（RULE-02）
   await pool.query(`
     CREATE OR REPLACE RULE audit_logs_no_update AS

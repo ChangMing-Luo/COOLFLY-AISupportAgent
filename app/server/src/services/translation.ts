@@ -3,7 +3,7 @@ import { query } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
 import { toHtml, toParagraphs } from '../core/content.js';
 import { getLlm } from '../integrations/llm.js';
-import { actorOf, findEntry, type EntryRow } from './entries.js';
+import { DomainError, actorOf, findEntry, type EntryRow } from './entries.js';
 
 export interface TranslateOutcome {
   entry: EntryRow;
@@ -11,12 +11,24 @@ export interface TranslateOutcome {
   mode: string;
 }
 
+/** 可以改英文正文的状态——与 saveEntry 的口径一致 */
+const EDITABLE: ReadonlySet<string> = new Set(['draft', 'rejected', 'fixing']);
+
 /**
  * 中文 → 英文：标题与正文同批送模型（标题走 `__title__` 段）。
  * 失败时保留上一次英文版本，不把半成品写进库。
  */
 export async function translateEntry(user: SessionUser, code: string): Promise<TranslateOutcome> {
   const entry = await findEntry(code);
+  // 状态守卫与 saveEntry 对齐。少了它，英文正文（推 Zendesk 的那一份）就有一条绕审通道：
+  // 对已发布条目重翻一次覆盖已审英文，再点「重新同步」即可把未经审核的内容推上线；
+  // 对待审条目重翻则让审核人看到的与最终发布的不是同一份内容。
+  if (!EDITABLE.has(entry.status)) {
+    throw new DomainError(
+      `当前状态「${entry.status === 'pending' ? '待审核' : entry.status === 'published' ? '已发布' : '已下线'}」不可修改英文版本，请先「创建修订」再翻译。`,
+      409,
+    );
+  }
   const paragraphs = toParagraphs(entry.body_zh);
   const llm = getLlm();
   const segments = [

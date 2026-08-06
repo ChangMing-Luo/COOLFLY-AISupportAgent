@@ -34,6 +34,8 @@ function stubFetch(
     sectionArticleCount?: number;
     categorySectionCount?: number;
     sourceLocale?: string;
+    /** 该文章在 Zendesk 侧已不存在（被连带删除）：命中它的请求一律 404 */
+    deadArticleRef?: string;
   } = {},
 ) {
   const calls: Call[] = [];
@@ -56,6 +58,9 @@ function stubFetch(
     });
     if (url.endsWith('/oauth/tokens')) {
       return respond(200, { access_token: opts.token ?? 'tok_1', expires_in: opts.expiresIn ?? 1800 });
+    }
+    if (opts.deadArticleRef && url.includes(`/articles/${opts.deadArticleRef}`)) {
+      return respond(404, { error: 'RecordNotFound' });
     }
     if (method === 'DELETE') return respond(204, undefined);
     // 结构端点
@@ -307,6 +312,18 @@ describe('locale 配置', () => {
     expect(
       calls.some((c) => c.method === 'PUT' && c.url.includes('/articles/54105583966355/translations/zh-cn.json')),
     ).toBe(true);
+  });
+
+  it('articleRef 指向的文章已被删除时落回创建，不让同步卡在 404 死循环', async () => {
+    // 分类/场景下架会让 Zendesk 连带硬删其下文章，本地映射却还留着那个 id。
+    // 拿死 id 走更新路径时 PUT 与 POST translations 都是 404，若不落回创建，
+    // 这条知识的同步会永远停在失败，且没有任何入口能清掉这个映射。
+    const calls = stubFetch({ deadArticleRef: '54105583966355' });
+    const { getZendesk } = await loadZendesk();
+    const article = await getZendesk().upsertArticle({ ...PUSH, articleRef: '54105583966355' });
+    expect(calls.some((c) => c.method === 'POST' && /\/sections\/[^/]+\/articles\.json$/.test(c.url))).toBe(true);
+    // 返回的是新文章 id，调用方据此改写映射，死 id 不再被沿用
+    expect(article.id).toBe('907');
   });
 
   it('ZENDESK_LOCALE 生效', async () => {

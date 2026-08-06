@@ -8,6 +8,7 @@ import {
   type SessionUser,
 } from '@kb/contracts';
 import { query, newId, withTransaction } from '../db/pool.js';
+import { withCodeRetry } from '../core/codes.js';
 import { writeAudit, type AuditActor } from '../core/audit.js';
 import { toHtml, toParagraphs, toPlainText } from '../core/content.js';
 import { fmtShort, fmtFull, thousands } from '../core/fmt.js';
@@ -218,26 +219,30 @@ export interface CreateArgs {
 }
 
 export async function createEntry(user: SessionUser, args: CreateArgs): Promise<EntryRow> {
-  const code = await nextEntryCode();
   const id = newId('ent');
-  await query(
-    `INSERT INTO entries (id, code, title_zh, body_zh, category_id, scene_id, status, version,
-                          owner_id, owner_name, source, confidence, quality)
-     VALUES ($1,$2,$3,$4,$5,$6,'draft','v0.1',$7,$8,$9,$10,$11)`,
-    [
-      id,
-      code,
-      args.titleZh,
-      toHtml(args.bodyZh ?? ''),
-      args.categoryId ?? null,
-      args.sceneId ?? null,
-      user.id,
-      user.name,
-      args.source ?? '人工撰写',
-      args.confidence ?? 0,
-      args.quality ?? 20,
-    ],
-  );
+  // 取号与插入一起重试：并发新建会读到同一个 MAX 而撞 code 唯一键
+  const code = await withCodeRetry(async () => {
+    const next = await nextEntryCode();
+    await query(
+      `INSERT INTO entries (id, code, title_zh, body_zh, category_id, scene_id, status, version,
+                            owner_id, owner_name, source, confidence, quality)
+       VALUES ($1,$2,$3,$4,$5,$6,'draft','v0.1',$7,$8,$9,$10,$11)`,
+      [
+        id,
+        next,
+        args.titleZh,
+        toHtml(args.bodyZh ?? ''),
+        args.categoryId ?? null,
+        args.sceneId ?? null,
+        user.id,
+        user.name,
+        args.source ?? '人工撰写',
+        args.confidence ?? 0,
+        args.quality ?? 20,
+      ],
+    );
+    return next;
+  });
   await query('INSERT INTO entry_metrics (entry_id) VALUES ($1)', [id]);
   await syncTags(id, args.tags ?? [], user.name);
   await query(
@@ -329,6 +334,11 @@ export async function submitEntry(user: SessionUser, code: string): Promise<{ en
   if (!canTransition(r.status, 'pending')) {
     throw new DomainError(`当前状态「${ENTRY_STATUS_META[r.status].label}」不可提交审核。`, 409);
   }
+  // published → pending 这条边只为回滚而开（SPEC §2.3）。直接提交一条已发布知识会
+  // 走普通发布分支：白涨一个大版本、把该版本累计的命中与采纳率清零、给审核人一份零 diff。
+  if (r.status === 'published' && r.pending_kind !== 'rollback') {
+    throw new DomainError('已发布的知识不能直接提交审核，请先「创建修订」生成新版本草稿。', 409);
+  }
   // 门禁：场景与其所属分类都必须已发布，否则 Zendesk 侧无处可挂（用户要求 4a）
   const { assertEntryTaxonomyReady } = await import('./gates.js');
   await assertEntryTaxonomyReady(r);
@@ -392,6 +402,9 @@ export async function batchDeleteDrafts(user: SessionUser, codes: string[]): Pro
         const { archiveEntry } = await import('./sync.js');
         await archiveEntry(actorOf(user), r);
       }
+      // 由未命中问题派生的草稿被删掉后，把该未命中退回「待处理」——
+      // 否则外键把 entry_id 置空、状态却还停在「已排期」，这条知识缺口就静默丢失了
+      await query(`UPDATE misses SET state='open', entry_id=NULL, updated_at=now() WHERE entry_id=$1`, [r.id]);
       await query('DELETE FROM entries WHERE code=$1', [code]);
       await writeAudit(actorOf(user), {
         action: '删除草稿',
@@ -469,11 +482,26 @@ export async function restoreEntry(user: SessionUser, code: string): Promise<Ent
 export async function submitRollback(user: SessionUser, code: string, version: string): Promise<EntryRow> {
   const r = await findEntry(code);
   if (r.status !== 'published') throw new DomainError('只有已发布的知识可以回滚。', 409);
+  if (version === r.version) throw new DomainError(`${version} 就是当前版本，无需回滚。`, 409);
+  // 只能回滚到带内容快照的版本。`创建` 那条 v0.1 是空快照，回滚它会走
+  // COALESCE(NULLIF(...)) 的空值分支：正文一个字不动，版本号却退回 v0.1——
+  // 审核记录写着「回滚生效」而实际什么都没变，之后 bumpVersion 还会与历史版本号重号。
   const { rows } = await query<{ id: string }>(
-    'SELECT id FROM entry_versions WHERE entry_id=$1 AND version=$2 LIMIT 1',
+    `SELECT id FROM entry_versions WHERE entry_id=$1 AND version=$2 AND body_zh <> '' LIMIT 1`,
     [r.id, version],
   );
-  if (!rows[0]) throw new DomainError(`版本不存在：${version}`, 404);
+  if (!rows[0]) {
+    const { rows: exists } = await query<{ act: string }>(
+      'SELECT act FROM entry_versions WHERE entry_id=$1 AND version=$2 LIMIT 1',
+      [r.id, version],
+    );
+    throw new DomainError(
+      exists[0]
+        ? `版本 ${version}（${exists[0].act}）没有内容快照，无法回滚到它。`
+        : `版本不存在：${version}`,
+      exists[0] ? 409 : 404,
+    );
+  }
   await query(
     `UPDATE entries SET status='pending', pending_kind='rollback', pending_version=$2,
             submitter_id=$3, submitted_at=now(), owner_id=$3, owner_name=$4, updated_at=now()

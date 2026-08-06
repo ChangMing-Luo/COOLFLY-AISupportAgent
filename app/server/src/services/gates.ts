@@ -65,6 +65,17 @@ export async function assertEntryTaxonomyReady(entry: {
 }): Promise<void> {
   await assertScenePublished(entry.scene_id);
   if (entry.category_id) await assertCategoryPublished(entry.category_id);
+  // 场景必须真的挂在这个分类下。两者只是分别校验「已发布」的话，
+  // 条目可以标着分类 A、文章却挂进 B 的 Section——本地与 Zendesk 变成两本账，
+  // 分类下架的影响面统计也会跟着算错。
+  const s = entry.scene_id ? await loadScene(entry.scene_id) : null;
+  if (s && entry.category_id && s.category_id !== entry.category_id) {
+    const c = await loadCategory(entry.category_id);
+    throw new DomainError(
+      `问题场景「${s.name}」并不属于所选分类「${c?.name ?? entry.category_id}」，请在编辑器里重新选择归属。`,
+      409,
+    );
+  }
 }
 
 /** 非抛错版本，用于列表页给出提示而不阻断渲染 */

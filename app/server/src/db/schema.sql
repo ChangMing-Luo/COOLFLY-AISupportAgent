@@ -107,7 +107,9 @@ CREATE TABLE IF NOT EXISTS review_requests (
   -- 待生效内容与变更前快照，审核页据此出 diff
   payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
   before_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
-  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  -- processing = 已被某个审核人原子认领、正在执行生效动作（含数秒级的 Zendesk 调用）。
+  -- 没有它，approve 与 reject 并发时会各自通过前置检查，终态出现「记录=驳回、对象已生效」。
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','approved','rejected')),
   -- 自动过审：仍是一条完整审核记录，只是由权限直接批准
   auto_approved BOOLEAN NOT NULL DEFAULT FALSE,
   submitter_id  TEXT REFERENCES users(id),

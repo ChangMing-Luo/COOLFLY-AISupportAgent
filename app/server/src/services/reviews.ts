@@ -1,5 +1,6 @@
 import type { SessionUser } from '@kb/contracts';
 import { getMatrix, hasPermission } from '../core/rbac.js';
+import { withCodeRetry } from '../core/codes.js';
 import { query, newId } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
 import { fmtShort, fmtFull } from '../core/fmt.js';
@@ -37,7 +38,7 @@ export interface ReviewRequestDto {
   objectLabel: string;
   action: ReviewAction;
   actionLabel: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
   statusLabel: string;
   autoApproved: boolean;
   submitter: string;
@@ -64,7 +65,7 @@ interface Row {
   action: ReviewAction;
   payload: Record<string, unknown>;
   before_snapshot: Record<string, unknown>;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'processing' | 'approved' | 'rejected';
   auto_approved: boolean;
   submitter_name: string;
   submitted_at: Date;
@@ -73,7 +74,12 @@ interface Row {
   comment: string;
 }
 
-const STATUS_LABEL = { pending: '待审核', approved: '通过', rejected: '驳回' } as const;
+const STATUS_LABEL = {
+  pending: '待审核',
+  processing: '处理中',
+  approved: '通过',
+  rejected: '驳回',
+} as const;
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
@@ -154,27 +160,31 @@ export interface SubmitResult {
 export async function submitRequest(user: SessionUser, args: SubmitArgs): Promise<SubmitResult> {
   const auto = await canAutoApprove(user);
   const id = newId('rr');
-  const code = await nextCode();
-  await query(
-    `INSERT INTO review_requests
-       (id, code, object_type, object_id, object_code, object_label, action, payload, before_snapshot,
-        status, auto_approved, submitter_id, submitter_name)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12)`,
-    [
-      id,
-      code,
-      args.objectType,
-      args.objectId,
-      args.objectCode,
-      args.objectLabel,
-      args.action,
-      JSON.stringify(args.payload),
-      JSON.stringify(args.before ?? {}),
-      auto,
-      user.id,
-      user.name,
-    ],
-  );
+  // 取号与插入一起重试：撞号失败会让「条目已 pending 但队列里没有」的孤儿出现
+  const code = await withCodeRetry(async () => {
+    const next = await nextCode();
+    await query(
+      `INSERT INTO review_requests
+         (id, code, object_type, object_id, object_code, object_label, action, payload, before_snapshot,
+          status, auto_approved, submitter_id, submitter_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12)`,
+      [
+        id,
+        next,
+        args.objectType,
+        args.objectId,
+        args.objectCode,
+        args.objectLabel,
+        args.action,
+        JSON.stringify(args.payload),
+        JSON.stringify(args.before ?? {}),
+        auto,
+        user.id,
+        user.name,
+      ],
+    );
+    return next;
+  });
   await writeAudit(actorOf(user), {
     action: `提交审核 · ${OBJECT_LABEL[args.objectType]}${ACTION_LABEL[args.action]}`,
     objectType: args.objectType,
@@ -208,25 +218,28 @@ export async function recordReuse(
   args: Omit<SubmitArgs, 'action'> & { note: string },
 ): Promise<ReviewRequestDto> {
   const id = newId('rr');
-  const code = await nextCode();
-  await query(
-    `INSERT INTO review_requests
-       (id, code, object_type, object_id, object_code, object_label, action, payload, before_snapshot,
-        status, auto_approved, submitter_id, submitter_name, reviewer_id, reviewer_name, reviewed_at, comment)
-     VALUES ($1,$2,$3,$4,$5,$6,'update',$7,'{}'::jsonb,'approved',FALSE,$8,$9,$8,$9,now(),$10)`,
-    [
-      id,
-      code,
-      args.objectType,
-      args.objectId,
-      args.objectCode,
-      args.objectLabel,
-      JSON.stringify({ ...args.payload, noop: true }),
-      user.id,
-      user.name,
-      args.note,
-    ],
-  );
+  const code = await withCodeRetry(async () => {
+    const next = await nextCode();
+    await query(
+      `INSERT INTO review_requests
+         (id, code, object_type, object_id, object_code, object_label, action, payload, before_snapshot,
+          status, auto_approved, submitter_id, submitter_name, reviewer_id, reviewer_name, reviewed_at, comment)
+       VALUES ($1,$2,$3,$4,$5,$6,'update',$7,'{}'::jsonb,'approved',FALSE,$8,$9,$8,$9,now(),$10)`,
+      [
+        id,
+        next,
+        args.objectType,
+        args.objectId,
+        args.objectCode,
+        args.objectLabel,
+        JSON.stringify({ ...args.payload, noop: true }),
+        user.id,
+        user.name,
+        args.note,
+      ],
+    );
+    return next;
+  });
   return findRequest(code);
 }
 
@@ -238,35 +251,37 @@ export async function findRequest(code: string): Promise<ReviewRequestDto> {
   return toDto(rows[0]);
 }
 
+/** 待审队列。processing（已被认领、正在生效）也算未结案，否则它会从队列里凭空消失 */
 export async function listPending(): Promise<ReviewRequestDto[]> {
   const { rows } = await query<Row>(
-    `SELECT * FROM review_requests WHERE status='pending' ORDER BY submitted_at`,
+    `SELECT * FROM review_requests WHERE status IN ('pending','processing') ORDER BY submitted_at`,
   );
   return rows.map(toDto);
 }
 
 export async function listRecords(limit = 200): Promise<ReviewRequestDto[]> {
   const { rows } = await query<Row>(
-    `SELECT * FROM review_requests WHERE status <> 'pending' ORDER BY reviewed_at DESC NULLS LAST, submitted_at DESC LIMIT $1`,
+    `SELECT * FROM review_requests WHERE status IN ('approved','rejected')
+     ORDER BY reviewed_at DESC NULLS LAST, submitted_at DESC LIMIT $1`,
     [limit],
   );
   return rows.map(toDto);
 }
 
-/** 某个对象上尚未处理的请求（用于界面显示「审核中，不可重复提交」） */
+/** 某个对象上尚未结案的请求（用于界面显示「审核中，不可重复提交」） */
 export async function openRequestFor(
   objectType: ReviewObjectType,
   objectId: string,
 ): Promise<ReviewRequestDto | null> {
   const { rows } = await query<Row>(
-    `SELECT * FROM review_requests WHERE object_type=$1 AND object_id=$2 AND status='pending'
+    `SELECT * FROM review_requests WHERE object_type=$1 AND object_id=$2 AND status IN ('pending','processing')
      ORDER BY submitted_at DESC LIMIT 1`,
     [objectType, objectId],
   );
   return rows[0] ? toDto(rows[0]) : null;
 }
 
-/** 关掉某对象的待审请求（知识正文走原有 approve/reject 时回写） */
+/** 关掉某对象未结案的请求（知识正文走原有 approve/reject 时回写） */
 export async function closeOpenRequests(
   objectType: ReviewObjectType,
   objectId: string,
@@ -276,7 +291,7 @@ export async function closeOpenRequests(
 ): Promise<void> {
   await query(
     `UPDATE review_requests SET status=$3, reviewer_id=$4, reviewer_name=$5, reviewed_at=now(), comment=$6
-     WHERE object_type=$1 AND object_id=$2 AND status='pending'`,
+     WHERE object_type=$1 AND object_id=$2 AND status IN ('pending','processing')`,
     [objectType, objectId, status, user.id, user.name, comment],
   );
 }
@@ -294,40 +309,83 @@ export async function decide(
   verdict: 'approved' | 'rejected',
   comment: string,
 ): Promise<DecideResult> {
-  const { rows } = await query<Row>('SELECT * FROM review_requests WHERE code=$1', [code]);
-  const r = rows[0];
-  if (!r) throw new DomainError(`审核记录不存在：${code}`, 404);
-  if (r.status !== 'pending') throw new DomainError(`该请求已${STATUS_LABEL[r.status]}，不可重复处理。`, 409);
+  // 抢占式认领：把 pending 原子地翻成 processing，谁翻成功谁才有权继续。
+  // 原来是先 SELECT 判 pending、再慢悠悠调 Zendesk、最后才 close，中间几秒的窗口里
+  // 另一个审核人可以对同一条做出相反裁决——终态出现「记录=驳回、对象已上架且已建 Category」。
+  const { rows: claimed } = await query<Row>(
+    `UPDATE review_requests SET status='processing', reviewer_id=$2, reviewer_name=$3
+     WHERE code=$1 AND status='pending' RETURNING *`,
+    [code, user.id, user.name],
+  );
+  const r = claimed[0];
+  if (!r) {
+    const { rows: cur } = await query<Row>('SELECT * FROM review_requests WHERE code=$1', [code]);
+    if (!cur[0]) throw new DomainError(`审核记录不存在：${code}`, 404);
+    throw new DomainError(
+      cur[0].status === 'processing'
+        ? '该请求正在被其他审核人处理，请稍后刷新查看结论。'
+        : `该请求已${STATUS_LABEL[cur[0].status as keyof typeof STATUS_LABEL] ?? cur[0].status}，不可重复处理。`,
+      409,
+    );
+  }
 
-  if (verdict === 'rejected') {
-    await close(r, user, 'rejected', comment);
-    if (r.object_type === 'entry') {
-      const { reject } = await import('./review.js');
-      await reject(user, r.object_code, comment || '审核驳回');
-    } else {
-      await revertPending(r);
+  try {
+    if (verdict === 'rejected') {
+      await close(r, user, 'rejected', comment);
+      if (r.object_type === 'entry') {
+        const { reject } = await import('./review.js');
+        await reject(user, r.object_code, comment || '审核驳回');
+      } else {
+        await revertPending(r);
+      }
+      return { request: await findRequest(code) };
     }
-    return { request: await findRequest(code) };
-  }
 
-  // 知识正文沿用原有六态机的发布路径（版本、快照、指标、Zendesk 一并处理）
-  if (r.object_type === 'entry') {
-    const { approve } = await import('./review.js');
-    await approve(user, r.object_code, comment);
-    return { request: await findRequest(code) };
-  }
+    // 知识正文沿用原有六态机的发布路径（版本、快照、指标、Zendesk 一并处理）
+    if (r.object_type === 'entry') {
+      const { approve } = await import('./review.js');
+      await approve(user, r.object_code, comment);
+      await close(r, user, 'approved', comment);
+      return { request: await findRequest(code) };
+    }
 
-  const sync = await applyTaxonomy(r, user);
-  await close(r, user, 'approved', comment);
-  await writeAudit(actorOf(user), {
-    action: `审核通过 · ${OBJECT_LABEL[r.object_type]}${ACTION_LABEL[r.action]}`,
-    objectType: r.object_type,
-    objectCode: r.object_code,
-    objectLabel: `${r.code} ${r.object_label}`,
-    result: sync.ok ? '成功' : '失败',
-    detail: sync.ok ? null : sync.message,
-  });
-  return { request: await findRequest(code), sync };
+    const sync = await applyTaxonomy(r, user);
+    // 生效失败就不能标「通过」——否则记录说通过、Zendesk 没动，且无处重试。
+    // 退回 pending，审核人修好外部依赖后原样再点一次。
+    if (!sync.ok) {
+      await releaseClaim(r);
+      await writeAudit(actorOf(user), {
+        action: `审核生效失败 · ${OBJECT_LABEL[r.object_type]}${ACTION_LABEL[r.action]}`,
+        objectType: r.object_type,
+        objectCode: r.object_code,
+        objectLabel: `${r.code} ${r.object_label}`,
+        result: '失败',
+        detail: sync.message,
+      });
+      throw new DomainError(`生效失败，请求已退回待审可重试：${sync.message}`, 502);
+    }
+    await close(r, user, 'approved', comment);
+    await writeAudit(actorOf(user), {
+      action: `审核通过 · ${OBJECT_LABEL[r.object_type]}${ACTION_LABEL[r.action]}`,
+      objectType: r.object_type,
+      objectCode: r.object_code,
+      objectLabel: `${r.code} ${r.object_label}`,
+    });
+    return { request: await findRequest(code), sync };
+  } catch (err) {
+    // 认领后中途抛错（门禁 409、条目状态已变、外部异常）必须把 processing 放回去，
+    // 否则请求会永久卡在中间态，队列里既看不见、也没人能再处理
+    await releaseClaim(r);
+    throw err;
+  }
+}
+
+/** 把认领中的请求放回待审（仅当它还停在 processing） */
+async function releaseClaim(r: Row): Promise<void> {
+  await query(
+    `UPDATE review_requests SET status='pending', reviewer_id=NULL, reviewer_name='' WHERE id=$1 AND status='processing'`,
+    [r.id],
+  );
 }
 
 async function close(
@@ -338,7 +396,7 @@ async function close(
 ): Promise<void> {
   await query(
     `UPDATE review_requests SET status=$2, reviewer_id=$3, reviewer_name=$4, reviewed_at=now(), comment=$5
-     WHERE id=$1 AND status='pending'`,
+     WHERE id=$1 AND status='processing'`,
     [r.id, status, user.id, user.name, comment],
   );
 }
@@ -367,11 +425,17 @@ async function applyTaxonomy(r: Row, user: SessionUser): Promise<{ ok: boolean; 
       [r.object_id, str(p.nameZh), str(p.nameEn)],
     );
     const s = await syncCategory(actorOf(user), r.object_id);
-    return { ok: s.ok, message: s.message };
+    const restored = r.action === 'publish' ? await restoreCascadedScenes(r, user) : 0;
+    return {
+      ok: s.ok,
+      message: restored ? `${s.message}；同时恢复了随其下架的 ${restored} 个场景` : s.message,
+    };
   }
 
   if (r.action === 'unpublish') return unpublishScene(r, user);
-  const categoryId = str(p.categoryId);
+  // 父分类必须复查：门禁只在**提交时**跑过，提交到人工审批之间父分类可能已被下架。
+  // publish 动作的 payload 不带 categoryId，得从库里取，否则这道复查会被整体跳过。
+  const categoryId = str(p.categoryId) || (await sceneParentId(r.object_id));
   if (categoryId) await assertCategoryPublished(categoryId);
   await query(
     `UPDATE scenes SET name_zh=COALESCE(NULLIF($2,''), name_zh), name_en=COALESCE(NULLIF($3,''), name_en),
@@ -383,11 +447,55 @@ async function applyTaxonomy(r: Row, user: SessionUser): Promise<{ ok: boolean; 
   return { ok: s.ok, message: s.message };
 }
 
+async function sceneParentId(sceneId: string): Promise<string> {
+  const { rows } = await query<{ category_id: string }>('SELECT category_id FROM scenes WHERE id=$1', [sceneId]);
+  return rows[0]?.category_id ?? '';
+}
+
+/**
+ * 分类重新上架时，把当初随它一起被下架的场景恢复回来。
+ *
+ * 原来下架是级联的、上架不是：分类回来了，其下场景仍是 offline，而 `catalogTree`
+ * 只暴露 published 的分类与场景，编辑器下拉与目录浏览就都是空的——用户看到的
+ * 「分类下架再上架，里面的东西不见了」就是这个不对称。
+ *
+ * 只恢复当初被这次下架带走的那些（记在 payload.cascadedSceneIds 里），
+ * 本来就已经单独下架的场景保持原样。Zendesk Section 已随 Category 被硬删，
+ * ref 已清空，恢复时重新建目录。
+ */
+async function restoreCascadedScenes(r: Row, user: SessionUser): Promise<number> {
+  const { rows } = await query<{ ids: string[] | null }>(
+    `SELECT (
+       SELECT ARRAY(SELECT jsonb_array_elements_text(payload->'cascadedSceneIds'))
+       FROM review_requests
+       WHERE object_type='category' AND object_id=$1 AND action='unpublish' AND status='approved'
+       ORDER BY reviewed_at DESC NULLS LAST LIMIT 1
+     ) AS ids`,
+    [r.object_id],
+  );
+  const ids = (rows[0]?.ids ?? []).filter(Boolean);
+  if (!ids.length) return 0;
+  const { rows: restored } = await query<{ id: string }>(
+    `UPDATE scenes SET status='published', active=TRUE, updated_at=now()
+     WHERE id = ANY($1::text[]) AND category_id=$2 AND status='offline'
+     RETURNING id`,
+    [ids, r.object_id],
+  );
+  for (const s of restored) await syncScene(actorOf(user), s.id);
+  return restored.length;
+}
+
 /**
  * 分类下架 = 删除 Zendesk Category。
- * 之前只有「新增才同步」，下架的指令根本没发到 Zendesk（用户实测反馈）。
- * Zendesk 删 Category 会连带删掉其下 Section 与 Article，所以先把本地的场景一并置为下架，
- * 并把已同步的 ref 清空，避免下次上架时拿着一个已经不存在的 id 去 PUT。
+ * Zendesk 删 Category 会**连带硬删**其下全部 Section 与 Article，所以本地这一侧必须
+ * 与场景下架对齐地把整棵子树都处理掉：场景 offline、其下已发布知识 offline、
+ * 并清掉 `sync_mappings.zendesk_article_ref`。
+ *
+ * 原实现只改了 categories 与 scenes 两张表，完全没碰 entries 与 sync_mappings，后果是：
+ * 线上文章已被删，中台仍显示「已发布 / 已同步」；投票回流对死 id 恒 404 静默中断；
+ * 之后重新同步会拿着已不存在的 article ref 走更新路径，PUT/POST 双 404 陷入死循环。
+ *
+ * 被连带下架的场景 id 记进审核请求的 payload，重新上架时据此把子树一并恢复。
  */
 async function unpublishCategory(r: Row, user: SessionUser): Promise<{ ok: boolean; message: string }> {
   const { rows } = await query<{ zendesk_category_ref: string | null; name_zh: string; code: string }>(
@@ -396,24 +504,56 @@ async function unpublishCategory(r: Row, user: SessionUser): Promise<{ ok: boole
   );
   const c = rows[0];
   if (!c) throw new DomainError('分类不存在', 404);
-  await query(`UPDATE categories SET status='offline', active=FALSE, updated_at=now() WHERE id=$1`, [r.object_id]);
-  await query(
-    `UPDATE scenes SET status='offline', active=FALSE, zendesk_section_ref=NULL, updated_at=now()
-     WHERE category_id=$1`,
+
+  // 记下「因这次下架而被连带下架」的场景，供重新上架时恢复；已经是下架态的不记（本就该保持下架）
+  const { rows: cascaded } = await query<{ id: string }>(
+    `SELECT id FROM scenes WHERE category_id=$1 AND status <> 'offline'`,
     [r.object_id],
   );
 
-  if (!c.zendesk_category_ref) return { ok: true, message: '该分类未同步过 Zendesk，仅本地下架。' };
+  /** 本地这一侧的整棵子树：分类 → 场景 → 条目 → 文章映射，一次落齐 */
+  const applyLocal = async (): Promise<number> => {
+    await query(`UPDATE review_requests SET payload = payload || $2::jsonb WHERE id=$1`, [
+      r.id,
+      JSON.stringify({ cascadedSceneIds: cascaded.map((s) => s.id) }),
+    ]);
+    await query(`UPDATE categories SET status='offline', active=FALSE, updated_at=now() WHERE id=$1`, [r.object_id]);
+    await query(
+      `UPDATE scenes SET status='offline', active=FALSE, zendesk_section_ref=NULL, updated_at=now()
+       WHERE category_id=$1`,
+      [r.object_id],
+    );
+    // 线上文章会被 Zendesk 连带删除，本地条目必须同步落到 offline，并断开已失效的文章映射
+    await query(
+      `UPDATE entries SET status='offline', sync_status='none', updated_at=now()
+       WHERE category_id=$1 AND status='published'`,
+      [r.object_id],
+    );
+    const { rowCount } = await query(
+      `DELETE FROM sync_mappings WHERE entry_id IN (SELECT id FROM entries WHERE category_id=$1)`,
+      [r.object_id],
+    );
+    return rowCount ?? 0;
+  };
+
+  if (!c.zendesk_category_ref) {
+    await applyLocal();
+    return { ok: true, message: '该分类未同步过 Zendesk，仅本地下架。' };
+  }
   const started = Date.now();
   try {
+    // 先动 Zendesk，成功了再改本地——反过来的话远端删除失败会留下
+    // 「本地整棵子树已下架、线上原封不动」的半截状态，而且重试通道已被自己堵死
+    // （requestMetaToggle 对非 published 对象拒绝再次下架）
     await getZendesk().deleteCategory(c.zendesk_category_ref);
+    const unmapped = await applyLocal();
     await query('UPDATE categories SET zendesk_category_ref=NULL WHERE id=$1', [r.object_id]);
     await logSync({
       entryId: null,
       entryCode: c.code,
       objectLabel: `${c.name_zh} → 删除 Zendesk 目录（Category）`,
       result: '成功',
-      message: `删除 Category ${c.zendesk_category_ref}，其下 Section 与 Article 一并移除`,
+      message: `删除 Category ${c.zendesk_category_ref}，其下 Section 与 Article 一并移除；本地连带下架 ${cascaded.length} 个场景、断开 ${unmapped ?? 0} 条文章映射`,
       durationMs: Date.now() - started,
       actorName: user.name,
       action: 'category-delete',
@@ -445,9 +585,11 @@ async function unpublishScene(r: Row, user: SessionUser): Promise<{ ok: boolean;
   );
   const s = rows[0];
   if (!s) throw new DomainError('场景不存在', 404);
-  await query(`UPDATE scenes SET status='offline', active=FALSE, updated_at=now() WHERE id=$1`, [r.object_id]);
 
-  if (!s.zendesk_section_ref) return { ok: true, message: '该场景未同步过 Zendesk，仅本地下架。' };
+  if (!s.zendesk_section_ref) {
+    await query(`UPDATE scenes SET status='offline', active=FALSE, updated_at=now() WHERE id=$1`, [r.object_id]);
+    return { ok: true, message: '该场景未同步过 Zendesk，仅本地下架。' };
+  }
   const started = Date.now();
   const zd = getZendesk();
   try {
@@ -459,15 +601,20 @@ async function unpublishScene(r: Row, user: SessionUser): Promise<{ ok: boolean;
       [r.object_id],
     );
     for (const a of arts) await zd.archiveArticle(a.ref);
-    if (arts.length) {
-      await query(
-        `UPDATE entries SET status='offline', sync_status='none', updated_at=now()
-         WHERE scene_id=$1 AND status='published'`,
-        [r.object_id],
-      );
-    }
     await zd.deleteSection(s.zendesk_section_ref);
-    await query('UPDATE scenes SET zendesk_section_ref=NULL WHERE id=$1', [r.object_id]);
+    // Zendesk 侧全部落定后才动本地：中途失败时本地零变更，请求留在 pending 可原样重试
+    await query(`UPDATE scenes SET status='offline', active=FALSE, zendesk_section_ref=NULL, updated_at=now() WHERE id=$1`, [
+      r.object_id,
+    ]);
+    await query(
+      `UPDATE entries SET status='offline', sync_status='none', updated_at=now()
+       WHERE scene_id=$1 AND status='published'`,
+      [r.object_id],
+    );
+    // Section 被删，其下文章一并消失——留着映射会让后续同步拿死 id 走更新路径，PUT/POST 双 404
+    await query(`DELETE FROM sync_mappings WHERE entry_id IN (SELECT id FROM entries WHERE scene_id=$1)`, [
+      r.object_id,
+    ]);
     await logSync({
       entryId: null,
       entryCode: s.code,
