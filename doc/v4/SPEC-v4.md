@@ -158,13 +158,24 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 
 | 对象 · 动作 | 生效 | Zendesk |
 |---|---|---|
-| 分类 create/update/publish | 落名字 + `status=published` | 建或改 Category（改名走 translations） |
-| 分类 unpublish | 本地 offline，其下场景一并 offline 且清 `zendesk_section_ref` | **DELETE Category**（Zendesk 连带删其下 Section/Article） |
+| 分类 create/update/publish | 落名字 + `status=published`；**publish 时按下架时记下的 `payload.cascadedSceneIds` 恢复子场景并重建 Section** | 建或改 Category（改名走 translations） |
+| 分类 unpublish | 本地 offline，其下场景一并 offline 且清 `zendesk_section_ref`；**其下已发布条目一并 offline，`sync_mappings` 删除** | **DELETE Category**（Zendesk 连带**硬删**其下 Section/Article） |
 | 场景 create/update/publish | 落名字 + `status=published` | 建或改 Section（挂在父 Category 下） |
-| 场景 unpublish | 本地 offline，其下已发布知识置 offline | 先逐篇 `archiveArticle`，再 **DELETE Section** |
+| 场景 unpublish | 本地 offline，其下已发布知识置 offline，**`sync_mappings` 删除** | 先逐篇 `archiveArticle`，再 **DELETE Section** |
 | 条目 * | 走原六态机 `approve()/reject()` | 发布时 `pushEntry` |
 
 `payload.noop = true` 的记录只留痕不动 Zendesk（采纳向导「沿用已发布分类」用）。
+
+**下架的执行顺序硬约束**：**先动 Zendesk，成功后才改本地**。反过来的话远端删除失败会留下
+「本地整棵子树已下架、线上原封不动」的半截状态，而 `requestMetaToggle` 又拒绝对非 published 对象再次下架，
+重试通道被自己堵死。同理，删目录后必须清 `sync_mappings`——留着死 article id，
+后续同步会走更新路径打出 PUT/POST 双 404，永久卡在失败。
+
+**审核裁决的并发模型**：`status` 增加 `processing` 态。`decide()` 用
+`UPDATE … WHERE status='pending' RETURNING *` 原子认领，抢到的人才继续；
+生效失败不标「通过」，释放认领退回 `pending` 供重试；中途抛错一律释放认领。
+没有这一步时，approve 与 reject 并发会各自通过前置检查，终态出现「记录=驳回、对象已上架且已建 Category」。
+待审队列与「是否有未结案请求」的判定都把 `processing` 计入未结案。
 
 ### 2.7 自动过审权限 `review.auto`
 
@@ -176,8 +187,17 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 操作 | 校验 | 不满足时 |
 |---|---|---|
 | 新增 / 更新 / 上架场景 | 所属分类 `status=published && active` | 409 +「请先到元数据中心提交并通过审核 / 重新上架该分类」 |
-| 提交知识审核 | 场景已发布 **且** 场景所属分类已发布 | 409 + 同上文案（含对象名） |
+| **审核通过场景上架** | 生效时**重新**校验父分类（payload 无 `categoryId` 时回库里取） | 409 |
+| 提交知识审核 | 场景已发布 **且** 场景所属分类已发布 **且场景确实隶属该分类** | 409 + 同上文案（含对象名） |
 | 审核通过知识 | 同上（通过即发布并写 Zendesk） | 409 |
+| 懒创建 Zendesk 目录（`ensureSectionRef`） | 场景与其父分类均已发布 | 409 |
+
+门禁必须在**生效时**再跑一遍，不能只在提交时跑：提交到人工审批之间父分类可能已被下架（TOCTOU）。
+`ensureSectionRef` 这条尤其重要——它是「现建 Category/Section」的路径，不设防的话
+一条残留的 published 条目就能把已下架的目录在帮助中心重新建出来。
+
+「场景是否隶属所选分类」也必须查：两者只分别校验「已发布」的话，条目可以标着分类 A、
+文章却挂进 B 的 Section，本地与 Zendesk 变成两本账，下架影响面也会算错。
 
 ---
 
@@ -338,13 +358,17 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 
 ## 5. API 契约
 
-统一前缀 `/api`，会话 Cookie `kb_session`，错误体 `{error, message}`。
+统一前缀 `/api`，会话 Cookie `kb_session`（httpOnly + 签名，签名校验失败直接拒绝），错误体 `{error, message}`。
+
+全局 preHandler 两道闸：未登录 → `401`；`must_change_password` 为 true 且不在
+`me / logout / change-password / bootstrap` 白名单内 → `428 must_change_password`。
 
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | POST | `/auth/login` | — | 邮箱 + 密码 → 会话 |
 | POST | `/auth/logout` | 登录 | 注销 |
 | POST | `/auth/switch` | 登录 | 切换账号（验目标账号密码后换会话） |
+| POST | `/auth/change-password` | 登录 | 改密（验当前密码，新密码 ≥10 位）→ 清 `must_change_password`、销毁该用户全部旧会话并换发新会话 |
 | GET | `/auth/accounts` | 登录 | 切换对话框的可选账号（不含任何凭据） |
 | GET | `/auth/me` | 登录 | 当前用户 + 权限 |
 | GET | `/bootstrap` | 登录 | 一次性返回：me / 分类树 / 标签 / 徽标计数 / 侧栏统计 |
@@ -500,6 +524,74 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 8 | 批量删除曾发布过的草稿，会在 Zendesk 留下孤儿文章 | 下线→恢复为草稿后 `sync_mappings` 仍在，直接 `DELETE FROM entries` 只删本地 | 删除前若有文章映射，先 `archiveEntry` 归档再删 |
 | 9 | 升级后原本「已下架」的分类在列表里显示成「已上架」 | 迁移把所有带 Zendesk ref 的行一律置 `status='published'`，没看 `active` | 迁移改为：`active` 才置 published，`NOT active` 一律对齐 `offline` |
 
+### 7.1.5 第五轮：全盘 review 五类问题（08-06-2026）
+
+四路并行深扫（前端交互 / 数据链路闭环 / 业务边界与产品闭环 / 账号与系统安全），
+以下为已修项。多条被两到三路独立命中，交叉印证。
+
+**安全基线（新增，不可回退）**
+
+| 项 | 规则 |
+|---|---|
+| 正文富文本 | 一律过 `sanitizeRichHtml`（`sanitize-html` + TipTap 白名单）。**三层**：入库 `toHtml`、出库 `/entries/:code` 与 `/editor`、外发 `pushEntry`。出库那层同时兜住升级前的存量脏数据 |
+| iframe | 仅放行 YouTube 域名；被剥成空标签的 iframe 直接丢弃 |
+| 外链 | 强制 `target=_blank` + `rel=noopener noreferrer` |
+| 会话 id | `randomBytes(32)`，**禁用** `Math.random()`（`newId()` 不可用于会话） |
+| Cookie 签名 | 校验失败**直接拒绝**，不得回退原始值 |
+| `COOKIE_SECRET` | 缺失时随机生成并告警，**禁止**回退源码常量；生产须显式配置，否则重启即全员登出 |
+| 初始密码 | `must_change_password` 由全局 preHandler 强制（428），仅放行 `me / logout / change-password / bootstrap` |
+| 登录 | 账号不存在时也跑一次 argon2，抹平用户枚举时序差 |
+| 500 响应 | 只回泛化文案，内部错误详情仅进服务端日志 |
+
+正文有三条**不经 TipTap**的入库路径——一键导入的原始文档、采纳向导带进来的 Zendesk 会话原文、
+大模型译文——而详情页是 `dangerouslySetInnerHTML` 直渲，所以净化必须在服务端做，前端白名单不算数。
+
+**闭环与状态机**
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 10 | 分类下架不动条目：Zendesk 硬删了文章，中台仍显示「已发布/已同步」 | 联动 entries 与 sync_mappings，见 §2.6 |
+| 11 | 下架级联、上架不级联，分类回来了场景还是 offline（用户实测报告） | 记 `cascadedSceneIds`，上架时恢复子树 |
+| 12 | `archiveEntry` 吞掉 Zendesk 失败后照样置 offline | 改为抛错，下线不生效；避免「中台已下线、线上仍可见」 |
+| 13 | approve/reject 并发裁决分叉 | `processing` 原子认领，见 §2.6 |
+| 14 | 编号「读 MAX → +1 → INSERT」撞唯一键 | `core/codes.ts` 唯一键冲突重试；撞号曾让条目 pending 却无审核请求，成为队列看不见的孤儿 |
+| 15 | `translate` 无状态守卫 → 已发布条目重翻 + 重新同步 = 绕审上线 | 与 `saveEntry` 同口径，只允许 draft/rejected/fixing |
+| 16 | 已发布条目可直接提交审核（该边只为回滚而开） | 拒绝，须先「创建修订」 |
+| 17 | `fixFeedback` 允许 pending/offline → fixing，且可重复点 | 补 `canTransition` 与幂等 |
+| 18 | 「修复中」的反馈永远到不了 `closed` | 修复发布时自动关闭（`closeFixedFeedbacks`） |
+| 19 | 可回滚到当前版本或无快照的「创建」版本（版本号倒退、正文不变） | 两者都拒绝 |
+| 20 | 删掉由未命中派生的草稿后，该未命中永久卡在「已排期」 | 删除时退回 `open` |
+| 21 | 文章已被硬删时 `upsertArticle` 陷入 404 死循环 | 404 落回创建 |
+| 22 | 采纳向导中断重试堆重复分类/场景 | 按名复用已存在对象 |
+
+**前端交互**
+
+| # | 问题 | 修法 |
+|---|---|---|
+| 23 | 新建后首次「翻译为英文」必 404（stale closure 用了旧 `code`） | 改用 `persist()` 的返回值 |
+| 24 | 编辑器装载失败静默 → 空表单保存会覆盖正文与英文版本 | 渲染失败态并阻断进入编辑 |
+| 25 | 审核/回滚/下线/合并标签可双击、失败无提示 | 统一 busy 闸 + catch |
+| 26 | 列表十余处行内动作静默失败、可双击 | 统一 `runAction` 出口 |
+| 27 | 列表/详情/审核加载失败渲染空白 | `LoadFailed` 失败态 + 重试 |
+| 28 | 一键导入的「取消上传」被进度模态遮罩挡住（AbortController 是死代码） | 取消入口移进进度模态 |
+| 29 | 请求无超时，慢依赖挂起就整页死锁 | api 层 120s 超时，与调用方 signal 合并 |
+| 30 | 路由切换不清抽屉/弹窗，动作指向旧对象 | `go()` 一并关闭 |
+| 31 | 抽取「清空」失败后 busy 永久卡 true，按钮全灰死 | try/finally；「彻底清空」补二次确认 |
+| 32 | 候选「最近」排序拼死 2026 年，跨年错乱 | 服务端下发 `createdAtTs` |
+| 33 | 本地备份只比中文字段，只改英文的备份被静默删除 | 全字段比对 |
+
+**尚未处置（需用户决定）**
+
+| 项 | 说明 |
+|---|---|
+| `xlsx@0.18.5` | 存在原型污染 CVE-2023-30533 与 ReDoS CVE-2024-22363，经 `/import/parse` 可达。npm 上该包已停止维护，升级须改从 SheetJS 官方源安装（会动 registry 配置），未擅自改动 |
+| 上传解压比无上限 | `XLSX.read` 与 `mammoth` 整包解压进内存，20MB 高压缩比文件可撑爆内存；`/import/parse` 也无限流 |
+| 「命中率」显示的是 AI 置信度 | `routes/entries.ts` 详情页健康度把 `confidencePct` 标成命中率；`hits/views` 全链路无回填来源（`fetchTicketSignals` 零调用），恒为 0 |
+| 「我的草稿 / 我提交的 / 待我审核」不按人过滤 | `VIEW_SQL` 与工作台 KPI 都是全量口径，与「我的」这一命名不符 |
+| 标签被推成 Zendesk 文章 labels | 与 §2.1「标签不进 Zendesk」及 RULE-05 冲突 |
+| 投票拉取无翻页、失败静默 | `votes.json?per_page=100` 不翻页；逐篇异常 `catch { continue }`，失败篇数界面不可见 |
+| 服务层无事务 | `withTransaction` 定义了但零调用；`entries.lock_version` 亦为死字段。本轮用「顺序调整 + 原子认领 + 编号重试」覆盖了最危险的几条路径，彻底解决需要引入事务边界 |
+
 ### 7.2 Zendesk 侧的两处「返回 200 但不生效」（均已实证并修复）
 
 | 对象 | 错误做法 | 正确做法 |
@@ -555,7 +647,14 @@ E2E_PASSWORD=<超管密码> E2E_OPS_PASSWORD=<运营密码> node app/e2e/ui.mjs 
 | RULE-04 | 数据 | 新增分类/场景 → 懒创建 Zendesk Category/Section | ✅ 场景挂上 Section id |
 | RULE-05 | 数据 | 标签不翻译、不进 Zendesk | ✅ 无英文字段；翻译端点拒标签 |
 
-单元测试：`vitest run` **37/37**（状态机与版本号、权限单独授予、段落 diff LCS、脱敏、时间格式、Zendesk 契约含更新路径 / 下线逐 locale / 重发复位 draft 三条防回归）。
+单元测试：`vitest run` **39/39**（状态机与版本号、权限单独授予、段落 diff LCS、脱敏、时间格式、
+Zendesk 契约含更新路径 / 下线逐 locale / 重发复位 draft / **文章已删落回创建** 四条防回归、
+**富文本白名单净化**）。
+
+| 编号 | 类型 | 验收项 | 结果 |
+|---|---|---|---|
+| RULE-06 | 安全 | 富文本净化：`img onerror` / `script` / `javascript:` / `svg onload` / 三方 iframe / 事件属性六类载荷全部剥除，白名单节点原样保留 | ✅ 单测 + 真实模块实跑 |
+| RULE-07 | 安全 | 未签名的会话 id 直接当 Cookie 提交 → 401 | ✅ 真实服务实测（取库中有效会话 id 裸传被拒） |
 
 ---
 
@@ -585,3 +684,4 @@ corepack pnpm -C app --filter @kb/web dev             # 5311（代理 /api → 3
 | `ZENDESK_FORCE_SANDBOX=1` | 强制沙箱；跑 E2E 必须加 |
 | `DISABLE_CRON=1` | 关闭抽取（每日 07:00）与未命中刷新（每小时） |
 | `DISPLAY_TZ` | 界面时区，默认 `Asia/Shanghai` |
+| `COOKIE_SECRET` | **生产必配**（≥16 位随机串）。缺失时每次启动生成随机密钥并告警——安全没问题，但重启即全员登出 |
