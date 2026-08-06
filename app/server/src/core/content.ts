@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import sanitize from 'sanitize-html';
 
 /**
  * v4 正文是富文本 HTML 字符串（原型编辑器用 contenteditable，产出 <p>/<h4>/<ul>）。
@@ -13,10 +14,57 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** 纯文本 → HTML：空行分段，段内换行为 <br>。已是 HTML 的原样返回（原型 htmlOf 同口径） */
+/**
+ * 正文 HTML 白名单——与编辑器 TipTap 的节点集对齐（richtext.tsx 的 extensions）。
+ *
+ * 必须在**服务端**做：正文有三条不经 TipTap 的入库路径（一键导入的原始文档、
+ * 采纳向导带进来的 Zendesk 会话原文、大模型译文），而详情页是
+ * `dangerouslySetInnerHTML` 直渲。少了这层，`<img src=x onerror=...>`
+ * 会在超管打开条目时以其会话身份执行任意请求（建超管账号、改权限矩阵）。
+ * 同一份正文还会推去 Zendesk 帮助中心，污染面直达对客页面。
+ */
+const HTML_POLICY: sanitize.IOptions = {
+  allowedTags: [
+    'p', 'br', 'hr', 'div', 'span',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'strong', 'b', 'em', 'i', 's', 'strike', 'del', 'u', 'code', 'pre', 'blockquote',
+    'ul', 'ol', 'li',
+    'a', 'img', 'iframe',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'colgroup', 'col',
+  ],
+  allowedAttributes: {
+    a: ['href', 'title', 'target', 'rel'],
+    img: ['src', 'alt', 'title', 'width', 'height'],
+    // TipTap Youtube 扩展产出 div[data-youtube-video] > iframe
+    iframe: ['src', 'width', 'height', 'allow', 'allowfullscreen', 'frameborder'],
+    div: ['data-youtube-video'],
+    td: ['colspan', 'rowspan'],
+    th: ['colspan', 'rowspan'],
+    col: ['span'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  // 视频只允许 YouTube 内嵌，杜绝把任意站点塞进后台与帮助中心
+  allowedIframeHostnames: ['www.youtube.com', 'youtube.com', 'www.youtube-nocookie.com', 'youtube-nocookie.com'],
+  allowIframeRelativeUrls: false,
+  disallowedTagsMode: 'discard',
+  // 外链一律新窗口打开并断开 opener，避免反向控制后台标签页
+  transformTags: {
+    a: sanitize.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }),
+  },
+  // 非白名单域名的 iframe 会被剥成空标签；空 iframe 无害但是垃圾节点，直接丢掉
+  exclusiveFilter: (frame) => frame.tag === 'iframe' && !frame.attribs.src,
+};
+
+/** 富文本净化：所有入库与外发的正文 HTML 都必须过这层 */
+export function sanitizeRichHtml(html: string): string {
+  if (!html) return '';
+  return sanitize(html, HTML_POLICY);
+}
+
+/** 纯文本 → HTML：空行分段，段内换行为 <br>。已是 HTML 的按白名单净化后返回 */
 export function toHtml(text: string): string {
   if (!text) return '';
-  if (/<[a-z]/i.test(text)) return text;
+  if (/<[a-z]/i.test(text)) return sanitizeRichHtml(text);
   return text
     .split('\n\n')
     .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)

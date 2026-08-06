@@ -60,6 +60,22 @@ describe('正文与 diff', () => {
     expect(toHtml(html)).toBe(html);
   });
 
+  it('富文本净化：脚本与事件处理器被剥掉，编辑器白名单节点原样保留', () => {
+    // 正文有三条不经 TipTap 的入库路径（一键导入原文 / 采纳向导带入的 Zendesk 会话 / 模型译文），
+    // 而详情页是 dangerouslySetInnerHTML 直渲——净化必须在服务端做
+    expect(toHtml('<img src=x onerror="alert(1)">')).toBe('<img src="x" />');
+    expect(toHtml('<p>正常</p><script>alert(1)</script>')).toBe('<p>正常</p>');
+    expect(toHtml('<a href="javascript:alert(1)">点我</a>')).not.toContain('javascript:');
+    expect(toHtml('<p onclick="steal()">正文</p>')).toBe('<p>正文</p>');
+    // iframe 只放行 YouTube，别的站点一律丢弃
+    expect(toHtml('<iframe src="https://evil.example/x"></iframe>')).toBe('');
+    expect(toHtml('<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>')).toContain('youtube-nocookie');
+    // 白名单节点与外链属性保留（外链补 rel 防反向控制）
+    const rich = '<h2>标题</h2><ul><li>项</li></ul><table><tbody><tr><td>格</td></tr></tbody></table>';
+    expect(toHtml(rich)).toBe(rich);
+    expect(toHtml('<a href="https://coolfly.com">官网</a>')).toContain('rel="noopener noreferrer"');
+  });
+
   it('段落级 diff 用最长公共子序列，未改动段判为 same', () => {
     const before = toHtml(['一、适用范围。', '二、费率。旧口径。', '三、特殊情形。'].join('\n\n'));
     const after = toHtml(['一、适用范围。', '二、费率。新口径。', '三、特殊情形。', '四、生效日期。'].join('\n\n'));

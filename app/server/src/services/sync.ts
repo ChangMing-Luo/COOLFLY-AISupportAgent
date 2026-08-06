@@ -2,7 +2,7 @@ import type { SessionUser } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { getZendesk } from '../integrations/zendesk.js';
 import { writeAudit, SYSTEM_ACTOR, type AuditActor } from '../core/audit.js';
-import { contentHash, toPlainText } from '../core/content.js';
+import { contentHash, sanitizeRichHtml, toPlainText } from '../core/content.js';
 import { DomainError, findEntry, actorOf, type EntryRow } from './entries.js';
 
 /** 报文号自增：与审计一样只增不改，用于「同步日志」页的可追溯列 */
@@ -247,7 +247,8 @@ export async function pushEntry(
     const article = await getZendesk().upsertArticle({
       entryCode: entry.code,
       title: entry.title_en,
-      publicHtml: entry.body_en,
+      // 外发前再净化：写进帮助中心的正文是对客页面，绝不能带脚本或第三方内嵌
+      publicHtml: sanitizeRichHtml(entry.body_en),
       labels: entry.tags ?? [],
       sectionRef,
       internalOnly: false,

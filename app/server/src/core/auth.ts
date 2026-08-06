@@ -1,7 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import argon2 from 'argon2';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ROLE_LABELS, type Role, type SessionUser } from '@kb/contracts';
-import { query, newId } from '../db/pool.js';
+import { query } from '../db/pool.js';
 import { permissionsOf } from './rbac.js';
 
 export const SESSION_COOKIE = 'kb_session';
@@ -31,8 +32,13 @@ export async function verifyPassword(hash: string, plain: string): Promise<boole
   }
 }
 
+/**
+ * 会话 id 是本系统唯一的认证凭据，必须用 CSPRNG。
+ * 通用的 `newId()` 走 `Math.random()`（V8 xorshift128+，非密码学安全）且随机位只有 ~41 bit——
+ * 攻击者拿自己多次登录的 session id 就能反推 PRNG 状态、预测他人会话。
+ */
 export async function createSession(userId: string): Promise<string> {
-  const id = newId('sess');
+  const id = `sess_${randomBytes(32).toString('base64url')}`;
   await query('INSERT INTO sessions (id, user_id, expires_at) VALUES ($1,$2,$3)', [
     id,
     userId,
@@ -84,12 +90,14 @@ declare module 'fastify' {
 export async function attachUser(req: FastifyRequest): Promise<void> {
   const sid = req.cookies?.[SESSION_COOKIE];
   if (!sid) return;
+  // 签名校验不通过就直接拒绝。原来会回退到原始 Cookie 值继续查库，
+  // 等于把 `signed: true` 的防伪保护抵消掉：任何人手写 `kb_session=<会话id>` 就能通过认证。
   const unsigned = req.unsignCookie(sid);
-  const value = unsigned.valid && unsigned.value ? unsigned.value : sid;
-  const user = await loadSessionUser(value);
+  if (!unsigned.valid || !unsigned.value) return;
+  const user = await loadSessionUser(unsigned.value);
   if (user) {
     req.currentUser = user;
-    req.sessionId = value;
+    req.sessionId = unsigned.value;
   }
 }
 

@@ -11,7 +11,7 @@ import {
   saveEntrySchema,
 } from '@kb/contracts';
 import { requirePermission } from '../core/rbac.js';
-import { toParagraphs } from '../core/content.js';
+import { sanitizeRichHtml, toParagraphs } from '../core/content.js';
 import { fmtShort, thousands } from '../core/fmt.js';
 import {
   DomainError,
@@ -90,9 +90,10 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
 
     return {
       entry: dto,
-      // 富文本原文（详情页按 HTML 渲染，保留标题/列表/图片/表格）
-      bodyZh: entry.body_zh,
-      bodyEn: entry.body_en,
+      // 富文本原文（详情页按 HTML 渲染，保留标题/列表/图片/表格）。
+      // 出口再净化一次：入库前的净化只保护新数据，这层同时挡住升级前存量与库侧直改。
+      bodyZh: sanitizeRichHtml(entry.body_zh),
+      bodyEn: sanitizeRichHtml(entry.body_en),
       paragraphsZh: toParagraphs(entry.body_zh),
       paragraphsEn: toParagraphs(entry.body_en),
       versions,
@@ -131,8 +132,8 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
     const entry = await findEntry(code);
     return {
       entry: toDto(entry),
-      bodyZh: entry.body_zh,
-      bodyEn: entry.body_en,
+      bodyZh: sanitizeRichHtml(entry.body_zh),
+      bodyEn: sanitizeRichHtml(entry.body_en),
       categoryId: entry.category_id,
       sceneId: entry.scene_id,
       suggestions: await editorSuggestions(entry),

@@ -14,6 +14,7 @@ import { Progress } from './views/Progress.js';
 import { Importer } from './views/Importer.js';
 import { C, Skeleton, tnum } from './ui.js';
 import { Login } from './views/Login.js';
+import { ChangePassword } from './views/ChangePassword.js';
 import { Dashboard } from './views/Dashboard.js';
 import { ListPage } from './views/ListPage.js';
 import { Extract } from './views/Extract.js';
@@ -173,6 +174,20 @@ export function App() {
     return (
       <Login
         onLogin={(u) => {
+          setUser(u);
+          if (u.mustChangePassword) return;
+          void api.get<{ catalog: CatalogCategory[] }>('/bootstrap').then((d) => setCatalog(d.catalog));
+          void loadShell();
+        }}
+      />
+    );
+  }
+  // 服务端会把未改初始密码的账号拦成 428，界面必须先把改密这一步走完
+  if (user.mustChangePassword) {
+    return (
+      <ChangePassword
+        user={user}
+        onDone={(u) => {
           setUser(u);
           void api.get<{ catalog: CatalogCategory[] }>('/bootstrap').then((d) => setCatalog(d.catalog));
           void loadShell();

@@ -8,12 +8,38 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 请求超时。缺了它，Zendesk / 大模型这类慢依赖一挂起，进度模态就永远停在
+ * 「运行中」——既不失败也关不掉，整页只能刷新（用户报过的"页面像卡死"）。
+ * 上传与 AI 整理确实慢，故给到 120s 而不是常见的 30s。
+ */
+const TIMEOUT_MS = 120_000;
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    credentials: 'include',
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
-    ...init,
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  // 调用方自带的 signal（一键导入的「取消上传」）与超时 signal 必须**同时**生效——
+  // 直接展开 init 会让后者覆盖前者，超时就形同虚设
+  const caller = init?.signal;
+  const onCallerAbort = (): void => ac.abort();
+  caller?.addEventListener('abort', onCallerAbort);
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, {
+      credentials: 'include',
+      headers: init?.body ? { 'content-type': 'application/json' } : undefined,
+      ...init,
+      signal: ac.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError' && !caller?.aborted) {
+      throw new ApiError(`请求超时（超过 ${TIMEOUT_MS / 1000} 秒未响应），请稍后重试`, 0);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    caller?.removeEventListener('abort', onCallerAbort);
+  }
   const text = await res.text();
   const data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
   if (!res.ok) {
@@ -40,6 +66,8 @@ export interface SessionUser {
   roleLabel: string;
   department: string;
   reviewGranted: boolean;
+  /** 首次登录用的一次性初始密码尚未换掉；为 true 时服务端会 428 拦下除改密外的所有接口 */
+  mustChangePassword: boolean;
   permissions: string[];
 }
 
