@@ -364,6 +364,60 @@ export async function submitEntry(user: SessionUser, code: string): Promise<{ en
   return { entry: await findEntry(code), errors: [] };
 }
 
+/* ══════════ 批量操作 ══════════ */
+
+export interface BatchResult {
+  ok: string[];
+  failed: Array<{ code: string; reason: string }>;
+}
+
+/** 批量删除草稿：只允许删本人的 draft / rejected，已发布或待审的一律拒绝并说明原因 */
+export async function batchDeleteDrafts(user: SessionUser, codes: string[]): Promise<BatchResult> {
+  const out: BatchResult = { ok: [], failed: [] };
+  for (const code of codes) {
+    try {
+      const r = await findEntry(code);
+      if (!['draft', 'rejected', 'fixing'].includes(r.status)) {
+        throw new DomainError(`状态「${ENTRY_STATUS_META[r.status].label}」不可删除`, 409);
+      }
+      if (user.role !== 'super' && r.owner_id && r.owner_id !== user.id) {
+        throw new DomainError('只能删除本人的草稿', 403);
+      }
+      await query('DELETE FROM entries WHERE code=$1', [code]);
+      await writeAudit(actorOf(user), {
+        action: '删除草稿',
+        objectCode: code,
+        objectLabel: `${code} ${r.title_zh}`,
+        version: r.version,
+      });
+      out.ok.push(code);
+    } catch (err) {
+      out.failed.push({ code, reason: err instanceof Error ? err.message : '未知错误' });
+    }
+  }
+  return out;
+}
+
+/** 批量上下架知识：逐条走单条路径，保证 Zendesk 归档与审计一条不落 */
+export async function batchShelf(
+  user: SessionUser,
+  codes: string[],
+  action: 'offline' | 'restore',
+): Promise<BatchResult> {
+  const out: BatchResult = { ok: [], failed: [] };
+  const { offlineEntry } = await import('./review.js');
+  for (const code of codes) {
+    try {
+      if (action === 'offline') await offlineEntry(user, code);
+      else await restoreEntry(user, code);
+      out.ok.push(code);
+    } catch (err) {
+      out.failed.push({ code, reason: err instanceof Error ? err.message : '未知错误' });
+    }
+  }
+  return out;
+}
+
 /* ══════════ 修订 / 反馈转修复 / 恢复 ══════════ */
 
 export async function startRevision(user: SessionUser, code: string, note = ''): Promise<EntryRow> {

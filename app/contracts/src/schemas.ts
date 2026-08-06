@@ -70,8 +70,39 @@ export const approveSchema = z.object({
   comment: z.string().default(''),
 });
 
+export const batchCodesSchema = z.object({
+  codes: z.array(z.string().min(1)).min(1, '请至少选择一条'),
+});
+
+export const batchShelfSchema = batchCodesSchema.extend({
+  action: z.enum(['offline', 'restore']),
+});
+
 export const rollbackSchema = z.object({
   version: z.string().regex(/^v\d+\.\d+$/, '版本号格式应为 vX.Y'),
+});
+
+/* ══════════ 采纳向导 ══════════ */
+
+const adoptTaxonomySchema = z.object({
+  id: z.string().nullish(),
+  nameZh: z.string().trim().default(''),
+  nameEn: z.string().trim().default(''),
+});
+
+export const adoptCandidateSchema = z.object({
+  category: adoptTaxonomySchema,
+  scene: adoptTaxonomySchema,
+  titleZh: z.string().trim().min(1, '标题不能为空'),
+  titleEn: z.string().trim().default(''),
+  bodyZh: z.string().default(''),
+  bodyEn: z.string().default(''),
+});
+export type AdoptCandidateInput = z.infer<typeof adoptCandidateSchema>;
+
+export const adoptTranslateSchema = z.object({
+  titleZh: z.string().default(''),
+  bodyZh: z.string().default(''),
 });
 
 /* ══════════ 元数据 ══════════ */

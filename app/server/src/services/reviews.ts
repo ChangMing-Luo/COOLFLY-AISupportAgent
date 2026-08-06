@@ -198,6 +198,38 @@ export async function submitRequest(user: SessionUser, args: SubmitArgs): Promis
   };
 }
 
+/**
+ * 沿用已发布对象时的留痕：采纳向导要求「提交后生成分类、场景、正文三条审核记录」，
+ * 但沿用一个已经在线的分类并不需要人再批一次——直接以 approved 落一条记录，
+ * 既有完整痕迹，又不会在待审队列里堆无意义的请求。
+ */
+export async function recordReuse(
+  user: SessionUser,
+  args: Omit<SubmitArgs, 'action'> & { note: string },
+): Promise<ReviewRequestDto> {
+  const id = newId('rr');
+  const code = await nextCode();
+  await query(
+    `INSERT INTO review_requests
+       (id, code, object_type, object_id, object_code, object_label, action, payload, before_snapshot,
+        status, auto_approved, submitter_id, submitter_name, reviewer_id, reviewer_name, reviewed_at, comment)
+     VALUES ($1,$2,$3,$4,$5,$6,'update',$7,'{}'::jsonb,'approved',FALSE,$8,$9,$8,$9,now(),$10)`,
+    [
+      id,
+      code,
+      args.objectType,
+      args.objectId,
+      args.objectCode,
+      args.objectLabel,
+      JSON.stringify({ ...args.payload, noop: true }),
+      user.id,
+      user.name,
+      args.note,
+    ],
+  );
+  return findRequest(code);
+}
+
 /* ══════════ 查询 ══════════ */
 
 export async function findRequest(code: string): Promise<ReviewRequestDto> {
@@ -325,6 +357,7 @@ async function revertPending(r: Row): Promise<void> {
 
 async function applyTaxonomy(r: Row, user: SessionUser): Promise<{ ok: boolean; message: string }> {
   const p = r.payload ?? {};
+  if (p.noop === true) return { ok: true, message: '沿用已发布对象，无需同步 Zendesk。' };
   if (r.object_type === 'category') {
     if (r.action === 'unpublish') return unpublishCategory(r, user);
     await query(

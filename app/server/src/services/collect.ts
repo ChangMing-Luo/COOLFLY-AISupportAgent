@@ -255,26 +255,70 @@ async function resolveTaxonomy(
   return { categoryId: cat?.id ?? null, sceneId: null };
 }
 
-/** 垃圾箱摘要指纹：新候选命中即自动丢弃 */
-async function matchTrash(summary: string): Promise<{ hit: boolean; against: string }> {
-  if (!summary.trim()) return { hit: false, against: '' };
-  const { rows } = await query<{ code: string; summary: string }>(
-    `SELECT code, summary FROM extract_candidates WHERE disposition='dropped' AND summary <> '' LIMIT 500`,
+/**
+ * 候选适配的唯一判据：分类 + 场景 + 正文三维（用户要求 2a）。
+ * 只看 AI 摘要会把「同一场景不同问题」误判成同一条；三维加权后，
+ * 场景不同的问题即使措辞相似也不会被吃掉。
+ */
+export interface Dimensions {
+  category: string;
+  scene: string;
+  body: string;
+}
+
+function dimScore(a: Dimensions, b: Dimensions): number {
+  return (
+    0.25 * literalSimilarity(a.category, b.category) +
+    0.35 * literalSimilarity(a.scene, b.scene) +
+    0.4 * literalSimilarity(a.body, b.body)
   );
-  for (const r of rows) {
-    if (literalSimilarity(summary, r.summary) >= SUMMARY_MATCH) return { hit: true, against: r.code };
+}
+
+interface DimRow {
+  code: string;
+  category_hint: string;
+  scene_hint: string;
+  summary: string;
+  answer: string;
+  cat_zh: string | null;
+  scene_zh: string | null;
+}
+
+function rowDims(r: DimRow): Dimensions {
+  return {
+    category: r.cat_zh || r.category_hint || '',
+    scene: r.scene_zh || r.scene_hint || '',
+    body: `${r.summary} ${toPlainText(r.answer).slice(0, 300)}`,
+  };
+}
+
+async function loadDims(dropped: boolean): Promise<DimRow[]> {
+  const { rows } = await query<DimRow>(
+    `SELECT c.code, c.category_hint, c.scene_hint, c.summary, c.answer,
+            cat.name_zh AS cat_zh, s.name_zh AS scene_zh
+     FROM extract_candidates c
+     LEFT JOIN categories cat ON cat.id=c.category_id
+     LEFT JOIN scenes s ON s.id=c.scene_id
+     WHERE c.disposition ${dropped ? '=' : '<>'} 'dropped'
+     ORDER BY c.created_at DESC LIMIT 500`,
+  );
+  return rows;
+}
+
+/** 垃圾箱三维指纹：新候选命中即自动丢弃 */
+async function matchTrash(dims: Dimensions): Promise<{ hit: boolean; against: string }> {
+  if (!dims.body.trim() && !dims.scene.trim()) return { hit: false, against: '' };
+  for (const r of await loadDims(true)) {
+    if (dimScore(dims, rowDims(r)) >= SUMMARY_MATCH) return { hit: true, against: r.code };
   }
   return { hit: false, against: '' };
 }
 
-/** 已入库候选的摘要去重（同一批或历史批次里已经有同一个问题就不再重复产出） */
-async function matchExisting(summary: string): Promise<string> {
-  if (!summary.trim()) return '';
-  const { rows } = await query<{ code: string; summary: string }>(
-    `SELECT code, summary FROM extract_candidates WHERE disposition <> 'dropped' AND summary <> '' LIMIT 500`,
-  );
-  for (const r of rows) {
-    if (literalSimilarity(summary, r.summary) >= SUMMARY_MATCH) return r.code;
+/** 已入库候选的三维去重（同一批或历史批次里已经有同一个问题就不再重复产出） */
+async function matchExisting(dims: Dimensions): Promise<string> {
+  if (!dims.body.trim() && !dims.scene.trim()) return '';
+  for (const r of await loadDims(false)) {
+    if (dimScore(dims, rowDims(r)) >= SUMMARY_MATCH) return r.code;
   }
   return '';
 }
@@ -333,7 +377,12 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
         continue;
       }
 
-      const dupCode = await matchExisting(topic.abstract);
+      const topicDims: Dimensions = {
+        category: topic.categoryHint,
+        scene: topic.sceneHint,
+        body: `${topic.abstract} ${topic.summary}`,
+      };
+      const dupCode = await matchExisting(topicDims);
       if (dupCode) {
         deduped += 1;
         continue;
@@ -350,7 +399,7 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
           body: `${topic.summary}\n\n（本条草稿正文自动生成失败：${e instanceof Error ? e.message : '未知错误'}，请人工补全）`,
         };
       }
-      const trash = await matchTrash(topic.abstract);
+      const trash = await matchTrash(topicDims);
       const { categoryId, sceneId } = await resolveTaxonomy(topic.categoryHint, topic.sceneHint);
 
       let best = { id: null as string | null, score: 0 };
@@ -459,37 +508,287 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
 
 /* ══════════ 候选处置 ══════════ */
 
-export async function acceptCandidate(user: SessionUser, code: string): Promise<EntryRow> {
-  const { rows } = await query<{
-    id: string;
-    code: string;
-    title: string;
-    answer: string;
-    summary: string;
-    category_id: string | null;
-    scene_id: string | null;
-    tags: string[];
-    confidence: string;
-    task_code: string;
-    disposition: string;
-  }>(
-    `SELECT c.*, t.code AS task_code FROM extract_candidates c
-     JOIN collect_tasks t ON t.id=c.task_id WHERE c.code=$1`,
+/* ══════════ 采纳向导（用户要求 2b~2e） ══════════ */
+
+export interface AdoptNode {
+  key: 'category' | 'scene' | 'body' | 'overview';
+  title: string;
+  hint: string;
+}
+
+export interface AdoptPlan {
+  code: string;
+  /** 节点数动态：已具备的信息直接跳过 */
+  nodes: AdoptNode[];
+  category: { id: string | null; nameZh: string; nameEn: string; fromLibrary: boolean };
+  scene: { id: string | null; nameZh: string; nameEn: string; categoryId: string | null; fromLibrary: boolean };
+  body: { titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+  mentionCount: number;
+  summary: string;
+}
+
+interface CandRow {
+  id: string;
+  code: string;
+  title: string;
+  answer: string;
+  summary: string;
+  category_id: string | null;
+  scene_id: string | null;
+  category_hint: string;
+  scene_hint: string;
+  tags: string[];
+  confidence: string;
+  mention_count: number;
+  task_code: string;
+  disposition: string;
+  cat_zh: string | null;
+  cat_en: string | null;
+  scene_zh: string | null;
+  scene_en: string | null;
+  scene_category_id: string | null;
+}
+
+async function loadCandidate(code: string): Promise<CandRow> {
+  const { rows } = await query<CandRow>(
+    `SELECT c.*, t.code AS task_code,
+            cat.name_zh AS cat_zh, cat.name_en AS cat_en,
+            s.name_zh AS scene_zh, s.name_en AS scene_en, s.category_id AS scene_category_id
+     FROM extract_candidates c
+     JOIN collect_tasks t ON t.id=c.task_id
+     LEFT JOIN categories cat ON cat.id=c.category_id
+     LEFT JOIN scenes s ON s.id=c.scene_id
+     WHERE c.code=$1`,
     [code],
   );
   const c = rows[0];
   if (!c) throw new DomainError(`候选不存在：${code}`, 404);
+  return c;
+}
+
+/** 采纳前的向导计划：库里已匹配上的维度直接跳过，其余带上 AI 建议值 */
+export async function adoptPlan(code: string): Promise<AdoptPlan> {
+  const c = await loadCandidate(code);
   if (c.disposition !== 'pending') throw new DomainError('该候选已处置。', 409);
 
-  // 场景没定但分类定了时，仍把分类带过去，编辑器里只需补场景
-  let categoryId = c.category_id;
-  if (!categoryId && c.scene_id) {
-    const { rows: sc } = await query<{ category_id: string }>('SELECT category_id FROM scenes WHERE id=$1', [
-      c.scene_id,
-    ]);
-    categoryId = sc[0]?.category_id ?? null;
+  const categoryId = c.category_id ?? c.scene_category_id ?? null;
+  let catZh = c.cat_zh ?? '';
+  let catEn = c.cat_en ?? '';
+  if (!c.cat_zh && categoryId) {
+    const { rows } = await query<{ name_zh: string; name_en: string }>(
+      'SELECT name_zh, name_en FROM categories WHERE id=$1',
+      [categoryId],
+    );
+    catZh = rows[0]?.name_zh ?? '';
+    catEn = rows[0]?.name_en ?? '';
+  }
+  const nodes: AdoptNode[] = [];
+  if (!categoryId) {
+    nodes.push({ key: 'category', title: '确认分类', hint: '库内没有匹配的一级分类，请确认 AI 的建议或改选已有分类' });
+  }
+  if (!c.scene_id) {
+    nodes.push({ key: 'scene', title: '确认场景', hint: '库内没有匹配的二级场景，请确认 AI 的建议或改选已有场景' });
+  }
+  nodes.push({ key: 'body', title: '确认知识正文', hint: 'AI 起草的标题与正文，可直接编辑；英文用于写入 Zendesk' });
+  nodes.push({ key: 'overview', title: '总览与提交', hint: '确认三个维度后提交，将生成分类、场景、正文三条审核记录' });
+
+  return {
+    code: c.code,
+    nodes,
+    category: {
+      id: categoryId,
+      nameZh: catZh || c.category_hint || '',
+      nameEn: catEn,
+      fromLibrary: Boolean(categoryId),
+    },
+    scene: {
+      id: c.scene_id,
+      nameZh: c.scene_zh ?? c.scene_hint ?? '',
+      nameEn: c.scene_en ?? '',
+      categoryId,
+      fromLibrary: Boolean(c.scene_id),
+    },
+    body: { titleZh: c.title, titleEn: '', bodyZh: c.answer, bodyEn: '' },
+    mentionCount: c.mention_count ?? 1,
+    summary: c.summary ?? '',
+  };
+}
+
+export interface AdoptInput {
+  category: { id: string | null; nameZh: string; nameEn: string };
+  scene: { id: string | null; nameZh: string; nameEn: string };
+  titleZh: string;
+  titleEn: string;
+  bodyZh: string;
+  bodyEn: string;
+}
+
+export interface AdoptResult {
+  entryCode: string;
+  reviews: Array<{ code: string; dimension: string; status: string; note: string }>;
+  message: string;
+}
+
+/**
+ * 采纳：按分类 → 场景 → 正文的顺序落地，每一步都落一条审核记录。
+ * 新建的分类/场景若没有自动过审权限，就停在这里——门禁要求父级已发布才能往下走，
+ * 与其半截落地，不如明确告诉用户在等哪一条审核。
+ */
+export async function adoptCandidate(user: SessionUser, code: string, input: AdoptInput): Promise<AdoptResult> {
+  const c = await loadCandidate(code);
+  if (c.disposition !== 'pending') throw new DomainError('该候选已处置。', 409);
+
+  const { recordReuse } = await import('./reviews.js');
+  const { upsertCategory, upsertScene } = await import('./meta.js');
+  const { assertCategoryPublished, assertScenePublished } = await import('./gates.js');
+  const reviews: AdoptResult['reviews'] = [];
+
+  // ① 分类
+  let categoryId = input.category.id;
+  if (categoryId) {
+    await assertCategoryPublished(categoryId);
+    const { rows } = await query<{ code: string; name_zh: string }>(
+      'SELECT code, name_zh FROM categories WHERE id=$1',
+      [categoryId],
+    );
+    const rec = await recordReuse(user, {
+      objectType: 'category',
+      objectId: categoryId,
+      objectCode: rows[0].code,
+      objectLabel: rows[0].name_zh,
+      payload: { nameZh: rows[0].name_zh, categoryZh: rows[0].name_zh },
+      note: `采纳 ${code}：沿用已发布分类`,
+    });
+    reviews.push({ code: rec.code, dimension: '知识分类', status: rec.statusLabel, note: '沿用已发布分类' });
+  } else {
+    if (!input.category.nameZh.trim()) throw new DomainError('请确认一级分类。', 400);
+    const r = await upsertCategory(user, null, input.category.nameZh, input.category.nameEn);
+    categoryId = r.item.id;
+    reviews.push({
+      code: r.review.code,
+      dimension: '知识分类',
+      status: r.review.applied ? '通过' : '待审核',
+      note: r.review.message,
+    });
+    if (!r.review.applied) {
+      return {
+        entryCode: '',
+        reviews,
+        message: `新分类「${input.category.nameZh}」已提交审核（${r.review.code}）。分类通过后才能在其下创建场景与知识，请审核通过后回到本页重新采纳。`,
+      };
+    }
   }
 
+  // ② 场景
+  let sceneId = input.scene.id;
+  if (sceneId) {
+    await assertScenePublished(sceneId);
+    const { rows } = await query<{ code: string; name_zh: string }>('SELECT code, name_zh FROM scenes WHERE id=$1', [
+      sceneId,
+    ]);
+    const rec = await recordReuse(user, {
+      objectType: 'scene',
+      objectId: sceneId,
+      objectCode: rows[0].code,
+      objectLabel: rows[0].name_zh,
+      payload: { nameZh: rows[0].name_zh, sceneZh: rows[0].name_zh },
+      note: `采纳 ${code}：沿用已发布场景`,
+    });
+    reviews.push({ code: rec.code, dimension: '问题场景', status: rec.statusLabel, note: '沿用已发布场景' });
+  } else {
+    if (!input.scene.nameZh.trim()) throw new DomainError('请确认二级场景。', 400);
+    const r = await upsertScene(user, null, input.scene.nameZh, input.scene.nameEn, categoryId!);
+    sceneId = r.item.id;
+    reviews.push({
+      code: r.review.code,
+      dimension: '问题场景',
+      status: r.review.applied ? '通过' : '待审核',
+      note: r.review.message,
+    });
+    if (!r.review.applied) {
+      return {
+        entryCode: '',
+        reviews,
+        message: `新场景「${input.scene.nameZh}」已提交审核（${r.review.code}）。场景通过后才能在其下创建知识，请审核通过后回到本页重新采纳。`,
+      };
+    }
+  }
+
+  // ③ 正文
+  const entry = await createEntry(user, {
+    titleZh: input.titleZh,
+    bodyZh: input.bodyZh,
+    categoryId,
+    sceneId,
+    tags: c.tags ?? [],
+    source: `AI 抽取 · ${c.task_code} / ${c.code}`,
+    confidence: Number(c.confidence),
+    quality: 60,
+  });
+  const { saveEntry, submitEntry } = await import('./entries.js');
+  await saveEntry(user, entry.code, {
+    titleZh: input.titleZh,
+    titleEn: input.titleEn,
+    bodyZh: input.bodyZh,
+    bodyEn: input.bodyEn,
+    categoryId,
+    sceneId,
+    tags: c.tags ?? [],
+    note: `由抽取候选 ${code} 采纳生成`,
+    enEdited: Boolean(input.bodyEn.trim()),
+  });
+  if (input.titleEn.trim() && input.bodyEn.trim()) {
+    await query('UPDATE entries SET translated=TRUE WHERE code=$1', [entry.code]);
+  }
+  await query(
+    `UPDATE extract_candidates SET disposition='accepted', disposed_by=$2, disposed_at=now(), entry_id=$3 WHERE code=$1`,
+    [code, user.id, entry.id],
+  );
+  await writeAudit(actorOf(user), {
+    action: 'AI 抽取候选采纳',
+    objectCode: entry.code,
+    objectLabel: `${entry.code} ${input.titleZh}（来自 ${code}）`,
+  });
+
+  const submitted = await submitEntry(user, entry.code);
+  if (submitted.errors.length) {
+    reviews.push({
+      code: '—',
+      dimension: '知识正文',
+      status: '草稿',
+      note: `未能自动提交审核：${submitted.errors.join('；')}`,
+    });
+    return {
+      entryCode: entry.code,
+      reviews,
+      message: `已生成 ${entry.code}，但还差：${submitted.errors.join('；')}。请在编辑器补全后提交审核。`,
+    };
+  }
+  const { openRequestFor, listRecords } = await import('./reviews.js');
+  const open = await openRequestFor('entry', entry.id);
+  if (open) {
+    reviews.push({ code: open.code, dimension: '知识正文', status: '待审核', note: '等待审核通过后发布并同步 Zendesk' });
+  } else {
+    const done = (await listRecords(20)).find((r) => r.objectType === 'entry' && r.objectId === entry.id);
+    reviews.push({
+      code: done?.code ?? '—',
+      dimension: '知识正文',
+      status: '通过',
+      note: '自动过审并已发布，Zendesk 同步结果见发布与同步',
+    });
+  }
+  return {
+    entryCode: entry.code,
+    reviews,
+    message: `已采纳并生成 ${entry.code}，共留下 ${reviews.length} 条审核记录。`,
+  };
+}
+
+/** 旧的一键生成草稿：保留给未走向导的调用方（反馈转草稿等） */
+export async function acceptCandidate(user: SessionUser, code: string): Promise<EntryRow> {
+  const c = await loadCandidate(code);
+  if (c.disposition !== 'pending') throw new DomainError('该候选已处置。', 409);
+  const categoryId = c.category_id ?? c.scene_category_id ?? null;
   const entry = await createEntry(user, {
     titleZh: c.title,
     bodyZh: c.answer,

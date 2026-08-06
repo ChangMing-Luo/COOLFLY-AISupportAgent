@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { EXTRACT_CONFIG_LABELS, TUNABLES } from '@kb/contracts';
+import { EXTRACT_CONFIG_LABELS, TUNABLES, adoptCandidateSchema, adoptTranslateSchema } from '@kb/contracts';
 import { requirePermission } from '../core/rbac.js';
 import { getLlm } from '../integrations/llm.js';
 import { toDto } from '../services/entries.js';
 import {
   acceptCandidate,
+  adoptCandidate,
+  adoptPlan,
   candidateSources,
   clearWorkbench,
   currentTask,
@@ -53,6 +55,46 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
     const { code } = req.params as { code: string };
     const entry = await acceptCandidate(req.currentUser!, code);
     return { entry: toDto(entry) };
+  });
+
+  /* ══════ 采纳向导（分类 → 场景 → 正文 → 总览） ══════ */
+
+  app.get('/api/collect/candidates/:code/adopt', async (req) => {
+    const { code } = req.params as { code: string };
+    const { catalogTree } = await import('../services/meta.js');
+    return { plan: await adoptPlan(code), catalog: await catalogTree() };
+  });
+
+  app.post('/api/collect/candidates/:code/adopt', { preHandler: requirePermission('collect.manage') }, async (req) => {
+    const { code } = req.params as { code: string };
+    const body = adoptCandidateSchema.parse(req.body);
+    return adoptCandidate(req.currentUser!, code, {
+      category: { id: body.category.id ?? null, nameZh: body.category.nameZh, nameEn: body.category.nameEn },
+      scene: { id: body.scene.id ?? null, nameZh: body.scene.nameZh, nameEn: body.scene.nameEn },
+      titleZh: body.titleZh,
+      titleEn: body.titleEn,
+      bodyZh: body.bodyZh,
+      bodyEn: body.bodyEn,
+    });
+  });
+
+  /** 向导内的即时翻译：此时还没有条目，走通用文本翻译 */
+  app.post('/api/collect/translate', { preHandler: requirePermission('collect.manage') }, async (req) => {
+    const body = adoptTranslateSchema.parse(req.body);
+    const llm = getLlm();
+    const { toParagraphs, toHtml } = await import('../core/content.js');
+    const paras = toParagraphs(body.bodyZh);
+    const res = await llm.translateToEnglish([
+      { paragraphId: '__title__', zh: body.titleZh },
+      ...paras.map((p, i) => ({ paragraphId: `p${i}`, zh: p })),
+    ]);
+    const map = new Map(res.map((r) => [r.paragraphId, r.en]));
+    const bodyEn = paras.map((_, i) => (map.get(`p${i}`) ?? '').trim()).filter(Boolean);
+    return {
+      titleEn: (map.get('__title__') ?? '').trim(),
+      bodyEn: toHtml(bodyEn.join('\n\n')),
+      degraded: llm.mode !== 'qwen',
+    };
   });
 
   app.post('/api/collect/candidates/:code/drop', { preHandler: requirePermission('collect.manage') }, async (req) => {

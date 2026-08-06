@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import {
   TUNABLES,
   approveSchema,
+  batchCodesSchema,
+  batchShelfSchema,
   createEntrySchema,
   entryListViewSchema,
   rejectSchema,
@@ -13,6 +15,8 @@ import { toParagraphs } from '../core/content.js';
 import { fmtShort, thousands } from '../core/fmt.js';
 import {
   DomainError,
+  batchDeleteDrafts,
+  batchShelf,
   createEntry,
   findEntry,
   listEntries,
@@ -206,6 +210,18 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
     const { code } = req.params as { code: string };
     const out = await retrySync(req.currentUser!, code);
     return { ...out, entry: toDto(await findEntry(code)) };
+  });
+
+  /* ══════ 批量操作（用户要求 5） ══════ */
+
+  app.post('/api/entries/batch/delete', { preHandler: requirePermission('entry.write') }, async (req) => {
+    const body = batchCodesSchema.parse(req.body);
+    return batchDeleteDrafts(req.currentUser!, body.codes);
+  });
+
+  app.post('/api/entries/batch/shelf', { preHandler: requirePermission('kb.offline') }, async (req) => {
+    const body = batchShelfSchema.parse(req.body);
+    return batchShelf(req.currentUser!, body.codes, body.action);
   });
 
   /* ══════ 审核 ══════ */
