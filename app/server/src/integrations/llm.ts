@@ -39,6 +39,18 @@ export interface DerivedTopic {
   summary: string;
   /** 该主题命中的会话条数（频次准入的分子） */
   count: number;
+  /**
+   * 抽象摘要：这条问题「在描述什么、解决哪方面」的一句话归纳。
+   * 它是候选去重与垃圾箱自动丢弃的唯一匹配依据，必须与具体措辞无关。
+   */
+  abstract: string;
+  /** 命中的会话序号（1 基，对应传入数组下标+1），用于把原始会话挂到候选下 */
+  refs: number[];
+  /** 分类与场景建议（模型给的中文名，落库时映射到真实分类/场景，映射不上就留空让人工选） */
+  categoryHint: string;
+  sceneHint: string;
+  /** 用户情绪，供优先级排序：negative 最急 */
+  sentiment: 'negative' | 'neutral' | 'positive';
 }
 
 /** 整理建议（建议态：不写正文，运营逐项采纳/修改/拒绝） */
@@ -148,6 +160,13 @@ class LocalProvider implements LlmProvider {
         topic: `[local] ${topic}`,
         summary: `[local] 按首句粗聚合，共 ${count} 条会话——本地模式未做语义提炼`,
         count,
+        abstract: `[local] ${topic}`,
+        refs: conversations
+          .map((c, i) => (c.includes(topic) ? i + 1 : 0))
+          .filter((n): n is number => n > 0),
+        categoryHint: '',
+        sceneHint: '',
+        sentiment: 'neutral' as const,
       }));
   }
 
@@ -279,26 +298,62 @@ class QwenProvider implements LlmProvider {
       '你是 COOLFLY 客服知识库的中译英译者。逐段翻译为北美用户可读的英文，保持政策口径与数字不变。只输出 JSON 数组，元素为 {"paragraphId":"...","en":"..."}，不要任何解释或代码围栏。',
       JSON.stringify(segments),
     );
-    return JSON.parse(extractJson(raw)) as TranslateResult[];
+    return asArray<TranslateResult>(parseJson(raw, '翻译结果'));
   }
 
   async extractTopics(conversations: string[]): Promise<DerivedTopic[]> {
     if (conversations.length === 0) return [];
     const raw = await this.call(
-      '你在为 COOLFLY 智能硬件（喂鸟器/户外摄像头）客服团队做会话挖掘。从下列客服会话中归纳用户反复问的问题主题，同一件事合并为一条。只输出 JSON 数组，元素为 {"topic":"一句话主题","summary":"该主题的现象与用户诉求概括","count":命中会话数}，按 count 降序，最多 10 条，不要任何解释或代码围栏。',
+      [
+        '你在为 COOLFLY 智能硬件（喂鸟器 / 户外摄像头）客服团队做会话挖掘。',
+        '把描述同一个问题场景的会话**合并为一条**（例如所有配网失败、Wi-Fi 连不上的会话合成一条），不要按措辞拆开。',
+        '只输出 JSON 对象：{"items":[{',
+        '"topic":"一句话问题主题",',
+        '"summary":"该主题的现象与用户诉求概括",',
+        '"abstract":"抽象摘要：这个问题在描述什么、要解决哪方面的问题，与具体措辞无关，用于后续去重",',
+        '"category":"建议的一级分类中文名",',
+        '"scene":"建议的二级场景中文名",',
+        '"sentiment":"negative|neutral|positive（用户整体情绪）",',
+        '"refs":[命中的会话编号数组]',
+        '}]}，按命中会话数降序，最多 10 条。不要任何解释或代码围栏。',
+      ].join(''),
       conversations
         .slice(0, 200)
         .map((c, i) => `#${i + 1} ${c.replace(/\s+/g, ' ').slice(0, 400)}`)
         .join('\n'),
     );
-    const parsed = JSON.parse(extractJson(raw)) as DerivedTopic[];
+    const parsed = asArray<{
+      topic?: string;
+      summary?: string;
+      abstract?: string;
+      category?: string;
+      scene?: string;
+      sentiment?: string;
+      refs?: unknown;
+      count?: unknown;
+    }>(parseJson(raw, '会话主题'));
     return parsed
       .filter((t) => t.topic?.trim())
-      .map((t) => ({
-        topic: t.topic.trim(),
-        summary: t.summary?.trim() ?? '',
-        count: Math.max(1, Number(t.count) || 1),
-      }));
+      .map((t) => {
+        const refs = Array.isArray(t.refs)
+          ? t.refs
+              .map((n) => Number(n))
+              .filter((n) => Number.isInteger(n) && n >= 1 && n <= conversations.length)
+          : [];
+        const sentiment =
+          t.sentiment === 'negative' || t.sentiment === 'positive' ? t.sentiment : ('neutral' as const);
+        return {
+          topic: t.topic!.trim(),
+          summary: t.summary?.trim() ?? '',
+          // 会话数以 refs 为准：模型自报的 count 常与 refs 对不上
+          count: Math.max(1, refs.length || Number(t.count) || 1),
+          abstract: t.abstract?.trim() || t.summary?.trim() || t.topic!.trim(),
+          refs,
+          categoryHint: t.category?.trim() ?? '',
+          sceneHint: t.scene?.trim() ?? '',
+          sentiment,
+        };
+      });
   }
 
   async draftCandidate(topic: string, sourceSummary: string): Promise<DraftResult> {
@@ -306,7 +361,7 @@ class QwenProvider implements LlmProvider {
       '你是知识库编辑。根据客服会话聚类结果起草一条知识条目草稿，正文分点写明现象、处理步骤、例外与升级路径。只输出 JSON：{"title":"...","body":"...","summary":"..."}，不要任何解释或代码围栏。',
       `主题：${topic}\n来源摘要：${sourceSummary}`,
     );
-    return JSON.parse(extractJson(raw)) as DraftResult;
+    return parseJson<DraftResult>(raw, '候选草稿');
   }
 
   async suggestOrganize(
@@ -320,7 +375,7 @@ class QwenProvider implements LlmProvider {
       `标题：${title}\n正文：${body.slice(0, 1500)}\n可选一级场景：${scenes.join(' / ')}\n可选章节：${chapters.join(' / ')}`,
       true,
     );
-    const p = JSON.parse(extractJson(raw)) as Omit<OrganizeSuggestion, 'degraded'>;
+    const p = parseJson<Omit<OrganizeSuggestion, 'degraded'>>(raw, '整理建议');
     return {
       labels: (p.labels ?? []).slice(0, 5),
       // 模型可能自由发挥，落回给定清单内，防止产出库里不存在的场景/章节
@@ -337,7 +392,7 @@ class QwenProvider implements LlmProvider {
       '你是 COOLFLY 客服知识库编辑。用 2–3 句简体中文概括这条知识的适用场景与核心口径，供内部语义查重比对使用。只输出 JSON：{"summary":"..."}，不要任何解释或代码围栏。',
       `标题：${title}\n正文：${body.slice(0, 3000)}`,
     );
-    const parsed = JSON.parse(extractJson(raw)) as { summary: string };
+    const parsed = parseJson<{ summary: string }>(raw, '条目摘要');
     return parsed.summary;
   }
 
@@ -351,7 +406,7 @@ class QwenProvider implements LlmProvider {
         .map((c) => `- ${c.code}｜${c.title}｜${c.summary}`)
         .join('\n')}`,
     );
-    const parsed = JSON.parse(extractJson(raw)) as { code: string | null; similarity: number; reason: string };
+    const parsed = parseJson<{ code: string | null; similarity: number; reason: string }>(raw, '查重判定');
     return {
       code: parsed.code,
       similarity: Number(Math.max(0, Math.min(1, parsed.similarity)).toFixed(4)),
@@ -364,8 +419,124 @@ class QwenProvider implements LlmProvider {
 function extractJson(text: string): string {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
   const body = fenced ? fenced[1]! : text;
-  const m = body.match(/[[{][\s\S]*[\]}]/);
-  return m ? m[0] : body;
+  // 括号配平扫描，比贪婪正则可靠：贪婪匹配会把「结尾解释里的括号」也吞进来
+  const start = body.search(/[[{]/);
+  if (start < 0) return body;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < body.length; i += 1) {
+    const ch = body[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') depth += 1;
+    else if (ch === '}' || ch === ']') {
+      depth -= 1;
+      if (depth === 0) return body.slice(start, i + 1);
+    }
+  }
+  return body.slice(start);
+}
+
+/**
+ * 把字符串里的裸控制字符转义。
+ * 模型写多行正文时经常直接把真换行塞进 JSON 字符串里，那是非法 JSON——
+ * 线上实证：草稿 body 带 `\n` 列表导致整批抽取失败。
+ */
+function escapeRawControlChars(text: string): string {
+  let out = '';
+  let inStr = false;
+  let esc = false;
+  for (const ch of text) {
+    if (inStr) {
+      if (esc) {
+        out += ch;
+        esc = false;
+        continue;
+      }
+      if (ch === '\\') {
+        out += ch;
+        esc = true;
+        continue;
+      }
+      if (ch === '"') {
+        out += ch;
+        inStr = false;
+        continue;
+      }
+      if (ch === '\n') out += '\\n';
+      else if (ch === '\r') out += '\\r';
+      else if (ch === '\t') out += '\\t';
+      else if (ch < ' ') out += `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`;
+      else out += ch;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    out += ch;
+  }
+  return out;
+}
+
+/** 把被截断 / 带尾逗号 / 含裸换行的 JSON 尽量修回来（模型撞 max_tokens 或写多行正文时很常见） */
+function repairJson(text: string): string {
+  let s = escapeRawControlChars(text.trim()).replace(/,\s*([}\]])/g, '$1');
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  if (inStr) s += '"';
+  // 截断处可能停在 `"key":` 或 `,`，先削掉再补闭合
+  s = s.replace(/[,:]\s*$/, '');
+  while (stack.length) s += stack.pop() === '{' ? '}' : ']';
+  return s.replace(/,\s*([}\]])/g, '$1');
+}
+
+/**
+ * 解析模型返回的 JSON。三道：直解 → 修复后再解 → 抛带片段的可读错误。
+ * 直接 `JSON.parse` 会把「模型少了个引号」变成一条看不懂的报错糊到用户脸上
+ * （线上实证：抽取任务失败原因显示 `Expected ',' or '}' ... position 63`）。
+ */
+function parseJson<T>(raw: string, what: string): T {
+  const body = extractJson(raw);
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    try {
+      return JSON.parse(repairJson(body)) as T;
+    } catch (err) {
+      const snippet = body.replace(/\s+/g, ' ').slice(0, 160);
+      throw new Error(
+        `大模型返回的${what}不是合法 JSON（已尝试自动修复仍失败）：${(err as Error).message}；返回片段：${snippet}`,
+      );
+    }
+  }
+}
+
+/** 数组型返回的兜底：模型有时会包一层 {items:[...]} 或 {data:[...]} */
+function asArray<T>(parsed: unknown): T[] {
+  if (Array.isArray(parsed)) return parsed as T[];
+  if (parsed && typeof parsed === 'object') {
+    for (const key of ['items', 'data', 'list', 'result', 'topics', 'results']) {
+      const v = (parsed as Record<string, unknown>)[key];
+      if (Array.isArray(v)) return v as T[];
+    }
+  }
+  return [];
 }
 
 let provider: LlmProvider | null = null;

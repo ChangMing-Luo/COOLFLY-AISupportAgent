@@ -3,7 +3,16 @@ import { EXTRACT_CONFIG_LABELS, TUNABLES } from '@kb/contracts';
 import { requirePermission } from '../core/rbac.js';
 import { getLlm } from '../integrations/llm.js';
 import { toDto } from '../services/entries.js';
-import { acceptCandidate, currentTask, dropCandidate, runCollect } from '../services/collect.js';
+import {
+  acceptCandidate,
+  candidateSources,
+  clearWorkbench,
+  currentTask,
+  dropCandidate,
+  restoreCandidate,
+  runCollect,
+  trashCandidates,
+} from '../services/collect.js';
 import {
   createDraftFromMiss,
   fixFeedback,
@@ -48,8 +57,30 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/collect/candidates/:code/drop', { preHandler: requirePermission('collect.manage') }, async (req) => {
     const { code } = req.params as { code: string };
-    await dropCandidate(req.currentUser!, code);
-    return { ok: true };
+    const body = (req.body ?? {}) as { reason?: string };
+    await dropCandidate(req.currentUser!, code, body.reason ?? '');
+    return currentTask();
+  });
+
+  /** 某条聚合候选下挂的全部 Zendesk 会话原文 */
+  app.get('/api/collect/candidates/:code/sources', async (req) => {
+    const { code } = req.params as { code: string };
+    return candidateSources(code);
+  });
+
+  /* ══════ 垃圾箱 ══════ */
+  app.get('/api/collect/trash', async () => ({ candidates: await trashCandidates() }));
+
+  app.post('/api/collect/candidates/:code/restore', { preHandler: requirePermission('collect.manage') }, async (req) => {
+    const { code } = req.params as { code: string };
+    await restoreCandidate(req.currentUser!, code);
+    return { candidates: await trashCandidates() };
+  });
+
+  app.post('/api/collect/clear', { preHandler: requirePermission('collect.manage') }, async (req) => {
+    const body = (req.body ?? {}) as { mode?: 'discard' | 'purge' };
+    const out = await clearWorkbench(req.currentUser!, body.mode ?? 'discard');
+    return { ...out, ...(await currentTask()) };
   });
 
   /* ══════ 反馈 ══════ */

@@ -191,18 +191,42 @@ CREATE TABLE IF NOT EXISTS extract_candidates (
   task_id      TEXT NOT NULL REFERENCES collect_tasks(id) ON DELETE CASCADE,
   title        TEXT NOT NULL,
   answer       TEXT NOT NULL DEFAULT '',
+  category_id  TEXT REFERENCES categories(id) ON DELETE SET NULL,
   scene_id     TEXT REFERENCES scenes(id) ON DELETE SET NULL,
+  -- 模型给的分类/场景建议原文（映射不到本地对象时保留，供人工判断）
+  category_hint TEXT NOT NULL DEFAULT '',
+  scene_hint    TEXT NOT NULL DEFAULT '',
   tags         JSONB NOT NULL DEFAULT '[]'::jsonb,
   confidence   NUMERIC(4,3) NOT NULL DEFAULT 0,
+  -- 抽象摘要：候选去重与垃圾箱自动丢弃的唯一匹配依据
+  summary      TEXT NOT NULL DEFAULT '',
+  -- 聚合后关联的会话条数与情绪，用于优先级排序
+  mention_count INT NOT NULL DEFAULT 1,
+  sentiment    TEXT NOT NULL DEFAULT 'neutral' CHECK (sentiment IN ('negative','neutral','positive')),
   dup_entry_id TEXT REFERENCES entries(id) ON DELETE SET NULL,
   dup_score    INT,
   disposition  TEXT NOT NULL DEFAULT 'pending' CHECK (disposition IN ('pending','accepted','dropped')),
+  -- 丢弃原因；auto_dropped=true 表示命中垃圾箱摘要被自动丢弃
+  drop_reason  TEXT,
+  auto_dropped BOOLEAN NOT NULL DEFAULT FALSE,
   disposed_by  TEXT REFERENCES users(id),
   disposed_at  TIMESTAMPTZ,
   entry_id     TEXT REFERENCES entries(id) ON DELETE SET NULL,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_cands_task ON extract_candidates(task_id, disposition);
+
+-- 候选 ← 会话：一条聚合候选下挂它命中的每一条 Zendesk 会话，界面可逐条查看
+CREATE TABLE IF NOT EXISTS candidate_sources (
+  id           TEXT PRIMARY KEY,
+  candidate_id TEXT NOT NULL REFERENCES extract_candidates(id) ON DELETE CASCADE,
+  ticket_ref   TEXT NOT NULL DEFAULT '',
+  channel      TEXT NOT NULL DEFAULT '',
+  excerpt      TEXT NOT NULL,
+  occurred_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cand_sources ON candidate_sources(candidate_id);
 
 -- ============ 反馈域 ============
 CREATE TABLE IF NOT EXISTS feedbacks (

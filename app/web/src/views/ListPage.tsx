@@ -9,6 +9,7 @@ import {
   type MissDto,
   type PermissionRowDto,
   type ReviewLogDto,
+  type CandidateDto,
   type SceneMetaDto,
   type SyncLogDto,
   type TagDto,
@@ -47,6 +48,7 @@ interface Cfg {
 
 /** 每个列表路由的数据源 */
 const SOURCE: Record<string, string> = {
+  'collect.trash': '/collect/trash',
   'author.drafts': '/entries?view=drafts',
   'author.mine': '/entries?view=mine',
   'review.queue': '/entries?view=queue',
@@ -234,6 +236,51 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
     acts: [],
     open: () => app.go('kb.detail', d.code),
   });
+
+  if (r === 'collect.trash') {
+    const list = (data.candidates as CandidateDto[]) ?? [];
+    return {
+      kicker: '知识采集',
+      title: '垃圾箱',
+      desc: '人工丢弃与自动丢弃的抽取候选都收在这里。它们的 AI 摘要会成为「自动丢弃」的匹配指纹——下次抽到同一个问题会直接进垃圾箱，不再反复冒出来。恢复后该指纹立即失效。',
+      headers: ['问题', 'AI 摘要', '丢弃方式', '丢弃时间', '关联会话'],
+      rows: list.map((c) => ({
+        id: c.code,
+        c1: c.title,
+        sub: `${c.code} · ${c.sceneZh || c.sceneHint || '未匹配场景'}`,
+        c2: c.summary || '—',
+        c3: c.autoDropped ? '自动丢弃' : '人工丢弃',
+        tagCls: c.autoDropped ? 'tag-outline' : 'tag-neutral',
+        c4: c.disposedAt ?? '—',
+        c5: c.mentionCount,
+        open: () => app.openDrawer({ kind: 'sources', code: c.code }),
+        acts: [
+          { l: '查看会话', on: () => app.openDrawer({ kind: 'sources', code: c.code }) },
+          {
+            l: '恢复',
+            on: async () => {
+              await api.post(`/collect/candidates/${c.code}/restore`);
+              app.refreshShell();
+              app.toast('已恢复到待确认', `${c.code} 回到抽取工作台，其摘要不再用于自动丢弃。`, {
+                label: '前往抽取工作台',
+                route: 'collect.extract',
+              });
+            },
+          },
+        ],
+      })),
+      filters: [
+        { l: '全部' },
+        { l: '人工丢弃', test: (x) => x.c3 === '人工丢弃' },
+        { l: '自动丢弃', test: (x) => x.c3 === '自动丢弃' },
+      ],
+      actions: [],
+      emptyTitle: '垃圾箱是空的',
+      emptyDesc: '在抽取工作台点「丢弃」的候选会收到这里，并作为后续自动丢弃的依据。',
+      emptyCta: '前往抽取工作台',
+      emptyOn: () => app.go('collect.extract'),
+    };
+  }
 
   if (r === 'author.drafts' || r === 'author.mine') {
     const list = (data.entries as EntryDto[]) ?? [];

@@ -16,6 +16,8 @@ export function Importer() {
   const [rows, setRows] = useState<ParsedDraft[]>([]);
   const [skipped, setSkipped] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // 取消上传：AbortController 断掉请求，进度模态里的当前步骤即刻标失败
+  const abortRef = useRef<AbortController | null>(null);
   const catalog: CatalogCategory[] = app.catalog;
 
   async function pick(file: File) {
@@ -28,7 +30,17 @@ export function Importer() {
           setDetail(`${(file.size / 1024).toFixed(0)} KB，上传中…`);
           const fd = new FormData();
           fd.append('file', file);
-          const res = await fetch('/api/import/parse', { method: 'POST', body: fd, credentials: 'include' });
+          const ac = new AbortController();
+          abortRef.current = ac;
+          const res = await fetch('/api/import/parse', {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+            signal: ac.signal,
+          }).catch((e: Error) => {
+            if (e.name === 'AbortError') throw new Error('已取消上传，文件未入库');
+            throw e;
+          });
           const text = await res.text();
           const data = text ? JSON.parse(text) : {};
           if (!res.ok) throw new Error(String(data.message ?? `解析失败（${res.status}）`));
@@ -49,6 +61,7 @@ export function Importer() {
         },
       },
     ]);
+    abortRef.current = null;
     const p = parsed as ParseResult | null;
     if (p) {
       setResult(p);
@@ -129,9 +142,21 @@ export function Importer() {
               e.target.value = '';
             }}
           />
-          <button className="btn btn-secondary" onClick={() => fileRef.current?.click()} disabled={busy}>
-            {result ? '重新选择文件' : '选择文件'}
-          </button>
+          {busy ? (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                abortRef.current?.abort();
+                abortRef.current = null;
+              }}
+            >
+              取消上传
+            </button>
+          ) : (
+            <button className="btn btn-secondary" onClick={() => fileRef.current?.click()}>
+              {result ? '重新选择文件' : '选择文件'}
+            </button>
+          )}
           {result ? (
             <button className="btn btn-primary" onClick={commit} disabled={busy || kept === 0}>
               导入 {kept} 条为草稿
@@ -162,6 +187,8 @@ export function Importer() {
             </div>
             <p style={{ fontSize: 13, color: C.muted, margin: '8px auto 16px', maxWidth: 460, textWrap: 'pretty' }}>
               支持 .md / .txt（按 # 标题切条）、.csv / .tsv / .xlsx（按行切条，自动识别「标题·正文」或「问题·答案」列）、.docx（按标题层级切条）。单文件上限 20 MB。
+              <br />
+              文件只在服务端内存里解析，<b>不落盘、不入库</b>；入库的只有你确认后的知识条目。上传过程中可随时点「取消上传」。
             </p>
             <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={busy}>
               选择文件
@@ -196,6 +223,7 @@ export function Importer() {
             }}
           >
             《{result.fileName}》· {result.format} · {result.note}
+            <div style={{ marginTop: 6, color: C.muted700 }}>{result.storage}</div>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

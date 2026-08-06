@@ -68,6 +68,9 @@ export async function pullFromZendesk(user: SessionUser): Promise<{ created: num
   const zd = getZendesk();
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
   let created = 0;
+  let refreshed = 0;
+  let totalUp = 0;
+  let totalDown = 0;
 
   // ① 投票增量
   const { rows: mapped } = await query<{
@@ -82,8 +85,9 @@ export async function pullFromZendesk(user: SessionUser): Promise<{ created: num
             COALESCE(mt.votes_down,0) AS votes_down, COALESCE(mt.votes_up,0) AS votes_up
      FROM entries e
      JOIN sync_mappings m ON m.entry_id = e.id AND m.zendesk_article_ref IS NOT NULL
-     LEFT JOIN entry_metrics mt ON mt.entry_id = e.id
-     WHERE e.status='published'`,
+     LEFT JOIN entry_metrics mt ON mt.entry_id = e.id`,
+    // 不按 status 过滤：文章一旦推上帮助中心就会持续收到投票，
+    // 条目在中台被改成草稿/修复中并不代表线上文章下线了——按状态过滤会让投票永远回不来。
   );
   for (const m of mapped) {
     let votes: { up: number; down: number };
@@ -92,6 +96,9 @@ export async function pullFromZendesk(user: SessionUser): Promise<{ created: num
     } catch {
       continue;
     }
+    refreshed += 1;
+    totalUp += votes.up;
+    totalDown += votes.down;
     const total = votes.up + votes.down;
     await query(
       `INSERT INTO entry_metrics (entry_id, votes_up, votes_down, adopt_rate, refreshed_at)
@@ -150,13 +157,16 @@ export async function pullFromZendesk(user: SessionUser): Promise<{ created: num
     action: 'Zendesk 拉取',
     objectType: 'feedback',
     objectCode: null,
-    objectLabel: created ? `拉取到 ${created} 条客诉` : '本次未拉取到新客诉',
+    objectLabel: `刷新 ${refreshed} 篇文章投票（赞 ${totalUp} / 踩 ${totalDown}），新增 ${created} 条客诉`,
   });
+  const voteNote = refreshed
+    ? `已刷新 ${refreshed} 篇文章的投票：累计 ${totalUp} 赞 / ${totalDown} 踩，采纳率已更新。`
+    : '尚无已同步到 Zendesk 的文章，暂无投票可拉。';
   return {
     created,
     note: created
-      ? `已从 Zendesk 拉取 ${created} 条客诉，可直接在列表修复。`
-      : `Zendesk 近 7 日没有新的踩或客诉会话（数据源：${zd.mode === 'live' ? '真实实例' : '沙箱'}）。`,
+      ? `${voteNote}并新增 ${created} 条待处理客诉，可直接在列表修复。`
+      : `${voteNote}近 7 日没有新增的踩或客诉会话（数据源：${zd.mode === 'live' ? '真实实例' : '沙箱'}）。`,
   };
 }
 

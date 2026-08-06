@@ -40,6 +40,14 @@ async function main(): Promise<void> {
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS pending_kind TEXT;
     ALTER TABLE entries ADD COLUMN IF NOT EXISTS pending_version TEXT;
     ALTER TABLE users  ADD COLUMN IF NOT EXISTS review_granted BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS category_id TEXT REFERENCES categories(id) ON DELETE SET NULL;
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS category_hint TEXT NOT NULL DEFAULT '';
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS scene_hint TEXT NOT NULL DEFAULT '';
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS summary TEXT NOT NULL DEFAULT '';
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS mention_count INT NOT NULL DEFAULT 1;
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS sentiment TEXT NOT NULL DEFAULT 'neutral';
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS drop_reason TEXT;
+    ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS auto_dropped BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
   // 审计日志 append-only：数据库层拒绝 UPDATE / DELETE（RULE-02）

@@ -161,6 +161,9 @@ export interface ParseResult {
   drafts: ParsedDraft[];
   aiMode: string;
   note: string;
+  storage: string;
+  aiOrganized: number;
+  elapsedMs: number;
 }
 
 export interface ImportCommitResult {
@@ -172,16 +175,35 @@ export interface CandidateDto {
   code: string;
   title: string;
   answer: string;
+  summary: string;
+  categoryZh: string;
   sceneZh: string;
+  categoryHint: string;
+  sceneHint: string;
   tags: string[];
   confidence: number;
   confidencePct: string;
   state: string;
   tagClass: string;
+  mentionCount: number;
+  sentiment: 'negative' | 'neutral' | 'positive';
+  sentimentLabel: string;
+  createdAt: string;
   dup: boolean;
   dupCode: string | null;
   dupTitle: string | null;
   dupScore: string | null;
+  dropReason: string | null;
+  autoDropped: boolean;
+  disposedAt: string | null;
+}
+
+export interface CandidateSourceDto {
+  id: string;
+  ticketRef: string;
+  channel: string;
+  excerpt: string;
+  at: string;
 }
 
 export interface CollectTaskDto {

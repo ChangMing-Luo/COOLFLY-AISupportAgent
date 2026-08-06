@@ -724,11 +724,17 @@ class LiveZendesk implements ZendeskClient {
     return { email, chat, items };
   }
 
+  /**
+   * 文章投票。Zendesk 返回的键是 **`votes`**，不是 `article_votes`——
+   * 读错键会让投票恒为 0/0：采纳率永远算不出来，差评也永远回流不了（08-06-2026 线上实证）。
+   * 两个键都兜住，避免不同版本/端点的差异再把这条链路打断。
+   */
   async fetchArticleVotes(articleRef: string): Promise<{ up: number; down: number }> {
-    const data = await this.call<{ article_votes?: Array<{ value: number }> }>(
-      `/help_center/articles/${articleRef}/votes.json?per_page=100`,
-    );
-    const votes = data.article_votes ?? [];
+    const data = await this.call<{
+      votes?: Array<{ value: number }>;
+      article_votes?: Array<{ value: number }>;
+    }>(`/help_center/articles/${articleRef}/votes.json?per_page=100`);
+    const votes = data.votes ?? data.article_votes ?? [];
     return { up: votes.filter((v) => v.value > 0).length, down: votes.filter((v) => v.value < 0).length };
   }
 

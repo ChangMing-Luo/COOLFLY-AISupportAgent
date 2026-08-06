@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type MissDto } from '../api.js';
+import { api, type CandidateDto, type CandidateSourceDto, type MissDto } from '../api.js';
 import { useApp, type DrawerState } from '../shell.js';
 import { C, tnum } from '../ui.js';
 import { ChecksCard, CommentBox, DiffBlock, doApprove, doReject, useReview } from './ReviewPage.js';
@@ -29,6 +29,7 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
   const [comment, setComment] = useState('');
   const [review] = useReview(state?.kind === 'review' ? state.code : null);
   const [miss, setMiss] = useState<MissDto | null>(null);
+  const [sources, setSources] = useState<{ candidate: CandidateDto; sources: CandidateSourceDto[] } | null>(null);
   const [metaZh, setMetaZh] = useState('');
   const [metaEn, setMetaEn] = useState('');
   const [metaType, setMetaType] = useState('业务');
@@ -53,6 +54,13 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
       setUserDept(state.department ?? '客服运营');
       setUserRole(state.role ?? 'ops');
       setUserReview(state.reviewGranted ?? false);
+    }
+    if (state?.kind === 'sources') {
+      setSources(null);
+      api
+        .get<{ candidate: CandidateDto; sources: CandidateSourceDto[] }>(`/collect/candidates/${state.code}/sources`)
+        .then(setSources)
+        .catch(() => undefined);
     }
     if (state?.kind === 'miss') {
       api
@@ -156,6 +164,11 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
         },
       },
     ];
+  } else if (state.kind === 'sources') {
+    kicker = `关联会话 · ${state.code}`;
+    title = sources?.candidate.title ?? '加载中…';
+    meta = sources ? `${sources.sources.length} 个 Zendesk 会话提及该问题` : '';
+    actions = [{ l: '关闭', cls: 'btn-secondary', on: onClose }];
   } else if (state.kind === 'info') {
     kicker = '详情';
     title = state.title;
@@ -294,18 +307,7 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
                   </select>
                 </div>
               ) : null}
-              {state.metaKind === '标签' ? (
-                <div className="field" style={{ marginTop: 12 }}>
-                  <label>标签类型</label>
-                  <select className="input" value={metaType} onChange={(e) => setMetaType(e.target.value)}>
-                    {['业务', '属性', '动作', '人群'].map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
+              {state.metaKind === '标签' ? null : (
                 <>
                   <div
                     style={{
@@ -512,6 +514,59 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
                   : '创建后系统生成一次性初始密码并在提示中显示，本人首次登录须修改。账号状态、审核授权与停用均可在列表中调整，全部动作写入审计。'}
               </p>
             </>
+          ) : null}
+
+          {state.kind === 'sources' ? (
+            sources ? (
+              <>
+                <div
+                  style={{
+                    borderLeft: `2px solid ${C.accent}`,
+                    background: 'var(--color-accent-100)',
+                    padding: '12px 14px',
+                    fontSize: 12.5,
+                    color: 'var(--color-accent-900)',
+                    textWrap: 'pretty',
+                  }}
+                >
+                  AI 摘要：{sources.candidate.summary || '—'}
+                </div>
+                <div style={{ display: 'flex', gap: 14, margin: '14px 0 16px', fontSize: 12.5, color: C.muted700 }}>
+                  <span>分类 · {sources.candidate.categoryZh || sources.candidate.categoryHint || '未匹配'}</span>
+                  <span>场景 · {sources.candidate.sceneZh || sources.candidate.sceneHint || '未匹配'}</span>
+                  <span style={tnum}>情绪 · {sources.candidate.sentimentLabel}</span>
+                </div>
+                <h5 style={{ margin: '0 0 10px' }}>会话原文（{sources.sources.length}）</h5>
+                {sources.sources.map((x) => (
+                  <div
+                    key={x.id}
+                    style={{
+                      border: `1px solid ${C.divider}`,
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '10px 12px',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, color: C.muted, ...tnum }}>
+                      <span>{x.ticketRef}</span>
+                      <span>{x.channel}</span>
+                      <div style={{ flex: 1 }} />
+                      <span>{x.at}</span>
+                    </div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 5, whiteSpace: 'pre-wrap' }}>
+                      {x.excerpt}
+                    </div>
+                  </div>
+                ))}
+                {sources.sources.length === 0 ? (
+                  <div style={{ fontSize: 13, color: C.muted, padding: '20px 0' }}>
+                    这条候选没有挂到具体会话（可能来自旧版抽取，或模型未给出命中编号）。
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: C.muted }}>加载中…</div>
+            )
           ) : null}
 
           {state.kind === 'info' ? (

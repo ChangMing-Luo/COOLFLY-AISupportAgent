@@ -38,6 +38,11 @@ export interface ParseResult {
   drafts: ParsedDraft[];
   aiMode: string;
   note: string;
+  /** 文件去向说明：只在内存里解析，不落盘 */
+  storage: string;
+  /** 实际走了 AI 整理的条数（其余为字面匹配，避免大文件把接口拖到超时） */
+  aiOrganized: number;
+  elapsedMs: number;
 }
 
 /* ══════════ 解析 ══════════ */
@@ -161,12 +166,57 @@ function splitCsvLine(line: string, sep: string): string[] {
 
 /* ══════════ AI 整理 ══════════ */
 
+/** AI 整理的并发与条数上限：串行逐条调大模型会把 50 行的表格拖成好几分钟 */
+const AI_CONCURRENCY = 6;
+const AI_MAX_ITEMS = Number(process.env.IMPORT_AI_MAX_ITEMS ?? 60);
+
+/** 定长并发池 */
+async function mapLimit<T, R>(list: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(list.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, list.length) }, async () => {
+      for (;;) {
+        const i = cursor;
+        cursor += 1;
+        if (i >= list.length) return;
+        out[i] = await fn(list[i], i);
+      }
+    }),
+  );
+  return out;
+}
+
 export async function parseAndOrganize(fileName: string, buf: Buffer): Promise<ParseResult> {
+  const started = Date.now();
   const { format, items } = await parseFile(fileName, buf);
   const usable = items.filter((x) => (x.title + x.body).replace(/\s/g, '').length >= 8);
   const scenes = await listScenes();
   const llm = getLlm();
-  const aiApplied = llm.mode === 'qwen';
+  const aiApplied = llm.mode === 'qwen' && scenes.length > 0;
+  // 超过上限的部分只做字面匹配，并在 note 里如实说明——宁可少做也不让接口挂住
+  const aiCount = aiApplied ? Math.min(usable.length, AI_MAX_ITEMS) : 0;
+
+  const suggestions = await mapLimit(usable.slice(0, aiCount), AI_CONCURRENCY, async (it) => {
+    const title = it.title || it.body.split(/\n/)[0].slice(0, 40);
+    const body = it.body || it.title;
+    try {
+      const sug = await llm.suggestOrganize(
+        title,
+        body,
+        scenes.map((s) => s.categoryZh),
+        scenes.map((s) => s.nameZh),
+      );
+      return {
+        sceneName: sug.sceneL2 || sug.sceneL1 || '',
+        tags: (sug.labels ?? []).slice(0, 4),
+        reason: sug.reason || '',
+        ok: true,
+      };
+    } catch {
+      return { sceneName: '', tags: [] as string[], reason: 'AI 整理调用失败，已退回字面匹配', ok: false };
+    }
+  });
 
   const drafts: ParsedDraft[] = [];
   for (let i = 0; i < usable.length; i += 1) {
@@ -174,24 +224,10 @@ export async function parseAndOrganize(fileName: string, buf: Buffer): Promise<P
     const title = it.title || it.body.split(/\n/)[0].slice(0, 40);
     const body = it.body || it.title;
 
-    let sceneName = '';
-    let tags: string[] = [];
-    let reason = '';
-    if (aiApplied && scenes.length > 0) {
-      try {
-        const sug = await llm.suggestOrganize(
-          title,
-          body,
-          scenes.map((s) => s.categoryZh),
-          scenes.map((s) => s.nameZh),
-        );
-        sceneName = sug.sceneL2 || sug.sceneL1 || '';
-        tags = (sug.labels ?? []).slice(0, 4);
-        reason = sug.reason || '';
-      } catch {
-        reason = 'AI 整理调用失败，已退回字面匹配';
-      }
-    }
+    const sug = suggestions[i];
+    let sceneName = sug?.sceneName ?? '';
+    let tags = sug?.tags ?? [];
+    let reason = sug?.reason ?? (i >= aiCount && aiApplied ? `超出单次 AI 整理上限（${AI_MAX_ITEMS} 条），本条按字面匹配` : '');
 
     // AI 给的场景名要落到真实场景上；给不出就用字面相似度兜底
     let scene = scenes.find((s) => s.nameZh === sceneName);
@@ -217,21 +253,28 @@ export async function parseAndOrganize(fileName: string, buf: Buffer): Promise<P
       sceneId: scene?.id ?? null,
       sceneZh: scene?.nameZh ?? '',
       tags,
-      aiApplied,
+      aiApplied: aiApplied && i < aiCount,
       reason: reason || (scenes.length === 0 ? '库内还没有分类与场景，导入后请在编辑器里补选' : '未匹配到合适场景，请人工选择'),
       warning: plain.length < 30 ? '内容偏短，可能是目录行或标题页，建议核对后再导入' : null,
     });
   }
 
+  const elapsedMs = Date.now() - started;
+  const over = aiApplied && usable.length > aiCount ? `（超出上限的 ${usable.length - aiCount} 条按字面匹配）` : '';
   return {
     fileName,
     format,
     rawCount: items.length,
     drafts,
     aiMode: llm.mode,
+    aiOrganized: aiCount,
+    elapsedMs,
+    storage: '文件只在服务端内存中解析，不落盘、不进数据库；解析完即释放。入库的只有你确认后的知识条目正文。',
     note: aiApplied
-      ? `已解析 ${items.length} 段，其中 ${drafts.length} 条可入库；分类与场景由大模型建议，导入前可逐条修改。`
-      : `已解析 ${items.length} 段，其中 ${drafts.length} 条可入库。**当前为本地模式，AI 整理未生效**，分类与场景仅按字面匹配，请逐条核对。`,
+      ? `已解析 ${items.length} 段，其中 ${drafts.length} 条可入库；${aiCount} 条由大模型整理${over}，耗时 ${(elapsedMs / 1000).toFixed(1)} 秒。导入前可逐条修改。`
+      : scenes.length === 0
+        ? `已解析 ${items.length} 段，其中 ${drafts.length} 条可入库。**库内还没有分类与场景**，AI 无从匹配，请先在元数据中心建好分类与场景，或导入后在编辑器里补选。`
+        : `已解析 ${items.length} 段，其中 ${drafts.length} 条可入库。**当前为本地模式，AI 整理未生效**，分类与场景仅按字面匹配，请逐条核对。`,
   };
 }
 

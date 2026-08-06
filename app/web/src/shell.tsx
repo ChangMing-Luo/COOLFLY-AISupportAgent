@@ -5,7 +5,14 @@ import type { CatalogCategory, SessionUser } from './api.js';
 
 export const NAV: Array<{ key: string; label: string; children: Array<[string, string]> }> = [
   { key: 'dash', label: '工作台', children: [] },
-  { key: 'collect', label: '知识采集', children: [['collect.extract', 'AI 抽取工作台']] },
+  {
+    key: 'collect',
+    label: '知识采集',
+    children: [
+      ['collect.extract', 'AI 抽取工作台'],
+      ['collect.trash', '垃圾箱'],
+    ],
+  },
   {
     key: 'author',
     label: '知识编辑',
@@ -87,6 +94,7 @@ export type DrawerState =
   | { kind: 'review'; code: string }
   | { kind: 'meta'; metaKind: '分类' | '场景' | '标签'; id: string | null; zh: string; en: string; parent: string; parentId: string; type: string }
   | { kind: 'miss'; code: string }
+  | { kind: 'sources'; code: string }
   | {
       kind: 'info';
       title: string;
