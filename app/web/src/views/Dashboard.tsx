@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type DashboardDto, type EntryDto } from '../api.js';
 import { useApp } from '../shell.js';
 import { C, Card, KpiRow, kickerStyle, tnum } from '../ui.js';
+import { pullFeedback } from './ListPage.js';
 
 export function Dashboard() {
   const app = useApp();
@@ -13,10 +14,9 @@ export function Dashboard() {
 
   if (!d) return null;
 
-  async function newDraft() {
-    const r = await api.post<{ entry: EntryDto }>('/entries', { titleZh: '未命名知识' });
-    app.refreshShell();
-    app.go('author.editor', r.entry.code);
+  // 直接进手动录入页；条目在首次保存时才落库，避免草稿箱堆空壳
+  function newDraft() {
+    app.go('author.editor', null);
   }
 
   async function onTodo(t: DashboardDto['todos'][number]) {
@@ -53,7 +53,21 @@ export function Dashboard() {
       </div>
       <hr className="hr" />
 
-      <KpiRow items={d.kpis} columns={5} />
+      <KpiRow
+        items={d.kpis}
+        columns={5}
+        onPick={(label) =>
+          app.go(
+            {
+              待我审核: 'review.queue',
+              我的草稿: 'author.drafts',
+              待处理反馈: 'feedback.list',
+              'ZENDESK 同步失败': 'publish.channels',
+              未命中问题: 'feedback.miss',
+            }[label] ?? 'dash',
+          )
+        }
+      />
 
       <div
         style={{
@@ -191,15 +205,7 @@ export function Dashboard() {
             <button
               className="btn btn-secondary btn-block"
               style={{ marginTop: 10 }}
-              onClick={async () => {
-                const r = await api.post<{ created: number; note: string }>('/feedback/pull');
-                app.refreshShell();
-                app.toast(
-                  r.created ? `已从 Zendesk 拉取 ${r.created} 条客诉` : '本次没有新客诉',
-                  r.note,
-                  r.created ? { label: '前往反馈回流', route: 'feedback.list' } : undefined,
-                );
-              }}
+              onClick={() => void pullFeedback(app)}
             >
               从 Zendesk 拉取客诉
             </button>

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type CatalogCategory, type EntryDto } from '../api.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, type CatalogCategory, type EntryDto, type TagDto } from '../api.js';
 import { useApp } from '../shell.js';
+import { RichText } from '../richtext.js';
 import { C, Card, Crumb, tnum, twoCol } from '../ui.js';
 
 interface EditorPayload {
@@ -14,43 +15,99 @@ interface EditorPayload {
   llmLabel: string;
 }
 
-const TOOLS: Array<{ l: string; ff: string; tip: string; cmd: string; val?: string }> = [
-  { l: 'B', ff: 'var(--font-body)', tip: '加粗', cmd: 'bold' },
-  { l: 'I', ff: 'var(--font-body)', tip: '斜体', cmd: 'italic' },
-  { l: 'H', ff: 'var(--font-heading)', tip: '小标题', cmd: 'formatBlock', val: '<h4>' },
-  { l: '•', ff: 'var(--font-body)', tip: '项目符号', cmd: 'insertUnorderedList' },
-  { l: '¶', ff: 'var(--font-body)', tip: '正文段落', cmd: 'formatBlock', val: '<p>' },
-];
+interface LocalBackup {
+  at: number;
+  titleZh: string;
+  titleEn: string;
+  bodyZh: string;
+  bodyEn: string;
+  note: string;
+  categoryId: string;
+  sceneId: string;
+  tags: string[];
+}
 
-const TAG_POOL = ['退票', '国际机票', '费率表', '不可抗力', '改签', '值机', '行李', '婴儿票'];
+const backupKey = (code: string | null): string => `coolfly.kb.draft.${code ?? '__new__'}`;
 
 export function Editor() {
   const app = useApp();
-  const code = app.sel;
+  /** null = 新建态：还没落库，首次保存才建条目（避免草稿箱堆「未命名知识」空壳） */
+  const [code, setCode] = useState<string | null>(app.sel);
   const [d, setD] = useState<EditorPayload | null>(null);
   const [title, setTitle] = useState('');
   const [titleEn, setTitleEn] = useState('');
+  const [bodyZh, setBodyZh] = useState('');
+  const [bodyEn, setBodyEn] = useState('');
   const [note, setNote] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [sceneId, setSceneId] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [allTags, setAllTags] = useState<TagDto[]>([]);
+  const [catalog, setCatalog] = useState<CatalogCategory[]>(app.catalog);
   const [translated, setTranslated] = useState(false);
   const [enEdited, setEnEdited] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
   const [showErr, setShowErr] = useState(false);
   const [suggestions, setSuggestions] = useState<EditorPayload['suggestions']>([]);
   const [busy, setBusy] = useState(false);
-  const zhRef = useRef<HTMLDivElement | null>(null);
-  const enRef = useRef<HTMLDivElement | null>(null);
+  const [backup, setBackup] = useState<LocalBackup | null>(null);
+  const [savedAt, setSavedAt] = useState('');
+  const [dirty, setDirty] = useState(false);
+  const loadedKey = useRef('');
+
+  /* ── 装载 ── */
+  useEffect(() => {
+    setCode(app.sel);
+  }, [app.sel]);
 
   useEffect(() => {
-    if (!code) return;
-    api
+    void api
+      .get<{ tags: TagDto[] }>('/meta/tags')
+      .then((r) => setAllTags(r.tags.filter((t) => t.active)))
+      .catch(() => undefined);
+  }, [app.rev]);
+
+  useEffect(() => {
+    const key = code ?? '__new__';
+    if (loadedKey.current === key) return;
+    loadedKey.current = key;
+    setShowErr(false);
+    setDirty(false);
+
+    const readBackup = (): LocalBackup | null => {
+      try {
+        const raw = localStorage.getItem(backupKey(code));
+        return raw ? (JSON.parse(raw) as LocalBackup) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    if (!code) {
+      setD(null);
+      setTitle('');
+      setTitleEn('');
+      setBodyZh('');
+      setBodyEn('');
+      setNote('');
+      setCategoryId('');
+      setSceneId('');
+      setTags([]);
+      setTranslated(false);
+      setEnEdited(false);
+      setSuggestions([]);
+      setSavedAt('');
+      setBackup(readBackup());
+      return;
+    }
+    void api
       .get<EditorPayload>(`/entries/${code}/editor`)
       .then((p) => {
         setD(p);
-        setTitle(p.entry.titleZh);
+        setTitle(p.entry.titleZh === '未命名知识' ? '' : p.entry.titleZh);
         setTitleEn(p.entry.titleEn);
+        setBodyZh(p.bodyZh);
+        setBodyEn(p.bodyEn);
         setNote(p.entry.note);
         setCategoryId(p.categoryId ?? '');
         setSceneId(p.sceneId ?? '');
@@ -58,36 +115,62 @@ export function Editor() {
         setTranslated(p.entry.translated);
         setEnEdited(p.entry.enEdited);
         setSuggestions(p.suggestions);
-        setShowErr(false);
-        if (zhRef.current) zhRef.current.innerHTML = p.bodyZh;
-        if (enRef.current) enRef.current.innerHTML = p.bodyEn;
+        setCatalog(p.catalog);
+        setSavedAt(p.entry.updatedAt);
+        const b = readBackup();
+        // 本地备份比服务端新，且内容确实不同，才提示恢复
+        if (b && (b.titleZh !== p.entry.titleZh || b.bodyZh !== p.bodyZh)) setBackup(b);
+        else {
+          setBackup(null);
+          localStorage.removeItem(backupKey(code));
+        }
       })
       .catch(() => undefined);
   }, [code]);
 
-  const validate = useCallback((): string[] => {
+  /* ── 本地备份：改动后 800ms 落 localStorage，防刷新/误退丢内容 ── */
+  useEffect(() => {
+    if (!dirty) return;
+    const t = setTimeout(() => {
+      const b: LocalBackup = { at: Date.now(), titleZh: title, titleEn, bodyZh, bodyEn, note, categoryId, sceneId, tags };
+      try {
+        localStorage.setItem(backupKey(code), JSON.stringify(b));
+      } catch {
+        /* 配额满则放弃备份，不影响编辑 */
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [dirty, title, titleEn, bodyZh, bodyEn, note, categoryId, sceneId, tags, code]);
+
+  /* ── 离开前提醒 ── */
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent): void => {
+      if (dirty) e.preventDefault();
+    };
+    window.addEventListener('beforeunload', h);
+    return () => window.removeEventListener('beforeunload', h);
+  }, [dirty]);
+
+  const touch = useCallback(() => setDirty(true), []);
+
+  const errors = useMemo(() => {
     const out: string[] = [];
     if (!sceneId) out.push('未选择问题场景（必填）');
-    if (!title || title === '未命名知识') out.push('中文标题为空或仍为默认值');
+    if (!title.trim() || title === '未命名知识') out.push('中文标题为空或仍为默认值');
     if (!translated) out.push('尚未翻译为英文（Zendesk 同步需要英文版本）');
     return out;
   }, [sceneId, title, translated]);
 
-  useEffect(() => {
-    setErrors(validate());
-  }, [validate]);
-
-  if (!d || !code) return null;
-
-  const cat = d.catalog.find((c) => c.id === categoryId);
+  const cat = catalog.find((c) => c.id === categoryId);
   const scene = cat?.scenes.find((s) => s.id === sceneId);
+  const entry = d?.entry;
 
   function payload() {
     return {
-      titleZh: title,
+      titleZh: title.trim() || '未命名知识',
       titleEn,
-      bodyZh: zhRef.current?.innerHTML ?? d!.bodyZh,
-      bodyEn: enRef.current?.innerHTML ?? d!.bodyEn,
+      bodyZh,
+      bodyEn,
       categoryId: categoryId || null,
       sceneId: sceneId || null,
       tags,
@@ -96,113 +179,188 @@ export function Editor() {
     };
   }
 
-  async function save() {
+  /** 首次保存才建条目；返回条目号 */
+  async function persist(): Promise<string> {
+    let target = code;
+    if (!target) {
+      const r = await api.post<{ entry: EntryDto }>('/entries', {
+        titleZh: title.trim() || '未命名知识',
+        bodyZh,
+        categoryId: categoryId || undefined,
+        sceneId: sceneId || undefined,
+        tags,
+      });
+      target = r.entry.code;
+      loadedKey.current = target;
+      setCode(target);
+    }
+    await api.put(`/entries/${target}`, payload());
+    localStorage.removeItem(backupKey(code));
+    localStorage.removeItem(backupKey(target));
+    setDirty(false);
+    const fresh = await api.get<EditorPayload>(`/entries/${target}/editor`);
+    setD(fresh);
+    setSavedAt(fresh.entry.updatedAt);
+    setSuggestions(fresh.suggestions);
+    return target;
+  }
+
+  async function saveDraft() {
     setBusy(true);
     try {
-      await api.put(`/entries/${code}`, payload());
+      const c = await persist();
       app.refreshShell();
-      app.toast('草稿已保存', `${code} ${d!.entry.version} 已保存（中 + EN），未提交审核，线上不受影响。`);
+      app.toast('草稿已保存', `${c} 已保存（中 + EN），未提交审核，线上不受影响。`);
+    } catch (e) {
+      app.toast('保存失败', e instanceof Error ? e.message : '未知错误');
     } finally {
       setBusy(false);
     }
   }
 
-  async function submit() {
-    const errs = validate();
-    if (errs.length) {
+  async function saveAndSubmit() {
+    if (errors.length) {
       setShowErr(true);
-      app.toast('无法提交', `有 ${errs.length} 项未通过校验，请先修正（含英文翻译）。`);
+      app.toast('无法提交', `有 ${errors.length} 项未通过校验，请先修正（含英文翻译）。`);
       return;
     }
     setBusy(true);
-    try {
-      await api.put(`/entries/${code}`, payload());
-      await api.post(`/entries/${code}/submit`);
-      app.refreshShell();
-      app.toast('已提交审核', `${code} 进入待审队列。审核通过后英文版本自动写入 Zendesk。`, {
-        label: '前往审核中心',
-        route: 'review.queue',
-      });
-      app.go('author.drafts');
-    } catch (e) {
-      const err = e as { status?: number; payload?: { errors?: string[] } };
-      if (err.status === 422 && err.payload?.errors) {
-        setShowErr(true);
-        setErrors(err.payload.errors);
-        app.toast('无法提交', `有 ${err.payload.errors.length} 项未通过校验，请先修正（含英文翻译）。`);
-      } else {
-        app.toast('提交失败', e instanceof Error ? e.message : '未知错误');
-      }
-    } finally {
-      setBusy(false);
-    }
+    let target = code;
+    await app.runWithProgress('保存并提交审核', [
+      {
+        label: '保存到中台',
+        run: async ({ setDetail }) => {
+          target = await persist();
+          setDetail(`${target} 已入库`);
+        },
+      },
+      {
+        label: '提交审核队列',
+        run: async ({ setDetail }) => {
+          await api.post(`/entries/${target}/submit`);
+          setDetail('已进入待审队列，审核通过后英文版本写入 Zendesk');
+        },
+      },
+    ]);
+    setBusy(false);
+    app.refreshShell();
+    const fresh = await api.get<EditorPayload>(`/entries/${target}/editor`).catch(() => null);
+    if (fresh?.entry.status === 'pending') app.go('author.drafts');
   }
 
   async function translate() {
     setBusy(true);
-    try {
-      await api.put(`/entries/${code}`, payload());
-      const r = await api.post<{ entry: EntryDto; bodyEn: string; degraded: boolean; mode: string }>(
-        `/entries/${code}/translate`,
-      );
-      setTitleEn(r.entry.titleEn);
+    type TransOut = { entry: EntryDto; bodyEn: string; degraded: boolean; mode: string };
+    let out: TransOut | null = null;
+    await app.runWithProgress('翻译为英文', [
+      { label: '保存当前内容', run: async () => void (await persist()) },
+      {
+        label: '调用大模型翻译标题与正文',
+        run: async ({ setDetail }) => {
+          setDetail(`引擎：${d?.llmLabel ?? '大模型'}`);
+          out = await api.post(`/entries/${code ?? ''}/translate`);
+        },
+      },
+    ]);
+    const o = out as TransOut | null;
+    if (o) {
+      setTitleEn(o.entry.titleEn);
+      setBodyEn(o.bodyEn);
       setTranslated(true);
       setEnEdited(false);
-      if (enRef.current) enRef.current.innerHTML = r.bodyEn;
-      app.toast(
-        '翻译完成',
-        r.degraded
-          ? `当前为本地确定性模式（${r.mode}），输出仅供占位，请人工改写后再提交。`
-          : '大模型已生成英文标题与正文，可在下方二次编辑。',
-      );
-    } catch (e) {
-      app.toast('翻译失败', e instanceof Error ? e.message : '未知错误');
-    } finally {
-      setBusy(false);
+      loadedKey.current = `${loadedKey.current}!`;
+      if (o.degraded) {
+        app.toast('翻译完成（本地模式）', `当前为 ${o.mode} 模式，输出仅供占位，请人工改写后再提交。`);
+      }
     }
+    setBusy(false);
   }
 
-  function exec(cmd: string, val?: string) {
-    document.execCommand(cmd, false, val);
-  }
-
-  const st = d.entry;
+  const statusTag = entry ? (
+    <span className={`tag ${entry.statusTagClass}`}>{entry.statusLabel}</span>
+  ) : (
+    <span className="tag tag-neutral">新建</span>
+  );
 
   return (
     <>
       <Crumb onBack={() => app.go('author.drafts')} label={`知识编辑 / ${title || '新建知识'}`} />
       <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 24,
-          marginTop: 10,
-        }}
+        style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, marginTop: 10 }}
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span className={`tag ${st.statusTagClass}`}>{st.statusLabel}</span>
+            {statusTag}
             <span style={{ fontSize: 12, color: C.muted, ...tnum }}>
-              {st.code} · {st.version}
+              {entry ? `${entry.code} · ${entry.version}` : '尚未入库 · 保存后生成知识编号'}
             </span>
             <span className={`tag ${translated ? 'tag-accent' : 'tag-outline'}`}>
               {translated ? '中 / EN 已翻译' : '仅中文 · 未翻译'}
             </span>
-            <span style={{ fontSize: 12, color: C.muted }}>最近保存 {st.updatedAt}</span>
+            <span style={{ fontSize: 12, color: dirty ? 'var(--color-accent-700)' : C.muted }}>
+              {dirty ? '有未保存改动 · 已存本地备份' : savedAt ? `最近保存 ${savedAt}` : '尚未保存'}
+            </span>
           </div>
           <h2 style={{ margin: '8px 0 0', fontWeight: 400 }}>编辑知识</h2>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={save} disabled={busy}>
+          <button className="btn btn-secondary" onClick={saveDraft} disabled={busy}>
             保存草稿
           </button>
-          <button className="btn btn-primary" onClick={submit} disabled={busy}>
-            提交审核
+          <button className="btn btn-primary" onClick={saveAndSubmit} disabled={busy}>
+            保存草稿并提交审核
           </button>
         </div>
       </div>
       <hr className="hr" />
+
+      {backup ? (
+        <div
+          style={{
+            border: '1px solid var(--color-accent-600)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            marginBottom: 18,
+            background: 'var(--color-accent-100)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--color-accent-900)' }}>
+            检测到本地未保存的备份（{new Date(backup.at).toLocaleString('zh-CN')}），可能是上次刷新或误退时留下的。
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            onClick={() => {
+              setTitle(backup.titleZh);
+              setTitleEn(backup.titleEn);
+              setBodyZh(backup.bodyZh);
+              setBodyEn(backup.bodyEn);
+              setNote(backup.note);
+              setCategoryId(backup.categoryId);
+              setSceneId(backup.sceneId);
+              setTags(backup.tags);
+              setBackup(null);
+              setDirty(true);
+              loadedKey.current = `${loadedKey.current}!`;
+            }}
+          >
+            恢复备份
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12 }}
+            onClick={() => {
+              localStorage.removeItem(backupKey(code));
+              setBackup(null);
+            }}
+          >
+            丢弃
+          </button>
+        </div>
+      ) : null}
 
       {showErr && errors.length > 0 ? (
         <div
@@ -232,22 +390,26 @@ export function Editor() {
             <input
               className="input"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                touch();
+              }}
+              placeholder="一句话说清这条知识回答什么问题"
               style={{ fontSize: 16, minHeight: 42 }}
             />
           </div>
           <div className="field">
-            <label>正文（中文）· 富文本</label>
-            <div style={{ border: `1px solid ${C.divider}`, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-              <Toolbar onCmd={exec} />
-              <div
-                ref={zhRef}
-                contentEditable
-                suppressContentEditableWarning
-                data-ph="输入知识正文，可加粗、分小标题、加项目符号…"
-                style={{ minHeight: 240, padding: '14px 16px', fontSize: 14.5, lineHeight: 1.85, textAlign: 'justify' }}
-              />
-            </div>
+            <label>正文（中文）· 富文本，支持标题 / 列表 / 引用 / 图片 / 视频 / 表格</label>
+            <RichText
+              editorKey={`${loadedKey.current}:zh`}
+              value={bodyZh}
+              minHeight={280}
+              placeholder="输入知识正文…"
+              onChange={(html) => {
+                setBodyZh(html);
+                touch();
+              }}
+            />
           </div>
 
           <div
@@ -261,9 +423,7 @@ export function Editor() {
             }}
           >
             <div style={{ flex: 1 }}>
-              <div
-                style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: C.accent }}
-              >
+              <div style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: C.accent }}>
                 English 版本 · 大模型翻译
               </div>
               <div style={{ fontSize: 12, color: C.muted, marginTop: 3, textWrap: 'pretty' }}>
@@ -277,44 +437,43 @@ export function Editor() {
             <button
               className={`btn ${translated ? 'btn-secondary' : 'btn-primary'}`}
               onClick={translate}
-              disabled={busy}
+              disabled={busy || !bodyZh}
             >
-              {busy ? '处理中…' : translated ? '重新翻译' : '翻译为英文'}
+              {translated ? '重新翻译' : '翻译为英文'}
             </button>
           </div>
 
-          <div style={{ display: translated ? 'block' : 'none' }}>
-            <div className="field" style={{ marginBottom: 16 }}>
-              <label>Title (English) · 可编辑</label>
-              <input
-                className="input"
-                value={titleEn}
-                onChange={(e) => {
-                  setTitleEn(e.target.value);
-                  setEnEdited(true);
-                }}
-                placeholder="Machine-translated, editable"
-                style={{ fontSize: 15, minHeight: 42 }}
-              />
-            </div>
-            <div className="field">
-              <label>Body (English) · 可编辑</label>
-              <div
-                style={{ border: `1px solid ${C.divider}`, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}
-              >
-                <Toolbar onCmd={exec} />
-                <div
-                  ref={enRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={() => setEnEdited(true)}
-                  data-ph="Click 翻译 to generate the English version, or type here…"
-                  style={{ minHeight: 200, padding: '14px 16px', fontSize: 14, lineHeight: 1.8, textAlign: 'justify' }}
+          {translated ? (
+            <>
+              <div className="field" style={{ marginBottom: 16 }}>
+                <label>Title (English) · 可编辑</label>
+                <input
+                  className="input"
+                  value={titleEn}
+                  onChange={(e) => {
+                    setTitleEn(e.target.value);
+                    setEnEdited(true);
+                    touch();
+                  }}
+                  style={{ fontSize: 15, minHeight: 42 }}
                 />
               </div>
-            </div>
-          </div>
-          {!translated ? (
+              <div className="field">
+                <label>Body (English) · 可编辑</label>
+                <RichText
+                  editorKey={`${loadedKey.current}:en`}
+                  value={bodyEn}
+                  minHeight={220}
+                  placeholder="English body…"
+                  onChange={(html) => {
+                    setBodyEn(html);
+                    setEnEdited(true);
+                    touch();
+                  }}
+                />
+              </div>
+            </>
+          ) : (
             <div
               style={{
                 border: `1px dashed ${C.divider}`,
@@ -330,14 +489,17 @@ export function Editor() {
                 同步的是英文版本，因此提交审核前必须先翻译。翻译结果可在此二次编辑。
               </p>
             </div>
-          ) : null}
+          )}
 
           <h4 style={{ margin: '26px 0 8px' }}>变更说明</h4>
           <input
             className="input"
             placeholder="本次修改了什么？将写入版本历史，审核人可见"
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(e) => {
+              setNote(e.target.value);
+              touch();
+            }}
           />
         </div>
 
@@ -352,12 +514,13 @@ export function Editor() {
                 value={categoryId}
                 onChange={(e) => {
                   setCategoryId(e.target.value);
-                  const nextCat = d.catalog.find((c) => c.id === e.target.value);
-                  if (!nextCat?.scenes.some((s) => s.id === sceneId)) setSceneId('');
+                  const next = catalog.find((c) => c.id === e.target.value);
+                  if (!next?.scenes.some((s) => s.id === sceneId)) setSceneId('');
+                  touch();
                 }}
               >
                 <option value="">请选择一级分类</option>
-                {d.catalog.map((c) => (
+                {catalog.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.zh}
                   </option>
@@ -371,7 +534,14 @@ export function Editor() {
               <label>
                 问题场景（二级）<span style={{ color: C.accent700 }}>*</span>
               </label>
-              <select className="input" value={sceneId} onChange={(e) => setSceneId(e.target.value)}>
+              <select
+                className="input"
+                value={sceneId}
+                onChange={(e) => {
+                  setSceneId(e.target.value);
+                  touch();
+                }}
+              >
                 <option value="">{categoryId ? '请选择二级场景' : '请先选择一级分类'}</option>
                 {(cat?.scenes ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
@@ -387,6 +557,10 @@ export function Editor() {
                   未选择问题场景，无法进入审核队列
                 </div>
               ) : null}
+              <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6, textWrap: 'pretty' }}>
+                分类与场景在 Zendesk 是**目录**（Category / Section），不是文章；本条知识发布后会作为文章挂到所选场景的
+                Section 下。
+              </div>
             </div>
             <div className="field" style={{ marginTop: 12 }}>
               <label>知识标签（仅本地适配，不翻译）</label>
@@ -395,32 +569,62 @@ export function Editor() {
                   <button
                     key={t}
                     className="tag tag-accent"
-                    onClick={() => setTags(tags.filter((x) => x !== t))}
+                    onClick={() => {
+                      setTags(tags.filter((x) => x !== t));
+                      touch();
+                    }}
                     style={{ border: 0, cursor: 'pointer', fontFamily: 'var(--font-body)' }}
                   >
                     {t} ×
                   </button>
                 ))}
+                {tags.length === 0 ? <span style={{ fontSize: 12, color: C.muted }}>尚未添加标签</span> : null}
               </div>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {TAG_POOL.filter((t) => !tags.includes(t))
-                  .slice(0, 4)
-                  .map((t) => (
-                    <button
-                      key={t}
-                      className="tag tag-outline"
-                      onClick={() => setTags([...tags, t])}
-                      style={{ cursor: 'pointer', fontFamily: 'var(--font-body)', background: 'transparent' }}
-                    >
-                      + {t}
-                    </button>
-                  ))}
-              </div>
+              <input
+                className="input"
+                value={tagInput}
+                placeholder="输入标签后回车新增"
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const v = tagInput.trim();
+                  if (v && !tags.includes(v)) {
+                    setTags([...tags, v]);
+                    touch();
+                  }
+                  setTagInput('');
+                }}
+              />
+              {allTags.length > 0 ? (
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7 }}>
+                  {allTags
+                    .filter((t) => !tags.includes(t.name))
+                    .slice(0, 6)
+                    .map((t) => (
+                      <button
+                        key={t.id}
+                        className="tag tag-outline"
+                        onClick={() => {
+                          setTags([...tags, t.name]);
+                          touch();
+                        }}
+                        style={{ cursor: 'pointer', fontFamily: 'var(--font-body)', background: 'transparent' }}
+                      >
+                        + {t.name}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
+                  标签库还是空的，这里输入的新标签会自动入库，之后可在「元数据中心 · 知识标签」维护。
+                </div>
+              )}
             </div>
           </Card>
 
           <Card kicker="翻译控制台" style={{ marginTop: 14, background: C.surface }}>
-            <ConsoleRow k="翻译引擎" v={d.llmLabel} />
+            <ConsoleRow k="翻译引擎" v={d?.llmLabel ?? '保存后显示'} />
             <ConsoleRow
               k="中文 → 英文"
               v={translated ? '已完成' : '未执行'}
@@ -430,12 +634,12 @@ export function Editor() {
             <ConsoleRow k="Zendesk 同步语言" v="English" last />
           </Card>
 
-          {suggestions.length > 0 ? (
-            <Card
-              kicker="AI 编辑助手"
-              style={{ marginTop: 14, borderColor: 'var(--color-accent-300)', background: 'var(--color-accent-100)' }}
-            >
-              {suggestions.map((s) => (
+          <Card
+            kicker="AI 编辑助手"
+            style={{ marginTop: 14, borderColor: 'var(--color-accent-300)', background: 'var(--color-accent-100)' }}
+          >
+            {suggestions.length > 0 ? (
+              suggestions.map((s) => (
                 <div key={s.id} style={{ borderTop: '1px solid var(--color-accent-200)', padding: '9px 0' }}>
                   <div style={{ fontSize: 12.5, color: 'var(--color-accent-900)' }}>{s.text}</div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
@@ -443,15 +647,15 @@ export function Editor() {
                       className="btn btn-primary"
                       style={{ fontSize: 12, padding: '3px 10px' }}
                       onClick={() => {
-                        if (s.insert && zhRef.current) {
-                          zhRef.current.innerHTML += `<p>${s.insert}</p>`;
+                        if (s.insert) {
+                          setBodyZh(`${bodyZh}<p>${s.insert}</p>`);
+                          loadedKey.current = `${loadedKey.current}!`;
+                          touch();
                         }
                         setSuggestions(suggestions.filter((x) => x.id !== s.id));
                         app.toast(
                           '建议已采纳',
-                          s.insert
-                            ? '内容已插入中文正文末尾。翻译需重新执行以同步到英文。'
-                            : '已标记为已处理。',
+                          s.insert ? '内容已插入中文正文末尾。翻译需重新执行以同步到英文。' : '已标记为已处理。',
                         );
                       }}
                     >
@@ -466,13 +670,8 @@ export function Editor() {
                     </button>
                   </div>
                 </div>
-              ))}
-            </Card>
-          ) : (
-            <Card
-              kicker="AI 编辑助手"
-              style={{ marginTop: 14, borderColor: 'var(--color-accent-300)', background: 'var(--color-accent-100)' }}
-            >
+              ))
+            ) : (
               <div
                 style={{
                   fontSize: 12.5,
@@ -481,49 +680,13 @@ export function Editor() {
                   borderTop: '1px solid var(--color-accent-200)',
                 }}
               >
-                建议已全部处理。
+                {code ? '建议已全部处理。' : '保存草稿后，助手会基于正文给出结构与查重建议。'}
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
       </div>
     </>
-  );
-}
-
-function Toolbar({ onCmd }: { onCmd: (cmd: string, val?: string) => void }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 4,
-        padding: '6px 8px',
-        borderBottom: `1px solid ${C.divider}`,
-        background: C.surface,
-      }}
-    >
-      {TOOLS.map((t) => (
-        <button
-          key={t.l}
-          title={t.tip}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onCmd(t.cmd, t.val)}
-          style={{
-            minWidth: 32,
-            height: 28,
-            border: `1px solid ${C.divider}`,
-            background: C.bg,
-            borderRadius: 'var(--radius-sm)',
-            cursor: 'pointer',
-            fontFamily: t.ff,
-            fontSize: 13,
-            color: 'inherit',
-          }}
-        >
-          {t.l}
-        </button>
-      ))}
-    </div>
   );
 }
 

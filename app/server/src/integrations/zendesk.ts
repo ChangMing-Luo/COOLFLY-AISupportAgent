@@ -681,14 +681,47 @@ class LiveZendesk implements ZendeskClient {
     return data.count;
   }
 
+  /**
+   * 拉近期会话正文。
+   * **不能只取 `ticket.description`**：Zendesk Messaging（`via.channel = native_messaging`）的
+   * description 只是占位串「Conversation with Web User …」，真正的对话在 comments 里（线上实证）。
+   * 因此逐工单取 comments，拼接公开可见的往来内容；同时把 messaging / chat 都算作会话渠道。
+   */
   async fetchConversations(sinceIso: string): Promise<{ email: number; chat: number; items: string[] }> {
     const start = Math.floor(new Date(sinceIso).getTime() / 1000);
-    const data = await this.call<{ tickets: Array<{ id: number; via?: { channel?: string }; description?: string }> }>(
-      `/incremental/tickets.json?start_time=${start}`,
-    );
-    const email = data.tickets.filter((t) => t.via?.channel !== 'chat').length;
-    const chat = data.tickets.filter((t) => t.via?.channel === 'chat').length;
-    return { email, chat, items: data.tickets.map((t) => t.description ?? '') };
+    const data = await this.call<{
+      tickets: Array<{ id: number; subject?: string; via?: { channel?: string }; description?: string }>;
+    }>(`/incremental/tickets.json?start_time=${start}`);
+
+    const CHAT_CHANNELS = new Set(['chat', 'native_messaging', 'messaging', 'web_widget', 'any_channel']);
+    const tickets = data.tickets ?? [];
+    const email = tickets.filter((t) => !CHAT_CHANNELS.has(t.via?.channel ?? '')).length;
+    const chat = tickets.length - email;
+
+    const items: string[] = [];
+    for (const t of tickets) {
+      let text = '';
+      try {
+        const c = await this.call<{ comments: Array<{ body?: string; public?: boolean }> }>(
+          `/tickets/${t.id}/comments.json`,
+        );
+        text = (c.comments ?? [])
+          .filter((m) => m.public !== false)
+          .map((m) => (m.body ?? '').trim())
+          .filter(Boolean)
+          .join('\n');
+      } catch {
+        text = '';
+      }
+      // comments 拿不到时退回 description，但把占位串滤掉，避免拿垃圾去喂模型
+      if (!text) {
+        const d = (t.description ?? '').trim();
+        text = /^Conversation with Web User/i.test(d) ? '' : d;
+      }
+      const full = [t.subject, text].filter(Boolean).join('\n').trim();
+      if (full) items.push(full);
+    }
+    return { email, chat, items };
   }
 
   async fetchArticleVotes(articleRef: string): Promise<{ up: number; down: number }> {

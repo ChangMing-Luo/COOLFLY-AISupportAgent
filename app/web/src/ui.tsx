@@ -75,9 +75,12 @@ export function PageHead({
 export function KpiRow({
   items,
   columns,
+  onPick,
 }: {
   items: Array<{ label: string; value: string | number; delta: string }>;
   columns: number;
+  /** 给了就整块可点，跳到对应列表 */
+  onPick?: (label: string) => void;
 }) {
   return (
     <div
@@ -90,7 +93,18 @@ export function KpiRow({
       }}
     >
       {items.map((k) => (
-        <div key={k.label} style={{ padding: '16px 18px', borderRight: `1px solid ${C.divider}` }}>
+        <div
+          key={k.label}
+          onClick={onPick ? () => onPick(k.label) : undefined}
+          role={onPick ? 'button' : undefined}
+          tabIndex={onPick ? 0 : undefined}
+          onKeyDown={onPick ? (e) => e.key === 'Enter' && onPick(k.label) : undefined}
+          style={{
+            padding: '16px 18px',
+            borderRight: `1px solid ${C.divider}`,
+            cursor: onPick ? 'pointer' : undefined,
+          }}
+        >
           <div style={{ fontSize: 11, letterSpacing: '.09em', textTransform: 'uppercase', color: C.muted }}>
             {k.label}
           </div>

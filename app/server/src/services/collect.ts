@@ -170,10 +170,16 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
     const scenes = await query<{ id: string; name_zh: string }>('SELECT id, name_zh FROM scenes WHERE active');
 
     let n = 0;
+    let dropped = 0;
     for (const topic of topics) {
       const draft = await llm.draftCandidate(topic.topic, topic.summary);
-      const conf = Math.min(0.99, 0.55 + Math.min(topic.count, 10) * 0.04);
-      if (conf < TUNABLES.confidenceThreshold) continue;
+      // 置信度 = 起评分 0.62 + 频次加成。起评分必须高于阈值：
+      // 原来 0.55 起评导致单条主题（真实低频场景的常态）恒被丢弃，界面还什么都不显示。
+      const conf = Math.min(0.99, 0.62 + Math.min(topic.count, 10) * 0.035);
+      if (conf < TUNABLES.confidenceThreshold) {
+        dropped += 1;
+        continue;
+      }
 
       let best = { id: null as string | null, score: 0 };
       for (const p of published) {
@@ -181,7 +187,11 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
         if (s > best.score) best = { id: p.id, score: s };
       }
       const dupHit = best.score >= TUNABLES.dedupeThreshold * 0.6;
-      const scene = scenes.rows.find((s) => topic.topic.includes(s.name_zh.slice(0, 2)));
+      // 场景匹配：先按字面相似度挑最像的启用场景，太不像就留空让人工在编辑器里选
+      const scene = scenes.rows
+        .map((s) => ({ s, score: literalSimilarity(`${topic.topic} ${topic.summary}`, s.name_zh) }))
+        .sort((a, b) => b.score - a.score)
+        .filter((x) => x.score >= 0.08)[0]?.s;
 
       await query(
         `INSERT INTO extract_candidates (id, code, task_id, title, answer, scene_id, tags, confidence, dup_entry_id, dup_score)
@@ -203,19 +213,23 @@ export async function runCollect(ownerName = '系统', ownerId: string | null = 
     }
 
     await query(
-      `UPDATE collect_tasks SET state='done', candidate_count=$2, source_text=$3, source_meta=$4 WHERE id=$1`,
+      `UPDATE collect_tasks SET state='done', candidate_count=$2, source_text=$3, source_meta=$4, fail_reason=$5 WHERE id=$1`,
       [
         id,
         n,
         items.slice(0, 3).join('\n\n'),
-        `来自 Zendesk · 客服会话 · 共 ${items.length} 段 · 已解析 ${items.length} 段`,
+        `来自 Zendesk · 工单 ${conv.email} 封 / 会话 ${conv.chat} 段 · 共 ${items.length} 段 · 提炼主题 ${topics.length} 个`,
+        // 有语料却一条候选都没产出时，必须说清为什么，不能让界面空着让人以为是坏了
+        n === 0 && dropped > 0
+          ? `提炼出 ${topics.length} 个主题，但全部低于置信度阈值 ${TUNABLES.confidenceThreshold}，未生成候选`
+          : null,
       ],
     );
     await writeAudit(SYSTEM_ACTOR, {
       action: 'AI 抽取',
       objectType: 'collect',
       objectCode: code,
-      objectLabel: `${code} 产出 ${n} 条候选`,
+      objectLabel: `${code} 解析 ${items.length} 段会话，产出 ${n} 条候选${dropped ? `（${dropped} 条低于阈值被丢弃）` : ''}`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '未知错误';

@@ -86,6 +86,9 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
 
     return {
       entry: dto,
+      // 富文本原文（详情页按 HTML 渲染，保留标题/列表/图片/表格）
+      bodyZh: entry.body_zh,
+      bodyEn: entry.body_en,
       paragraphsZh: toParagraphs(entry.body_zh),
       paragraphsEn: toParagraphs(entry.body_en),
       versions,

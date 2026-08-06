@@ -271,3 +271,30 @@ textarea.input { min-height: 90px; resize: vertical; }
   [contenteditable] h4 { font-family: var(--font-heading); font-size: 16px; margin: 10px 0 4px; }
   [contenteditable] ul { margin: 6px 0 6px 20px; }
   [contenteditable]:focus { outline: none; }
+/* 富文本编辑区（TipTap）与详情页正文的共用排版 */
+.rt-body .tiptap { outline: none; min-height: inherit; }
+.rt-body .tiptap p { margin: 0 0 10px; }
+.rt-body .tiptap h2 { font-size: 22px; margin: 16px 0 8px; }
+.rt-body .tiptap h3 { font-size: 18px; margin: 14px 0 6px; }
+.rt-body .tiptap h4 { font-size: 16px; margin: 12px 0 6px; }
+.rt-body .tiptap ul, .rt-body .tiptap ol { margin: 6px 0 10px 22px; }
+.rt-body .tiptap li { margin: 2px 0; }
+.rt-body .tiptap blockquote {
+  margin: 10px 0; padding: 6px 14px;
+  border-left: 2px solid var(--color-accent); background: var(--color-accent-100);
+}
+.rt-body .tiptap pre {
+  background: var(--color-neutral-100); border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; font-size: 13px;
+}
+.rt-body .tiptap img { max-width: 100%; border-radius: var(--radius-sm); margin: 8px 0; }
+.rt-body .tiptap iframe { max-width: 100%; border: 0; margin: 8px 0; }
+.rt-body .tiptap hr { border: 0; border-top: 1px solid var(--color-divider); margin: 14px 0; }
+.rt-body .tiptap table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13.5px; }
+.rt-body .tiptap th, .rt-body .tiptap td {
+  border: 1px solid var(--color-divider); padding: 6px 9px; text-align: left;
+}
+.rt-body .tiptap th { background: var(--color-neutral-100); font-weight: 600; }
+.rt-body .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: var(--color-neutral-500); float: left; height: 0; pointer-events: none;
+}

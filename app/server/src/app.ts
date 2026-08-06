@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
+import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { attachUser } from './core/auth.js';
 import { DomainError } from './services/entries.js';
@@ -30,6 +31,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     secret: process.env.COOKIE_SECRET ?? 'kb-console-dev-cookie-secret-change-me',
   });
   await app.register(rateLimit, { global: false });
+  // 一键导入用：单文件 20MB 上限
+  await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024, files: 1 } });
 
   app.addHook('preHandler', async (req, reply) => {
     await attachUser(req);

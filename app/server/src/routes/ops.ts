@@ -15,6 +15,8 @@ import {
 } from '../services/feedback.js';
 import { listSyncLogs } from '../services/sync.js';
 import { healthReport } from '../services/analytics.js';
+import { commitImport, parseAndOrganize, type CommitItem } from '../services/importer.js';
+import { DomainError } from '../services/entries.js';
 
 export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
   /* ══════ 采集 ══════ */
@@ -82,6 +84,22 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
     const { code } = req.params as { code: string };
     const entry = await createDraftFromMiss(req.currentUser!, code);
     return { entry: toDto(entry) };
+  });
+
+  /* ══════ 一键导入 + AI 整理 ══════ */
+  app.post('/api/import/parse', { preHandler: requirePermission('entry.write') }, async (req) => {
+    const file = await req.file({ limits: { fileSize: 20 * 1024 * 1024 } });
+    if (!file) throw new DomainError('请选择要导入的文件（支持 md / txt / csv / tsv / xlsx / docx）', 400);
+    const buf = await file.toBuffer();
+    return parseAndOrganize(file.filename, buf);
+  });
+
+  app.post('/api/import/commit', { preHandler: requirePermission('entry.write') }, async (req) => {
+    const body = req.body as { fileName?: string; items?: CommitItem[] };
+    if (!Array.isArray(body?.items) || body.items.length === 0) {
+      throw new DomainError('没有可导入的条目', 400);
+    }
+    return commitImport(req.currentUser!, body.fileName ?? '导入文件', body.items);
   });
 
   /* ══════ 同步日志 / 数据分析 ══════ */

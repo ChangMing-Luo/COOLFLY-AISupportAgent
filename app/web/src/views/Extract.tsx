@@ -12,6 +12,7 @@ interface Payload {
 export function Extract() {
   const app = useApp();
   const [d, setD] = useState<Payload | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api.get<Payload>('/collect/task').then(setD).catch(() => undefined);
@@ -37,6 +38,36 @@ export function Extract() {
     app.toast('已丢弃候选', `${c.code} 不再进入草稿箱，本次抽取记录仍保留在审计中。`);
   }
 
+  /** 主动拉取：不等每日 07:00 的定时任务，立刻从 Zendesk 拉会话跑一遍抽取 */
+  async function runNow() {
+    setBusy(true);
+    let next: Payload | null = null;
+    await app.runWithProgress('立即从 Zendesk 拉取并抽取', [
+      {
+        label: '拉取近 7 日工单与会话正文',
+        run: async ({ setDetail }) => {
+          setDetail('正在读取 Zendesk 工单与 comments…');
+          next = await api.post<Payload>('/collect/run');
+          setDetail(next.task?.sourceMeta ?? '已完成');
+        },
+      },
+      {
+        label: '大模型提炼主题并起草候选',
+        run: async ({ setDetail }) => {
+          const n = next?.candidates.length ?? 0;
+          setDetail(
+            n > 0
+              ? `产出 ${n} 条待确认候选`
+              : (next?.task?.failReason ?? 'Zendesk 近 7 日没有可用会话语料，本批次未产出候选'),
+          );
+        },
+      },
+    ]);
+    if (next) setD(next);
+    app.refreshShell();
+    setBusy(false);
+  }
+
   return (
     <>
       <div style={kickerStyle}>知识采集 · AI 抽取工作台</div>
@@ -58,6 +89,9 @@ export function Extract() {
             {t?.ranAt ?? '—'}
           </p>
         </div>
+        <button className="btn btn-primary" onClick={() => void runNow()} disabled={busy} style={{ flex: 'none' }}>
+          {busy ? '拉取中…' : '立即拉取'}
+        </button>
       </div>
       <hr className="hr" />
 
@@ -66,7 +100,7 @@ export function Extract() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <h4 style={{ margin: 0 }}>抽取候选</h4>
             <span style={{ fontSize: 12, color: C.muted }}>
-              {d.candidates.length} 条待确认，人工确认后才会生成草稿（抽取由后台定时任务完成，无需手动创建）
+              {d.candidates.length} 条待确认，人工确认后才会生成草稿；抽取每日 07:00 自动跑，也可点右上角「立即拉取」
             </span>
           </div>
 

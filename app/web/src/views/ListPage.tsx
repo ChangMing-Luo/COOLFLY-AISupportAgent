@@ -268,15 +268,17 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
               { l: '已发布', test: (x) => x.c3 === '已发布' },
             ],
       actions: [
-        { l: '撰写新知识', cls: 'btn-primary', on: () => app.go('collect.extract') },
+        { l: '一键导入', cls: 'btn-secondary', on: () => app.go('author.import') },
+        // 直接进手动录入页；不再跳去 AI 抽取页（那是定时任务产出的候选池）
+        { l: '撰写新知识', cls: 'btn-primary', on: () => app.go('author.editor', null) },
       ],
       emptyTitle: r === 'author.drafts' ? '草稿箱是空的' : '暂无提交记录',
       emptyDesc:
         r === 'author.drafts'
           ? '所有草稿都已提交审核。可以从 AI 抽取工作台继续认领候选。'
           : '提交审核后，知识会出现在这里。',
-      emptyCta: '前往 AI 抽取',
-      emptyOn: () => app.go('collect.extract'),
+      emptyCta: '撰写新知识',
+      emptyOn: () => app.go('author.editor', null),
     };
   }
 
@@ -507,7 +509,8 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
       })),
       filters: [
         { l: '全部' },
-        { l: '成功', test: (x) => x.c3 === '成功' },
+        { l: '知识正文', test: (x) => x.c2 === 'Help Center' },
+        { l: '分类 / 场景', test: (x) => x.c2 === 'Category' || x.c2 === 'Section' },
         { l: '失败', test: (x) => x.c3 === '失败' },
       ],
       actions: [],
@@ -558,25 +561,11 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
         { l: '修复中', test: (x) => x.c5 === '修复中' },
         { l: '已关闭', test: (x) => x.c5 === '已关闭' },
       ],
-      actions: [
-        {
-          l: '从 Zendesk 拉取',
-          cls: 'btn-primary',
-          on: async () => {
-            const res = await api.post<{ created: number; note: string }>('/feedback/pull');
-            app.refreshShell();
-            app.toast(res.created ? `已从 Zendesk 拉取 ${res.created} 条客诉` : '本次没有新客诉', res.note);
-          },
-        },
-      ],
+      actions: [{ l: '从 Zendesk 拉取', cls: 'btn-primary', on: () => pullFeedback(app) }],
       emptyTitle: '暂无反馈',
       emptyDesc: '从 Zendesk 拉取后，客诉会汇总到这里。',
       emptyCta: '从 Zendesk 拉取',
-      emptyOn: async () => {
-        const res = await api.post<{ created: number; note: string }>('/feedback/pull');
-        app.refreshShell();
-        app.toast(res.created ? `已从 Zendesk 拉取 ${res.created} 条客诉` : '本次没有新客诉', res.note);
-      },
+      emptyOn: () => void pullFeedback(app),
     };
   }
 
@@ -629,7 +618,7 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
       rows: list.map((c) => ({
         id: c.id,
         c1: c.nameZh,
-        sub: `${c.code} · Zendesk Category`,
+        sub: `${c.code} · Zendesk Category ${c.zendeskRef ?? '未同步'}`,
         c2: c.nameEn || '未翻译',
         c3: c.active ? '已上架' : '已下架',
         tagCls: c.active ? 'tag-accent' : 'tag-neutral',
@@ -673,7 +662,7 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
       rows: list.map((s) => ({
         id: s.id,
         c1: s.nameZh,
-        sub: `${s.code} · Zendesk Section`,
+        sub: `${s.code} · Zendesk Section ${s.zendeskRef ?? '未同步'}`,
         c2: s.nameEn || '未翻译',
         c3: s.active ? '已上架' : '已下架',
         tagCls: s.active ? 'tag-accent' : 'tag-neutral',
@@ -956,6 +945,28 @@ function downloadCsv(csv: string, name: string): void {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** 从 Zendesk 拉取客诉：长操作，走进度模态，避免点了没反应 */
+export async function pullFeedback(app: Ctx): Promise<void> {
+  let res: { created: number; note: string } | null = null;
+  await app.runWithProgress('从 Zendesk 拉取客诉', [
+    {
+      label: '读取文章投票与近 7 日会话',
+      run: async ({ setDetail }) => {
+        setDetail('正在调用 Zendesk 接口…');
+        res = await api.post('/feedback/pull');
+        setDetail(res!.note);
+      },
+    },
+    {
+      label: '归集到反馈回流',
+      run: async ({ setDetail }) => {
+        app.refreshShell();
+        setDetail(res?.created ? `新增 ${res.created} 条待处理反馈` : '本次没有新增');
+      },
+    },
+  ]);
 }
 
 export async function submitEntry(app: Ctx, code: string): Promise<void> {

@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, type CatalogCategory, type SessionUser } from './api.js';
-import { AppCtx, BESPOKE, NAV, type Ctx, type DrawerState, type ModalState, type ToastNext } from './shell.js';
+import {
+  AppCtx,
+  BESPOKE,
+  NAV,
+  type Ctx,
+  type DrawerState,
+  type ModalState,
+  type ProgressState,
+  type ToastNext,
+} from './shell.js';
+import { Progress } from './views/Progress.js';
+import { Importer } from './views/Importer.js';
 import { C, Skeleton, tnum } from './ui.js';
 import { Login } from './views/Login.js';
 import { Dashboard } from './views/Dashboard.js';
@@ -39,6 +50,7 @@ export function App() {
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [rev, setRev] = useState(0);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
   const [stat, setStat] = useState({ total: 0, publishedToday: 0, todo: 0 });
   const [badges, setBadges] = useState<Badges>({ review: 0, feedback: 0 });
   const toastSeq = useRef(0);
@@ -88,6 +100,44 @@ export function App() {
     timer.current = setTimeout(() => setLoading(false), 380);
   }, []);
 
+  const runWithProgress = useCallback(
+    async (
+      title: string,
+      steps: Array<{ label: string; run: (c: { setDetail: (d: string) => void }) => Promise<unknown> }>,
+    ) => {
+      setProgress({ title, steps: steps.map((s) => ({ label: s.label, state: 'pending' })), done: false });
+      for (let i = 0; i < steps.length; i += 1) {
+        setProgress((p) =>
+          p ? { ...p, steps: p.steps.map((s, j) => (j === i ? { ...s, state: 'running' } : s)) } : p,
+        );
+        const setDetail = (d: string): void =>
+          setProgress((p) => (p ? { ...p, steps: p.steps.map((s, j) => (j === i ? { ...s, detail: d } : s)) } : p));
+        try {
+          await steps[i].run({ setDetail });
+          setProgress((p) =>
+            p ? { ...p, steps: p.steps.map((s, j) => (j === i ? { ...s, state: 'done' } : s)) } : p,
+          );
+        } catch (e) {
+          const message = e instanceof Error ? e.message : '未知错误';
+          setProgress((p) =>
+            p
+              ? {
+                  ...p,
+                  done: true,
+                  steps: p.steps.map((s, j) =>
+                    j === i ? { ...s, state: 'failed', detail: message } : j > i ? { ...s, state: 'pending' } : s,
+                  ),
+                }
+              : p,
+          );
+          return;
+        }
+      }
+      setProgress((p) => (p ? { ...p, done: true } : p));
+    },
+    [],
+  );
+
   const toast = useCallback((title: string, detail: string, next?: ToastNext) => {
     toastSeq.current += 1;
     const id = toastSeq.current;
@@ -132,7 +182,19 @@ export function App() {
 
   const denied = route.startsWith('admin') && user.role !== 'super';
   const bespoke = BESPOKE[route];
-  const ctx: Ctx = { user, catalog, route, sel, go, toast, openDrawer: setDrawer, openModal: setModal, refreshShell, rev };
+  const ctx: Ctx = {
+    user,
+    catalog,
+    route,
+    sel,
+    go,
+    toast,
+    openDrawer: setDrawer,
+    openModal: setModal,
+    runWithProgress,
+    refreshShell,
+    rev,
+  };
 
   const badgeOf = (key: string): number | null => {
     const n = key === 'review' ? badges.review : key === 'feedback' ? badges.feedback : 0;
@@ -449,6 +511,8 @@ export function App() {
               <ReviewPage />
             ) : bespoke === 'health' ? (
               <Health />
+            ) : route === 'author.import' ? (
+              <Importer />
             ) : (
               <ListPage />
             )}
@@ -457,6 +521,7 @@ export function App() {
 
         {drawer ? <Drawer state={drawer} onClose={() => setDrawer(null)} /> : null}
         {modal ? <Modal state={modal} onClose={() => setModal(null)} /> : null}
+        {progress ? <Progress state={progress} onClose={() => setProgress(null)} /> : null}
 
         {/* ══ Toast ══ */}
         <div

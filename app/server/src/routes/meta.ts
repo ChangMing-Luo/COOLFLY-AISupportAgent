@@ -26,24 +26,28 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/meta/categories', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const body = upsertCategorySchema.parse(req.body);
-    return { category: await upsertCategory(req.currentUser!, null, body.nameZh, body.nameEn) };
+    const r = await upsertCategory(req.currentUser!, null, body.nameZh, body.nameEn);
+    return { category: r.item, sync: r.sync };
   });
 
   app.put('/api/meta/categories/:id', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const { id } = req.params as { id: string };
     const body = upsertCategorySchema.parse(req.body);
-    return { category: await upsertCategory(req.currentUser!, id, body.nameZh, body.nameEn) };
+    const r = await upsertCategory(req.currentUser!, id, body.nameZh, body.nameEn);
+    return { category: r.item, sync: r.sync };
   });
 
   app.post('/api/meta/scenes', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const body = upsertSceneSchema.parse(req.body);
-    return { scene: await upsertScene(req.currentUser!, null, body.nameZh, body.nameEn, body.categoryId) };
+    const r = await upsertScene(req.currentUser!, null, body.nameZh, body.nameEn, body.categoryId);
+    return { scene: r.item, sync: r.sync };
   });
 
   app.put('/api/meta/scenes/:id', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const { id } = req.params as { id: string };
     const body = upsertSceneSchema.parse(req.body);
-    return { scene: await upsertScene(req.currentUser!, id, body.nameZh, body.nameEn, body.categoryId) };
+    const r = await upsertScene(req.currentUser!, id, body.nameZh, body.nameEn, body.categoryId);
+    return { scene: r.item, sync: r.sync };
   });
 
   app.post('/api/meta/tags', { preHandler: requirePermission('meta.manage') }, async (req) => {

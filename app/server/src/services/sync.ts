@@ -11,7 +11,7 @@ async function nextPayloadNo(): Promise<string> {
   return `#${88210 + Number(rows[0].n)}`;
 }
 
-async function logSync(args: {
+export async function logSync(args: {
   entryId: string | null;
   entryCode: string;
   objectLabel: string;
@@ -20,11 +20,12 @@ async function logSync(args: {
   durationMs: number;
   actorName: string;
   action?: string;
+  target?: string;
   payload?: string;
 }): Promise<void> {
   await query(
-    `INSERT INTO sync_logs (id, entry_id, entry_code, object_label, result, message, duration_ms, payload_no, actor_name, action, payload)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+    `INSERT INTO sync_logs (id, entry_id, entry_code, object_label, result, message, duration_ms, payload_no, actor_name, action, payload, target)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
     [
       newId('slog'),
       args.entryId,
@@ -37,13 +38,151 @@ async function logSync(args: {
       args.actorName,
       args.action ?? 'upsert',
       args.payload ?? '',
+      args.target ?? 'Help Center',
     ],
   );
 }
 
+/* ══════════ 结构同步：分类 → Category、场景 → Section ══════════
+ * 层级严格三层：分类 = Category，场景 = Section（挂在分类的 Category 下），条目 = Article（挂在场景的 Section 下）。
+ * 保存分类/场景时**立即**同步 Zendesk 并留痕，不再等到发布时才懒创建——
+ * 否则界面提示「将同步至 Zendesk 目录」而 Zendesk 侧毫无动静。
+ */
+
+export interface StructureSyncResult {
+  ok: boolean;
+  ref: string | null;
+  action: '创建' | '更新' | '跳过';
+  message: string;
+}
+
+/** 分类 → Zendesk Category（无 ref 则建，有 ref 且英文名变了则改名） */
+export async function syncCategory(
+  actor: AuditActor,
+  categoryId: string,
+): Promise<StructureSyncResult> {
+  const { rows } = await query<{
+    code: string;
+    name_zh: string;
+    name_en: string;
+    zendesk_category_ref: string | null;
+  }>('SELECT code, name_zh, name_en, zendesk_category_ref FROM categories WHERE id=$1', [categoryId]);
+  const c = rows[0];
+  if (!c) throw new DomainError('分类不存在', 404);
+  const name = (c.name_en || c.name_zh).trim();
+  const started = Date.now();
+  const zd = getZendesk();
+  try {
+    let ref = c.zendesk_category_ref;
+    let action: StructureSyncResult['action'];
+    if (ref) {
+      await zd.renameCategory(ref, name);
+      action = '更新';
+    } else {
+      ref = (await zd.createCategory(name)).id;
+      await query('UPDATE categories SET zendesk_category_ref=$2, updated_at=now() WHERE id=$1', [categoryId, ref]);
+      action = '创建';
+    }
+    await logSync({
+      entryId: null,
+      entryCode: c.code,
+      objectLabel: `${c.name_zh} → Zendesk 目录（Category）`,
+      result: '成功',
+      message: `${action} Category ${ref}「${name}」`,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'category',
+      target: 'Category',
+      payload: JSON.stringify({ categoryRef: ref, name }),
+    });
+    return { ok: true, ref, action, message: `已${action} Zendesk 目录「${name}」` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '未知错误';
+    await logSync({
+      entryId: null,
+      entryCode: c.code,
+      objectLabel: `${c.name_zh} → Zendesk 目录（Category）`,
+      result: '失败',
+      message,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'category',
+      target: 'Category',
+    });
+    return { ok: false, ref: c.zendesk_category_ref, action: '跳过', message };
+  }
+}
+
+/** 场景 → Zendesk Section（父分类没有 Category 时先建父级，保证层级不错位） */
+export async function syncScene(actor: AuditActor, sceneId: string): Promise<StructureSyncResult> {
+  const { rows } = await query<{
+    code: string;
+    name_zh: string;
+    name_en: string;
+    zendesk_section_ref: string | null;
+    category_id: string;
+    cat_ref: string | null;
+  }>(
+    `SELECT s.code, s.name_zh, s.name_en, s.zendesk_section_ref, s.category_id, c.zendesk_category_ref AS cat_ref
+     FROM scenes s JOIN categories c ON c.id = s.category_id WHERE s.id=$1`,
+    [sceneId],
+  );
+  const s = rows[0];
+  if (!s) throw new DomainError('场景不存在', 404);
+  const name = (s.name_en || s.name_zh).trim();
+  const started = Date.now();
+  const zd = getZendesk();
+  try {
+    let catRef = s.cat_ref;
+    if (!catRef) {
+      const r = await syncCategory(actor, s.category_id);
+      if (!r.ok || !r.ref) throw new Error(`父分类未能同步：${r.message}`);
+      catRef = r.ref;
+    }
+    let ref = s.zendesk_section_ref;
+    let action: StructureSyncResult['action'];
+    if (ref) {
+      await zd.renameSection(ref, name);
+      await zd.moveSection(ref, catRef);
+      action = '更新';
+    } else {
+      ref = (await zd.createSection(catRef, name)).id;
+      await query('UPDATE scenes SET zendesk_section_ref=$2, updated_at=now() WHERE id=$1', [sceneId, ref]);
+      action = '创建';
+    }
+    await logSync({
+      entryId: null,
+      entryCode: s.code,
+      objectLabel: `${s.name_zh} → Zendesk 目录（Section）`,
+      result: '成功',
+      message: `${action} Section ${ref}「${name}」，挂在 Category ${catRef} 下`,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'section',
+      target: 'Section',
+      payload: JSON.stringify({ sectionRef: ref, categoryRef: catRef, name }),
+    });
+    return { ok: true, ref, action, message: `已${action} Zendesk 目录「${name}」` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '未知错误';
+    await logSync({
+      entryId: null,
+      entryCode: s.code,
+      objectLabel: `${s.name_zh} → Zendesk 目录（Section）`,
+      result: '失败',
+      message,
+      durationMs: Date.now() - started,
+      actorName: actor.name,
+      action: 'section',
+      target: 'Section',
+    });
+    return { ok: false, ref: s.zendesk_section_ref, action: '跳过', message };
+  }
+}
+
 /**
- * 场景 → Zendesk Section 的懒创建：
- * 本台是结构的唯一维护方，场景没有 Section 就现建（父分类没有 Category 也一并建）。
+ * 场景 → Zendesk Section 的兜底：发布时若场景仍无 Section 就现建。
+ * 正常路径已在保存分类/场景时同步过，这里只是最后一道保险。
  */
 export async function ensureSectionRef(sceneId: string): Promise<string> {
   const { rows } = await query<{

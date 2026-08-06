@@ -17,6 +17,7 @@ for (const dir of [process.cwd(), join(here, '..'), join(here, '../..')]) {
 }
 import { runCollect } from './services/collect.js';
 import { refreshMisses } from './services/feedback.js';
+import { purgeEmptyDrafts } from './services/importer.js';
 
 const PORT = Number(process.env.PORT ?? 3311);
 
@@ -24,6 +25,10 @@ async function main(): Promise<void> {
   const app = await buildApp();
   await app.listen({ port: PORT, host: '0.0.0.0' });
   app.log.info(`知识运营中台服务已启动 http://localhost:${PORT}`);
+
+  // 清掉「点了撰写新知识但没写就走了」留下的空壳草稿（现在新建已改为首次保存才落库，这里收历史残留）
+  const purged = await purgeEmptyDrafts().catch(() => 0);
+  if (purged) app.log.info(`已清理 ${purged} 条空草稿`);
 
   if (process.env.DISABLE_CRON !== '1') {
     // AI 抽取：每日 07:00（抽取工作台页头文案与此一致）

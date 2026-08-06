@@ -1,9 +1,9 @@
 import type { SessionUser, TagType } from '@kb/contracts';
 import { query, newId } from '../db/pool.js';
 import { writeAudit } from '../core/audit.js';
-import { getZendesk } from '../integrations/zendesk.js';
 import { getLlm } from '../integrations/llm.js';
 import { DomainError, actorOf } from './entries.js';
+import { syncCategory, syncScene } from './sync.js';
 
 /* ══════════ 读 ══════════ */
 
@@ -143,32 +143,33 @@ async function nextCode(table: string, prefix: string, base: number): Promise<st
   return `${prefix}-${base + Number(rows[0].n)}`;
 }
 
+export interface MetaSaveResult<T> {
+  item: T;
+  /** Zendesk 结构同步的真实结果，界面据此如实提示成功/失败 */
+  sync: { ok: boolean; ref: string | null; message: string };
+}
+
 export async function upsertCategory(
   user: SessionUser,
   id: string | null,
   nameZh: string,
   nameEn: string,
-): Promise<CategoryDto> {
-  const zd = getZendesk();
+): Promise<MetaSaveResult<CategoryDto>> {
   if (id) {
-    const { rows } = await query<{ zendesk_category_ref: string | null; name_en: string }>(
-      'SELECT zendesk_category_ref, name_en FROM categories WHERE id=$1',
-      [id],
-    );
+    const { rows } = await query('SELECT 1 FROM categories WHERE id=$1', [id]);
     if (!rows[0]) throw new DomainError('分类不存在', 404);
     await query('UPDATE categories SET name_zh=$2, name_en=$3, updated_at=now() WHERE id=$1', [id, nameZh, nameEn]);
-    // 结构由本台维护并同步：英文名变了就改 Zendesk Category
-    if (rows[0].zendesk_category_ref && nameEn && nameEn !== rows[0].name_en) {
-      await zd.renameCategory(rows[0].zendesk_category_ref, nameEn);
-    }
   } else {
     id = newId('cat');
     const code = await nextCode('categories', 'CAT', 401);
     const { rows: seq } = await query<{ n: string }>('SELECT COUNT(*)::text AS n FROM categories');
-    await query(
-      'INSERT INTO categories (id, code, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5)',
-      [id, code, nameZh, nameEn, Number(seq[0].n)],
-    );
+    await query('INSERT INTO categories (id, code, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5)', [
+      id,
+      code,
+      nameZh,
+      nameEn,
+      Number(seq[0].n),
+    ]);
   }
   await writeAudit(actorOf(user), {
     action: '保存分类',
@@ -176,7 +177,9 @@ export async function upsertCategory(
     objectCode: nameZh,
     objectLabel: `${nameZh} / ${nameEn || '未翻译'}`,
   });
-  return (await listCategories()).find((c) => c.id === id)!;
+  // 保存即同步 Zendesk 目录（不再等发布时懒创建），成功与否如实回传
+  const sync = await syncCategory(actorOf(user), id);
+  return { item: (await listCategories()).find((c) => c.id === id)!, sync };
 }
 
 export async function upsertScene(
@@ -185,13 +188,9 @@ export async function upsertScene(
   nameZh: string,
   nameEn: string,
   categoryId: string,
-): Promise<SceneDto> {
-  const zd = getZendesk();
+): Promise<MetaSaveResult<SceneDto>> {
   if (id) {
-    const { rows } = await query<{ zendesk_section_ref: string | null; name_en: string }>(
-      'SELECT zendesk_section_ref, name_en FROM scenes WHERE id=$1',
-      [id],
-    );
+    const { rows } = await query('SELECT 1 FROM scenes WHERE id=$1', [id]);
     if (!rows[0]) throw new DomainError('场景不存在', 404);
     await query('UPDATE scenes SET name_zh=$2, name_en=$3, category_id=$4, updated_at=now() WHERE id=$1', [
       id,
@@ -199,17 +198,18 @@ export async function upsertScene(
       nameEn,
       categoryId,
     ]);
-    if (rows[0].zendesk_section_ref && nameEn && nameEn !== rows[0].name_en) {
-      await zd.renameSection(rows[0].zendesk_section_ref, nameEn);
-    }
   } else {
     id = newId('scn');
     const code = await nextCode('scenes', 'SCENE', 201);
     const { rows: seq } = await query<{ n: string }>('SELECT COUNT(*)::text AS n FROM scenes');
-    await query(
-      'INSERT INTO scenes (id, code, category_id, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5,$6)',
-      [id, code, categoryId, nameZh, nameEn, Number(seq[0].n)],
-    );
+    await query('INSERT INTO scenes (id, code, category_id, name_zh, name_en, sort_order) VALUES ($1,$2,$3,$4,$5,$6)', [
+      id,
+      code,
+      categoryId,
+      nameZh,
+      nameEn,
+      Number(seq[0].n),
+    ]);
   }
   await writeAudit(actorOf(user), {
     action: '保存场景',
@@ -217,7 +217,8 @@ export async function upsertScene(
     objectCode: nameZh,
     objectLabel: `${nameZh} / ${nameEn || '未翻译'}`,
   });
-  return (await listScenes()).find((s) => s.id === id)!;
+  const sync = await syncScene(actorOf(user), id);
+  return { item: (await listScenes()).find((s) => s.id === id)!, sync };
 }
 
 export async function upsertTag(

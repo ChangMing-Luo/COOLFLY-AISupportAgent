@@ -140,6 +140,34 @@ export interface MissDto {
   aiSummary: string;
 }
 
+export interface ParsedDraft {
+  key: string;
+  titleZh: string;
+  bodyZh: string;
+  categoryId: string | null;
+  categoryZh: string;
+  sceneId: string | null;
+  sceneZh: string;
+  tags: string[];
+  aiApplied: boolean;
+  reason: string;
+  warning: string | null;
+}
+
+export interface ParseResult {
+  fileName: string;
+  format: string;
+  rawCount: number;
+  drafts: ParsedDraft[];
+  aiMode: string;
+  note: string;
+}
+
+export interface ImportCommitResult {
+  created: EntryDto[];
+  failed: Array<{ index: number; title: string; reason: string }>;
+}
+
 export interface CandidateDto {
   code: string;
   title: string;
@@ -171,6 +199,8 @@ export interface CollectTaskDto {
 
 export interface EntryDetail {
   entry: EntryDto;
+  bodyZh: string;
+  bodyEn: string;
   paragraphsZh: string[];
   paragraphsEn: string[];
   versions: VersionDto[];
@@ -206,6 +236,7 @@ export interface CategoryDto {
   active: boolean;
   sceneCount: number;
   entryCount: number;
+  zendeskRef: string | null;
 }
 
 export interface SceneMetaDto {
@@ -217,6 +248,7 @@ export interface SceneMetaDto {
   categoryId: string;
   categoryZh: string;
   entryCount: number;
+  zendeskRef: string | null;
 }
 
 export interface TagDto {

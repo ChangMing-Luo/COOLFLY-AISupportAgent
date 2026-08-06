@@ -12,6 +12,7 @@ export const NAV: Array<{ key: string; label: string; children: Array<[string, s
     children: [
       ['author.drafts', '我的草稿'],
       ['author.mine', '我提交的'],
+      ['author.import', '一键导入'],
     ],
   },
   {
@@ -114,6 +115,19 @@ export type ModalState =
   | { type: 'mergeTag'; id: string; name: string }
   | null;
 
+/** 长操作的分步进度（拉取 / 抽取 / 发布同步 / 导入），逐步落在模态里 */
+export interface ProgressStep {
+  label: string;
+  state: 'pending' | 'running' | 'done' | 'failed';
+  detail?: string;
+}
+
+export interface ProgressState {
+  title: string;
+  steps: ProgressStep[];
+  done: boolean;
+}
+
 export interface Ctx {
   user: SessionUser;
   catalog: CatalogCategory[];
@@ -123,6 +137,14 @@ export interface Ctx {
   toast: (title: string, detail: string, next?: ToastNext) => void;
   openDrawer: (d: DrawerState) => void;
   openModal: (m: ModalState) => void;
+  /**
+   * 跑一个带进度模态的长操作：steps 里的每一步依次点亮，失败即停并把原因显示出来。
+   * 用于「从 Zendesk 拉取」「立即拉取抽取」「提交并发布」「一键导入」等会卡住界面的操作。
+   */
+  runWithProgress: <T>(
+    title: string,
+    steps: Array<{ label: string; run: (ctx: { setDetail: (d: string) => void }) => Promise<T | void> }>,
+  ) => Promise<void>;
   refreshShell: () => void;
   /** 全局刷新计数：视图以它作为 useEffect 依赖来重新拉数据 */
   rev: number;

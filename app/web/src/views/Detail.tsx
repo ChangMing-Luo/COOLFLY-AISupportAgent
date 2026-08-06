@@ -58,7 +58,7 @@ export function Detail() {
     });
   }
 
-  const paras = lang === 'en' ? d.paragraphsEn : d.paragraphsZh;
+  const html = lang === 'en' ? d.bodyEn : d.bodyZh;
   const adoptCol = (a: number) => (a >= 60 ? 'var(--color-accent-700)' : a >= 40 ? C.accent : C.muted500);
 
   return (
@@ -116,9 +116,10 @@ export function Detail() {
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize: 14.5, lineHeight: 1.9, textAlign: 'justify', maxWidth: '70ch' }}>
-                {paras.length ? (
-                  paras.map((p, i) => <p key={i}>{p}</p>)
+              <div className="rt-body" style={{ fontSize: 14.5, lineHeight: 1.9, maxWidth: '70ch', padding: 0 }}>
+                {html ? (
+                  // 正文由本台编辑器产出（TipTap 白名单节点），渲染富文本以保留标题/列表/图片/表格
+                  <div className="tiptap" dangerouslySetInnerHTML={{ __html: html }} />
                 ) : (
                   <p style={{ color: C.muted }}>
                     {lang === 'en' ? '英文版本尚未生成，请在编辑器中执行翻译。' : '正文为空，请在编辑器中补全。'}
