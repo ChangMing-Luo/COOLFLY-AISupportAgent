@@ -181,31 +181,4 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  /** 审核记录：审核结论的专用视图（从审计里筛出通过 / 驳回） */
-  app.get('/api/review/log', async () => {
-    const { rows } = await query<{
-      id: string;
-      at: Date;
-      actor_name: string;
-      action: string;
-      object_label: string;
-      object_code: string | null;
-      version: string | null;
-    }>(
-      `SELECT id, at, actor_name, action, object_label, object_code, version FROM audit_logs
-       WHERE action LIKE '审核通过%' OR action = '驳回' ORDER BY at DESC LIMIT 200`,
-    );
-    return {
-      logs: rows.map((r) => ({
-        id: r.id,
-        at: fmtShort(r.at),
-        who: r.actor_name,
-        act: r.action,
-        verdict: r.action === '驳回' ? '驳回' : '通过',
-        obj: r.object_label,
-        objCode: r.object_code,
-        version: r.version ?? '—',
-      })),
-    };
-  });
 }

@@ -383,6 +383,15 @@ export async function batchDeleteDrafts(user: SessionUser, codes: string[]): Pro
       if (user.role !== 'super' && r.owner_id && r.owner_id !== user.id) {
         throw new DomainError('只能删除本人的草稿', 403);
       }
+      // 曾经发布过、后来恢复成草稿的条目仍挂着 Zendesk 文章——直接删库会在 Zendesk 留下孤儿文章
+      const { rows: mapped } = await query<{ ref: string }>(
+        'SELECT zendesk_article_ref AS ref FROM sync_mappings WHERE entry_id=$1 AND zendesk_article_ref IS NOT NULL',
+        [r.id],
+      );
+      if (mapped[0]) {
+        const { archiveEntry } = await import('./sync.js');
+        await archiveEntry(actorOf(user), r);
+      }
       await query('DELETE FROM entries WHERE code=$1', [code]);
       await writeAudit(actorOf(user), {
         action: '删除草稿',
