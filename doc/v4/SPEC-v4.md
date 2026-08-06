@@ -41,11 +41,14 @@
 
 ### 2.1 元数据三层
 
-| 对象 | 说明 | 对应 Zendesk | 双语 | 上下架 |
-|---|---|---|---|---|
-| 一级分类 `category` | 6 条，如「机票 · 售后」 | Category | 中英，英文可 AI 翻译 + 人工编辑 | 是 |
-| 二级场景 `scene` | 10 条，挂在分类下，如「改签退票」 | Section | 中英 | 是 |
-| 知识标签 `tag` | 本地检索/推荐用，**不翻译** | 无 | 仅中文 + 类型 | 是（可合并） |
+| 对象 | 说明 | 对应 Zendesk | 双语 | 上下架 | 走审核 |
+|---|---|---|---|---|---|
+| 一级分类 `category` | 如「机票 · 售后」 | Category | 中英，英文可 AI 翻译 + 人工编辑 | 是（下架＝删 Category） | **是**（新增/更新/上架/下架） |
+| 二级场景 `scene` | 挂在分类下，如「改签退票」 | Section | 中英 | 是（下架＝归档文章后删 Section） | **是** |
+| 知识标签 `tag` | 本地检索/推荐用，**不翻译** | 无 | 仅中文 | 是（可合并） | 否（不进 Zendesk，即时生效） |
+
+分类与场景各带生命周期 `status ∈ draft / pending / published / offline`，与 `active` 同步维护。
+未发布的分类/场景不出现在编辑器的分类树里（`catalogTree` 只放 `published && active`）。
 
 标签类型枚举：`业务 / 属性 / 动作 / 人群`。
 
@@ -137,6 +140,47 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 
 ---
 
+### 2.6 统一审核对象 `review_request`（08-06-2026 用户要求 1）
+
+分类、场景、知识正文共用**同一条审核流水线**，审核中心的待审队列与审核记录都读这张表。
+
+| 字段 | 取值 | 说明 |
+|---|---|---|
+| `object_type` | `category / scene / entry` | 审核对象类型 |
+| `action` | `create / update / publish / unpublish / rollback` | 动作 |
+| `payload` / `before_snapshot` | JSONB | 待生效内容 / 变更前快照，审核页据此出 diff |
+| `status` | `pending / approved / rejected` | 结论 |
+| `auto_approved` | bool | 由「自动过审」权限直接批准 —— **记录照样完整落库** |
+
+三维展示：队列与记录的列固定为 `分类 / 场景 / 知识正文`，由 `payload.categoryZh / sceneZh / bodySummary` 投影。
+
+生效动作（审核通过时执行）：
+
+| 对象 · 动作 | 生效 | Zendesk |
+|---|---|---|
+| 分类 create/update/publish | 落名字 + `status=published` | 建或改 Category（改名走 translations） |
+| 分类 unpublish | 本地 offline，其下场景一并 offline 且清 `zendesk_section_ref` | **DELETE Category**（Zendesk 连带删其下 Section/Article） |
+| 场景 create/update/publish | 落名字 + `status=published` | 建或改 Section（挂在父 Category 下） |
+| 场景 unpublish | 本地 offline，其下已发布知识置 offline | 先逐篇 `archiveArticle`，再 **DELETE Section** |
+| 条目 * | 走原六态机 `approve()/reject()` | 发布时 `pushEntry` |
+
+`payload.noop = true` 的记录只留痕不动 Zendesk（采纳向导「沿用已发布分类」用）。
+
+### 2.7 自动过审权限 `review.auto`
+
+新权限点，默认 `super=true / ops=false`（权限矩阵可调）。
+持有者提交任何审核对象时**当场批准并生效**，但审核记录与审计一条不少（`auto_approved=true`）。
+
+### 2.8 关键节点门禁（`services/gates.ts`）
+
+| 操作 | 校验 | 不满足时 |
+|---|---|---|
+| 新增 / 更新 / 上架场景 | 所属分类 `status=published && active` | 409 +「请先到元数据中心提交并通过审核 / 重新上架该分类」 |
+| 提交知识审核 | 场景已发布 **且** 场景所属分类已发布 | 409 + 同上文案（含对象名） |
+| 审核通过知识 | 同上（通过即发布并写 Zendesk） | 409 |
+
+---
+
 ## 3. 页面规格（逐视图，对应模板行区间）
 
 ### 3.0 全局壳
@@ -188,6 +232,20 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 垃圾箱 | 丢弃的候选进 `collect.trash`，可查看会话、可恢复。其摘要成为**自动丢弃指纹**：下次抽到同类问题直接进垃圾箱并标「自动丢弃」；恢复后指纹立即失效 |
 | 清空 | 「清空工作台」把待确认移入垃圾箱（保留指纹）；「彻底清空」物理删除候选与空任务（不再作为指纹） |
 | 容错 | 单条草稿正文生成失败不拖垮整批，退回主题概括并在任务提示里说明 |
+
+### 3.3.2 采纳向导（08-06-2026 用户要求 2）
+
+抽取候选的「生成草稿」改为**「采纳」**，点击后在当前页弹引导式模态：
+
+```
+1. 确认分类 → 2. 确认场景 → 3. 确认知识正文 → 4. 总览与提交
+```
+
+- **节点动态**：候选已匹配到库内分类 / 场景时，对应节点直接跳过（`GET /collect/candidates/:code/adopt` 返回 `nodes`）。
+- **AI 值预填**：分类/场景带 AI 建议名，可改写，也可从下拉里选库内已发布对象。
+- **双语**：分类/场景名走 `/meta/translate`；正文走 `/collect/translate`（此时还没有条目，用通用文本翻译）。
+- **提交后固定生成三条审核记录**：分类、场景、知识正文。沿用已发布对象的那一维以 `approved + noop` 直接留痕，不占待审队列。
+- **门禁**：无自动过审权限时，新建分类/场景只会进待审队列，向导**停在那里并说明在等哪条审核**，不半截落地。
 
 ### 3.3.1 一键导入 `author.import`（原型未覆盖，用户 08-06 追加需求）
 
@@ -309,7 +367,10 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | POST | `/entries/:code/sync` | 同步 | 重新下发 / 重试 |
 | GET | `/entries/:code/diff` | 审核 | 审核 diff（当前版本 ↔ 待发布内容） |
 | GET | `/collect/task` | 登录 | 当前抽取任务 + 候选 + 来源原文 + 配置 |
-| POST | `/collect/candidates/:code/accept` | 编辑 | 采纳候选 → 生成草稿 |
+| POST | `/collect/candidates/:code/accept` | 编辑 | 采纳候选 → 生成草稿（未走向导的旧入口） |
+| GET | `/collect/candidates/:code/adopt` | 登录 | 采纳向导计划（动态节点 + AI 建议 + 分类树） |
+| POST | `/collect/candidates/:code/adopt` | 采集 | 采纳提交 → 分类 / 场景 / 正文三条审核记录 |
+| POST | `/collect/translate` | 采集 | 向导内文本翻译（无条目时用） |
 | POST | `/collect/candidates/:code/drop` | 编辑 | 丢弃候选 |
 | POST | `/collect/run` | 编辑 | 手动触发一次抽取（定时任务同一入口） |
 | GET | `/feedback` | 登录 | 用户反馈列表 |
@@ -320,7 +381,8 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | POST | `/misses/:code/draft` | 编辑 | 新建条目覆盖该场景 |
 | GET | `/meta/categories` `/meta/scenes` `/meta/tags` | 登录 | 元数据列表 |
 | POST/PUT | `/meta/categories[/:id]` 等 | 元数据 | 新增 / 编辑（含英文） |
-| POST | `/meta/:kind/:id/toggle` | 元数据 | 上架 / 下架 |
+| POST | `/meta/:kind/:id/toggle` | 元数据 | 上架 / 下架：标签即时生效；分类 / 场景走审核 |
+| GET | `/meta/:kind/:id/impact` | 登录 | 下架影响面（二次确认弹窗照此如实列后果） |
 | POST | `/meta/translate` | 元数据 | 中文名 → 英文名（LLM） |
 | POST | `/meta/tags/:id/merge` | 元数据 | 合并标签（引用改写） |
 | GET | `/sync/logs` | 登录 | 同步日志（报文号 / 耗时 / 结果） |
@@ -330,7 +392,13 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | POST | `/admin/users/:id/toggle` | super | 启用 / 停用（停用即刻销毁其会话） |
 | POST | `/admin/users/:id/review-grant` | super | 单独授予 / 收回审核权限 |
 | PUT | `/admin/permissions` | super | 调整权限矩阵（即时生效 + 审计） |
-| GET | `/review/log` | 登录 | 审核记录（从审计筛通过 / 驳回） |
+| GET | `/reviews/pending` | 登录 | 统一待审队列（分类 / 场景 / 正文）+ 当前用户是否有自动过审 |
+| GET | `/reviews/records` | 登录 | 统一审核记录（含三维与自动过审标记） |
+| GET | `/reviews/:code` | 登录 | 单条审核请求详情（含变更前后快照） |
+| POST | `/reviews/:code/approve` | 审核 | 通过并生效（分类/场景写 Zendesk；正文走六态机） |
+| POST | `/reviews/:code/reject` | 审核 | 驳回（意见必填，pending 状态回退） |
+| POST | `/entries/batch/delete` | 编辑 | 批量删除草稿（有 Zendesk 文章的先归档，避免孤儿） |
+| POST | `/entries/batch/shelf` | 下线 | 批量下架 / 恢复知识 |
 | POST | `/collect/run` | 采集 | 立即拉取并抽取（与每日 07:00 cron 同一入口，抽取页右上角「立即拉取」） |
 | POST | `/import/parse` | 编辑 | 上传文档/表格 → 解析 + AI 整理 → 预览列表（multipart，≤20MB） |
 | POST | `/import/commit` | 编辑 | 把预览列表批量建为草稿 |
@@ -408,6 +476,29 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 5 | 文章点赞拉不回系统 | `fetchArticleVotes` 读 `article_votes`，Zendesk 实际返回 **`votes`**；且拉取只查 `status='published'` 的条目，条目一旦被改成草稿/修复中就再也拉不到线上文章的票 | 两个键都兜；改为按「有 Zendesk 文章映射」拉票，与中台状态无关。实测拉回 1 赞、采纳率 100% |
 | 6 | 抽取报「Expected ',' or '}' … position N」 | 模型把多行正文的**真换行**直接写进 JSON 字符串（非法 JSON），贪婪正则又会把结尾解释吞进来 | 括号配平扫描 + 裸控制字符转义 + 截断修复三道，仍失败则抛带片段的可读错误；单条起草失败不拖垮整批 |
 | 7 | 清空后再抽取报唯一键冲突 | 候选编号用 `COUNT(*)+1`，清空后计数回落与残留的已采纳候选撞号 | 改用 `MAX(编号)+1` |
+
+### 7.1.4 第四轮（统一审核 / 门禁 / 采纳向导）落地实证（08-06-2026）
+
+真实生产链路逐条实测（管理员账号，`review.auto` 默认开）：
+
+| 验证项 | 结果 |
+|---|---|
+| 管理员新增分类「配网与联网问题」 | 自动过审 RV-5001，建 Zendesk Category `54147814756755` ✅ |
+| 管理员新增场景「路由器配网失败」 | 自动过审 RV-5002，建 Section `54147758971923` 并挂在上述 Category 下 ✅ |
+| 场景下架 | RV-5003 生效，归档 0 篇文章后 **DELETE Section**；`listSections` 已无该 id ✅ |
+| 分类下架 | RV-5004 生效，**DELETE Category**；再查该 id 返回 404 ✅ |
+| 门禁：在已下架分类下建场景 | 409「所属分类『配网与联网问题』已下架，无法继续。请先到元数据中心重新上架该分类。」✅ |
+| 关掉 `review.auto` 后上架分类 | 落 pending（RV-5005），队列可见；审核通过后才建 Category `54147869450515` ✅ |
+| 采纳向导（候选 EX-16） | 4 节点 → 提交，生成三条记录：分类 RV-5006（沿用）/ 场景 RV-5007（新建 Section）/ 正文 RV-5008；条目 KB-20127 发布并同步 Article ✅ |
+| 门禁：场景下架后提交该场景下的知识 | 409「所属场景『配网绑定失败』已下架…」；场景恢复后同一条提交成功并发布 ✅ |
+| 批量下架 / 恢复 / 删除 | 逐条走单条路径，删除前先归档其 Zendesk 文章（同步日志可见 `draft=true`）✅ |
+
+本轮自查发现并修掉的两处：
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 8 | 批量删除曾发布过的草稿，会在 Zendesk 留下孤儿文章 | 下线→恢复为草稿后 `sync_mappings` 仍在，直接 `DELETE FROM entries` 只删本地 | 删除前若有文章映射，先 `archiveEntry` 归档再删 |
+| 9 | 升级后原本「已下架」的分类在列表里显示成「已上架」 | 迁移把所有带 Zendesk ref 的行一律置 `status='published'`，没看 `active` | 迁移改为：`active` 才置 published，`NOT active` 一律对齐 `offline` |
 
 ### 7.2 Zendesk 侧的两处「返回 200 但不生效」（均已实证并修复）
 

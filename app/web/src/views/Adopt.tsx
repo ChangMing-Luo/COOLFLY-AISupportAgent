@@ -415,7 +415,12 @@ function NamePair({
         <label>English</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input className="input" value={en} disabled={disabled} onChange={(e) => onEn(e.target.value)} />
-          <button className="btn btn-secondary" disabled={disabled || busy} onClick={onTranslate}>
+          <button
+            className="btn btn-secondary"
+            style={{ flex: 'none', whiteSpace: 'nowrap' }}
+            disabled={disabled || busy}
+            onClick={onTranslate}
+          >
             翻译
           </button>
         </div>

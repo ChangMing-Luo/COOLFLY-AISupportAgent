@@ -101,7 +101,7 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
   } else if (state.type === 'unpublishMeta') {
     const label = state.kind === 'categories' ? '分类' : '场景';
     title = `下架${label}「${state.name}」`;
-    body = `下架需要二次确认：确认后会提交一条${label}下架的审核请求，通过后本地下架并**删除对应的 Zendesk 目录**。`;
+    body = `下架需要二次确认：确认后会提交一条${label}下架的审核请求，通过后本地下架，并删除对应的 Zendesk 目录。`;
     warn = '删除 Zendesk 目录不可撤销，重新上架会在 Zendesk 侧新建一个目录（ID 与原来不同）。';
     confirmLabel = '确认下架';
     onConfirm = async () => {

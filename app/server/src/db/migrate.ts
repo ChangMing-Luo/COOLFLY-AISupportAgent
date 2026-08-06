@@ -52,10 +52,13 @@ async function main(): Promise<void> {
     ALTER TABLE scenes     ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
   `);
 
-  // 存量分类/场景在引入审核前就在用，已同步到 Zendesk 的直接视为已发布，避免一升级全被门禁挡住
+  // 存量分类/场景在引入审核前就在用：已同步 Zendesk 且在架的视为已发布，已下架的对齐为 offline，
+  // 否则一升级要么全被门禁挡住，要么下架过的对象在列表里假装还在架上
   await pool.query(`
-    UPDATE categories SET status='published' WHERE status='draft' AND zendesk_category_ref IS NOT NULL;
-    UPDATE scenes     SET status='published' WHERE status='draft' AND zendesk_section_ref  IS NOT NULL;
+    UPDATE categories SET status='published' WHERE status='draft' AND active AND zendesk_category_ref IS NOT NULL;
+    UPDATE scenes     SET status='published' WHERE status='draft' AND active AND zendesk_section_ref  IS NOT NULL;
+    UPDATE categories SET status='offline'   WHERE status <> 'offline' AND NOT active;
+    UPDATE scenes     SET status='offline'   WHERE status <> 'offline' AND NOT active;
   `);
 
   // 审计日志 append-only：数据库层拒绝 UPDATE / DELETE（RULE-02）
