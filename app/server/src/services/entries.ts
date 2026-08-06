@@ -329,6 +329,9 @@ export async function submitEntry(user: SessionUser, code: string): Promise<{ en
   if (!canTransition(r.status, 'pending')) {
     throw new DomainError(`当前状态「${ENTRY_STATUS_META[r.status].label}」不可提交审核。`, 409);
   }
+  // 门禁：场景与其所属分类都必须已发布，否则 Zendesk 侧无处可挂（用户要求 4a）
+  const { assertEntryTaxonomyReady } = await import('./gates.js');
+  await assertEntryTaxonomyReady(r);
   await query(
     `UPDATE entries SET status='pending', pending_kind=NULL, pending_version=NULL,
             submitter_id=$2, submitted_at=now(), owner_id=$2, owner_name=$3, updated_at=now()
@@ -340,6 +343,23 @@ export async function submitEntry(user: SessionUser, code: string): Promise<{ en
     objectCode: code,
     objectLabel: `${code} ${r.title_zh}`,
     version: r.version,
+  });
+  // 知识正文与分类、场景共用同一条审核流水线：这里补一条 entry 维度的审核请求
+  const { submitRequest } = await import('./reviews.js');
+  await submitRequest(user, {
+    objectType: 'entry',
+    objectId: r.id,
+    objectCode: code,
+    objectLabel: `${code} ${r.title_zh}`,
+    action: r.pending_kind === 'rollback' ? 'rollback' : 'update',
+    payload: {
+      titleZh: r.title_zh,
+      categoryZh: r.category_zh ?? '',
+      sceneZh: r.scene_zh ?? '',
+      bodySummary: toPlainText(r.body_zh).slice(0, 80),
+      version: r.version,
+    },
+    before: { status: r.status, version: r.version },
   });
   return { entry: await findEntry(code), errors: [] };
 }
@@ -402,6 +422,22 @@ export async function submitRollback(user: SessionUser, code: string, version: s
     objectCode: code,
     objectLabel: `${code} → ${version}`,
     version,
+  });
+  const { submitRequest } = await import('./reviews.js');
+  await submitRequest(user, {
+    objectType: 'entry',
+    objectId: r.id,
+    objectCode: code,
+    objectLabel: `${code} 回滚至 ${version}`,
+    action: 'rollback',
+    payload: {
+      titleZh: r.title_zh,
+      categoryZh: r.category_zh ?? '',
+      sceneZh: r.scene_zh ?? '',
+      bodySummary: `回滚至历史版本 ${version}`,
+      version,
+    },
+    before: { status: r.status, version: r.version },
   });
   return findEntry(code);
 }

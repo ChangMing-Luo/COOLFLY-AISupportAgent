@@ -4,6 +4,8 @@ import { writeAudit } from '../core/audit.js';
 import { diffLines, toParagraphs, toPlainText } from '../core/content.js';
 import { literalSimilarity } from '../integrations/llm.js';
 import { DomainError, actorOf, addVersion, findEntry, listEntries, type EntryRow } from './entries.js';
+import { assertEntryTaxonomyReady } from './gates.js';
+import { closeOpenRequests } from './reviews.js';
 import { pushEntry } from './sync.js';
 
 /* ══════════ 审核 diff ══════════ */
@@ -124,6 +126,10 @@ export async function approve(user: SessionUser, code: string, comment: string):
     throw new DomainError(`当前状态「${ENTRY_STATUS_META[entry.status].label}」不在待审队列。`, 409);
   }
 
+  // 审核节点门禁：通过即发布并写 Zendesk，场景/分类必须都在线
+  await assertEntryTaxonomyReady(entry);
+  await closeOpenRequests('entry', entry.id, user, 'approved', comment || '审核通过');
+
   if (entry.pending_kind === 'rollback' && entry.pending_version) {
     return applyRollback(user, entry, comment);
   }
@@ -212,6 +218,7 @@ export async function reject(user: SessionUser, code: string, comment: string): 
   if (entry.status !== 'pending') {
     throw new DomainError(`当前状态「${ENTRY_STATUS_META[entry.status].label}」不在待审队列。`, 409);
   }
+  await closeOpenRequests('entry', entry.id, user, 'rejected', comment);
   await query(
     `UPDATE entries SET status='rejected', reject_reason=$2, pending_kind=NULL, pending_version=NULL,
             reviewer_id=$3, reviewed_at=now(), updated_at=now()

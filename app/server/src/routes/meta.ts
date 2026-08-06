@@ -12,7 +12,9 @@ import {
   listScenes,
   listTags,
   mergeTag,
-  toggleMeta,
+  requestMetaToggle,
+  toggleTag,
+  unpublishImpact,
   translateMetaName,
   upsertCategory,
   upsertScene,
@@ -27,27 +29,27 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/meta/categories', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const body = upsertCategorySchema.parse(req.body);
     const r = await upsertCategory(req.currentUser!, null, body.nameZh, body.nameEn);
-    return { category: r.item, sync: r.sync };
+    return { category: r.item, review: r.review, sync: r.sync };
   });
 
   app.put('/api/meta/categories/:id', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const { id } = req.params as { id: string };
     const body = upsertCategorySchema.parse(req.body);
     const r = await upsertCategory(req.currentUser!, id, body.nameZh, body.nameEn);
-    return { category: r.item, sync: r.sync };
+    return { category: r.item, review: r.review, sync: r.sync };
   });
 
   app.post('/api/meta/scenes', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const body = upsertSceneSchema.parse(req.body);
     const r = await upsertScene(req.currentUser!, null, body.nameZh, body.nameEn, body.categoryId);
-    return { scene: r.item, sync: r.sync };
+    return { scene: r.item, review: r.review, sync: r.sync };
   });
 
   app.put('/api/meta/scenes/:id', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const { id } = req.params as { id: string };
     const body = upsertSceneSchema.parse(req.body);
     const r = await upsertScene(req.currentUser!, id, body.nameZh, body.nameEn, body.categoryId);
-    return { scene: r.item, sync: r.sync };
+    return { scene: r.item, review: r.review, sync: r.sync };
   });
 
   app.post('/api/meta/tags', { preHandler: requirePermission('meta.manage') }, async (req) => {
@@ -61,11 +63,22 @@ export async function registerMetaRoutes(app: FastifyInstance): Promise<void> {
     return { tag: await upsertTag(req.currentUser!, id, body.name, body.type) };
   });
 
+  /** 下架影响面：前端二次确认弹窗按这个如实列后果（用户要求 5） */
+  app.get('/api/meta/:kind/:id/impact', async (req) => {
+    const { kind, id } = req.params as { kind: 'categories' | 'scenes'; id: string };
+    return unpublishImpact(kind === 'categories' ? 'category' : 'scene', id);
+  });
+
   app.post('/api/meta/:kind/:id/toggle', { preHandler: requirePermission('meta.manage') }, async (req) => {
     const { kind, id } = req.params as { kind: 'categories' | 'scenes' | 'tags'; id: string };
-    const map = { categories: 'category', scenes: 'scene', tags: 'tag' } as const;
-    const active = await toggleMeta(req.currentUser!, map[kind], id);
-    return { active };
+    if (kind === 'tags') return { active: await toggleTag(req.currentUser!, id) };
+    const objectType = kind === 'categories' ? 'category' : 'scene';
+    const table = kind === 'categories' ? 'categories' : 'scenes';
+    const { query } = await import('../db/pool.js');
+    const { rows } = await query<{ status: string }>(`SELECT status FROM ${table} WHERE id=$1`, [id]);
+    const next = rows[0]?.status === 'published' ? 'unpublish' : 'publish';
+    const out = await requestMetaToggle(req.currentUser!, objectType, id, next);
+    return { ...out, next };
   });
 
   app.post('/api/meta/tags/:id/merge', { preHandler: requirePermission('meta.manage') }, async (req) => {

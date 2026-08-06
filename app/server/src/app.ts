@@ -13,6 +13,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerEntryRoutes } from './routes/entries.js';
 import { registerMetaRoutes } from './routes/meta.js';
 import { registerOpsRoutes } from './routes/ops.js';
+import { registerReviewRoutes } from './routes/reviews.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { getZendesk } from './integrations/zendesk.js';
 import { getLlm } from './integrations/llm.js';
@@ -66,6 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerEntryRoutes(app);
   await registerMetaRoutes(app);
   await registerOpsRoutes(app);
+  await registerReviewRoutes(app);
   await registerAdminRoutes(app);
 
   // 前端静态资源（同仓构建，随引擎部署）

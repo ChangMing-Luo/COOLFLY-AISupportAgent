@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS categories (
   name_zh               TEXT NOT NULL,
   name_en               TEXT NOT NULL DEFAULT '',
   zendesk_category_ref  TEXT,
+  -- 生命周期：与条目一致地走审核（draft→pending→published；下架为 offline）
+  status                TEXT NOT NULL DEFAULT 'draft'
+                          CHECK (status IN ('draft','pending','published','offline')),
   active                BOOLEAN NOT NULL DEFAULT TRUE,
   sort_order            INT NOT NULL DEFAULT 0,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -71,6 +74,8 @@ CREATE TABLE IF NOT EXISTS scenes (
   name_zh              TEXT NOT NULL,
   name_en              TEXT NOT NULL DEFAULT '',
   zendesk_section_ref  TEXT,
+  status               TEXT NOT NULL DEFAULT 'draft'
+                         CHECK (status IN ('draft','pending','published','offline')),
   active               BOOLEAN NOT NULL DEFAULT TRUE,
   sort_order           INT NOT NULL DEFAULT 0,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -89,6 +94,32 @@ CREATE TABLE IF NOT EXISTS tags (
   merged_into   TEXT REFERENCES tags(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 通用审核对象：分类 / 场景 / 条目共用一条审核流水线
+CREATE TABLE IF NOT EXISTS review_requests (
+  id            TEXT PRIMARY KEY,
+  code          TEXT NOT NULL UNIQUE,
+  object_type   TEXT NOT NULL CHECK (object_type IN ('category','scene','entry')),
+  object_id     TEXT NOT NULL,
+  object_code   TEXT NOT NULL DEFAULT '',
+  object_label  TEXT NOT NULL DEFAULT '',
+  action        TEXT NOT NULL CHECK (action IN ('create','update','publish','unpublish','rollback')),
+  -- 待生效内容与变更前快照，审核页据此出 diff
+  payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  before_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  -- 自动过审：仍是一条完整审核记录，只是由权限直接批准
+  auto_approved BOOLEAN NOT NULL DEFAULT FALSE,
+  submitter_id  TEXT REFERENCES users(id),
+  submitter_name TEXT NOT NULL DEFAULT '',
+  submitted_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewer_id   TEXT REFERENCES users(id),
+  reviewer_name TEXT NOT NULL DEFAULT '',
+  reviewed_at   TIMESTAMPTZ,
+  comment       TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_rr_status ON review_requests(status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rr_object ON review_requests(object_type, object_id);
 
 -- ============ 知识域 ============
 CREATE TABLE IF NOT EXISTS entries (

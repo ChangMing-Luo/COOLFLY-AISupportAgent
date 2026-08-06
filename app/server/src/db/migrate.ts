@@ -48,6 +48,14 @@ async function main(): Promise<void> {
     ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS sentiment TEXT NOT NULL DEFAULT 'neutral';
     ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS drop_reason TEXT;
     ALTER TABLE extract_candidates ADD COLUMN IF NOT EXISTS auto_dropped BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+    ALTER TABLE scenes     ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'draft';
+  `);
+
+  // 存量分类/场景在引入审核前就在用，已同步到 Zendesk 的直接视为已发布，避免一升级全被门禁挡住
+  await pool.query(`
+    UPDATE categories SET status='published' WHERE status='draft' AND zendesk_category_ref IS NOT NULL;
+    UPDATE scenes     SET status='published' WHERE status='draft' AND zendesk_section_ref  IS NOT NULL;
   `);
 
   // 审计日志 append-only：数据库层拒绝 UPDATE / DELETE（RULE-02）
