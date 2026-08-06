@@ -23,7 +23,7 @@
 |---|---|---|---|
 | 01 | 工作台 | `dash` | 定制（dash） |
 | 02 | 知识采集 | `collect.extract` AI 抽取工作台 | 定制（extract） |
-| 03 | 知识编辑 | `author.drafts` 我的草稿 · `author.mine` 我提交的 · `author.editor`(隐藏) | 列表 ×2 + 定制（editor） |
+| 03 | 知识编辑 | `author.drafts` 我的草稿 · `author.mine` 我提交的 · `author.import` 一键导入 · `author.editor`(隐藏) | 列表 ×2 + 定制（editor / importer） |
 | 04 | 审核中心 | `review.queue` 待我审核 · `review.log` 审核记录 · `review.detail`(隐藏) | 列表 ×2 + 定制（reviewPage） |
 | 05 | 知识库 | `kb.list` 全部知识 · `kb.offline` 已下线 · `kb.detail`(隐藏) | 列表 ×2 + 定制（detail） |
 | 06 | 发布与同步 | `publish.channels` Zendesk 同步 · `publish.logs` 同步日志 | 列表 ×2 |
@@ -148,8 +148,9 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 顶栏 | 全局搜索（占位「搜索知识、场景、分类或知识 ID…」，命中下拉 ≤6 条，无命中提示引导登记未命中）；右侧「待办 N」按钮；当前用户名 + 角色 + 「切换」 |
 | 主区 | `padding: var(--mp) 28px 60px` |
 | Toast | 右下固定，392px，左侧 2px accent 竖条，9 秒自动消失，可带「下一步」跳转按钮 |
-| 抽屉 | 右侧 640px，四形态：审核 / 元数据编辑 / 未命中处理流程 / 记录详情 |
-| 弹窗 | 440px，两种：回滚确认、下线确认 |
+| 抽屉 | 右侧 640px，五形态：审核 / 元数据编辑 / 未命中处理流程 / 记录详情 / 用户新增与编辑 |
+| 弹窗 | 440px：回滚确认、下线确认、切换账号、合并标签 |
+| 进度模态 | 520px。长操作（从 Zendesk 拉取、立即抽取、保存并提交、一键导入）逐步点亮步骤，失败即停并显示原因——避免点了按钮没反应、页面像卡死 |
 
 ### 3.1 工作台 `dash`（模板 116-207）
 
@@ -174,12 +175,27 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 
 顶部固定文案：任务标题「定时抽取 · 近 7 日 Zendesk 客诉聚类」，meta「后台定时任务 · 每日 07:00 自动运行 · 来源 Zendesk 客服会话 · 最近运行 …」，计数行「N 条待确认，人工确认后才会生成草稿（抽取由后台定时任务完成，无需手动创建）」。
 
+### 3.3.1 一键导入 `author.import`（原型未覆盖，用户 08-06 追加需求）
+
+上传文档或表格 → 大模型理解整理 → 逐条预览可改 → 批量建**草稿**（不绕过审核）。
+
+| 环节 | 口径 |
+|---|---|
+| 支持格式 | `.md` `.txt`（按 `#/##/###` 切条）、`.csv` `.tsv` `.xlsx`（按行切条，自动识别「标题·正文」或「问题·答案」列）、`.docx`（按标题层级切条）；单文件 ≤ 20 MB |
+| AI 整理 | 逐条调 `suggestOrganize`，产出标题、匹配一级分类与二级场景、建议标签，并给出匹配理由 |
+| 降级 | LLM 不可用时退回字面相似度匹配，且在每行标「字面匹配」、在页头如实写「AI 整理未生效」 |
+| 落库 | 一律 `draft`，`source = 一键导入 · <文件名>`；仍须翻译 → 提交 → 审核 → 发布 |
+
 ### 3.4 编辑器 `author.editor`（模板 346-485）
 
 - 面包屑「← 返回 / 知识编辑 / {标题}」
-- 头部：状态 tag + `{id} · {ver}` + 翻译状态 chip + 自动保存提示；h2「编辑知识」；右侧「保存草稿」「提交审核」
+- 头部：状态 tag + `{id} · {ver}` + 翻译状态 chip + 保存状态提示；h2「编辑知识」；右侧**两个按钮**「保存草稿」「保存草稿并提交审核」
 - 校验失败横幅：列出未通过项（未选场景 / 标题为空或默认 / 未翻译）
-- 左栏：中文标题 → 中文富文本（工具条 B/I/H/•/¶，`contenteditable`，占位「输入知识正文…」）→ **翻译分隔条**（左说明 + 右「翻译为英文 / 重新翻译」按钮）→ 英文标题 + 英文富文本（未翻译时显示虚线占位块）→ 变更说明输入
+- **新建态不落库**：从「撰写新知识」进来时 `sel = null`，首次保存才创建条目并生成知识编号
+- **本地备份**：改动后 800ms 存 localStorage（键 `coolfly.kb.draft.<code|__new__>`），刷新或误退后回到该条目会提示「恢复备份 / 丢弃」；离开前浏览器二次确认
+- 左栏：中文标题 → 中文富文本 → **翻译分隔条**（左说明 + 右「翻译为英文 / 重新翻译」按钮）→ 英文标题 + 英文富文本（未翻译时显示虚线占位块）→ 变更说明输入
+- **富文本 = TipTap**（`@tiptap/react` + StarterKit + Image / Link / Youtube / Table）。工具条：加粗 / 斜体 / 删除线 / H2 / H3 / 正文 / 项目符号 / 编号列表 / 引用 / 代码块 / 分隔线 / 链接 / 图片 / 视频 / 表格。原 `contenteditable + execCommand` 只能加粗与小标题，承载不了图片视频表格
+- 标签：已选可点删除；建议来自**真实标签库**（`/meta/tags`），输入回车即新增；库为空时如实说明
 - 右栏（372px）：目录归属卡（一级分类 select + `EN · xxx`、二级场景 select + `EN · xxx` + 未选错误提示、标签区：已选 tag 可点删除 + 建议 tag 可点添加）；翻译控制台卡（翻译引擎 / 中文→英文状态 / 英文人工修订 有·无 / Zendesk 同步语言 English）；AI 编辑助手卡（建议列表，采纳 / 忽略）
 
 ### 3.5 知识详情 `kb.detail`（模板 487-631）
@@ -298,7 +314,10 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | POST | `/admin/users/:id/review-grant` | super | 单独授予 / 收回审核权限 |
 | PUT | `/admin/permissions` | super | 调整权限矩阵（即时生效 + 审计） |
 | GET | `/review/log` | 登录 | 审核记录（从审计筛通过 / 驳回） |
-| POST | `/collect/run` | 采集 | 手动跑一次抽取（与每日 07:00 cron 同一入口，界面不暴露按钮） |
+| POST | `/collect/run` | 采集 | 立即拉取并抽取（与每日 07:00 cron 同一入口，抽取页右上角「立即拉取」） |
+| POST | `/import/parse` | 编辑 | 上传文档/表格 → 解析 + AI 整理 → 预览列表（multipart，≤20MB） |
+| POST | `/import/commit` | 编辑 | 把预览列表批量建为草稿 |
+| PUT | `/admin/users/:id` | super | 编辑用户姓名 / 部门 / 角色 |
 | POST | `/misses/refresh` | 反馈 | 从帮助中心「搜索无结果」刷新未命中（cron 每小时同入口） |
 | GET | `/healthz` | — | 依赖模式自曝（zendesk / llm） |
 
@@ -343,6 +362,27 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | 沙箱 | 启动时加 `ZENDESK_FORCE_SANDBOX=1` | 跑 `e2e/flows.mjs` / `e2e/ui.mjs` 必须用此模式；两套脚本自带闸，检测到 `live` 直接拒绝执行 |
 
 `ALLOW_LIVE_SYNC` 未置 1 时，`LiveZendesk` 的写方法直接抛错并把失败原因写进同步日志——防止误配置下静默写生产。
+
+### 7.1.1 三层映射（用户高频误解点，界面已加说明）
+
+```
+中台「知识分类」  ─→  Zendesk Category   （目录，不是文章）
+中台「问题场景」  ─→  Zendesk Section    （目录，挂在上级分类的 Category 下）
+中台「知识条目」  ─→  Zendesk Article    （文章，挂在所选场景的 Section 下）
+```
+
+同步用**英文名**（`name_en` 为空时退回中文名）。Guide 界面里 Section 与 Article 同树展示，
+若把场景起成问句式的知识标题（如「配网提示 Wi-Fi 连接失败」），看起来就像凭空多了一篇文章——
+这是命名问题，不是映射错误。编辑器的场景选择框下方已常驻说明。
+
+### 7.1.2 用户实操后修掉的四个真 bug（08-06-2026）
+
+| # | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | 分类/场景保存提示成功，Zendesk 无变化 | 只在「已有 ref 且英文名变了」时改名，新建时不建目录（等发布懒创建） | 保存即调 `syncCategory` / `syncScene`，真实结果回传界面并写同步日志 |
+| 2 | AI 采集拿不到任何数据 | 取 `ticket.description`，而 Messaging 工单的 description 是占位串「Conversation with Web User …」，真实对话在 `/tickets/{id}/comments.json`；且 channel 判定写死 `=== 'chat'`，真实值是 `native_messaging` | 逐工单取 comments 拼公开往来；channel 白名单含 messaging/web_widget |
+| 3 | 抽取跑了却一条候选都没有 | 置信度起评 0.55 + 频次加成，单条主题 0.59 低于阈值 0.60，低频场景全被静默丢弃 | 起评提到 0.62；被阈值丢弃时把原因写进任务 `fail_reason` 并在界面显示 |
+| 4 | 草稿箱出现空白条目 | 「撰写新知识」点击即建库行，放弃编辑就留下「未命名知识」空壳 | 新建态不落库，首次保存才建；启动时清理历史空壳 |
 
 ### 7.2 Zendesk 侧的两处「返回 200 但不生效」（均已实证并修复）
 
