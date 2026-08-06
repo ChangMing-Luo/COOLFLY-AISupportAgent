@@ -103,15 +103,15 @@ export async function pushEntry(
     );
     const articleRef = mapRows[0]?.zendesk_article_ref ?? null;
 
+    // 写入语言 = English（原型「写入语言：English」；帮助中心默认 en-us、原有文章皆 en-us）。
+    // 中文正文留在中台作为唯一事实来源，不推 Zendesk。
     const article = await getZendesk().upsertArticle({
       entryCode: entry.code,
-      title: entry.title_zh,
-      publicHtml: entry.body_zh,
+      title: entry.title_en,
+      publicHtml: entry.body_en,
       labels: entry.tags ?? [],
       sectionRef,
       internalOnly: false,
-      enTitle: entry.title_en,
-      enBodyHtml: entry.body_en,
       articleRef,
     });
 

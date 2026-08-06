@@ -84,6 +84,13 @@ function stubFetch(
     if (/\/help_center\/(categories|sections)\/[^/]+\.json$/.test(url) && method === 'PUT') {
       return respond(200, {});
     }
+    // 文章翻译列表（下线逐 locale 撤下的前置查询）
+    if (/\/help_center\/articles\/[^/]+\/translations\.json$/.test(url) && method === 'GET') {
+      return respond(200, { translations: [{ locale: 'zh-cn' }, { locale: 'en-us' }] });
+    }
+    if (/\/help_center\/articles\/[^/]+\/translations\/[^/]+\.json$/.test(url) && method === 'PUT') {
+      return respond(200, { translation: { draft: true } });
+    }
     // 文章端点（既有用例）
     const status = articleStatus.shift() ?? 201;
     return respond(status, { article: { id: 907, updated_at: '2026-08-05T02:00:00Z' } });
@@ -263,6 +270,31 @@ describe('locale 配置', () => {
     };
     expect(trans.translation.title).toBe('Refund policy');
     expect(trans.translation.title).not.toBe(PUSH.title);
+  });
+
+  it('下线逐个 locale 打 translations 端点置 draft，不打对象端点', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().archiveArticle('54141192272659');
+    // 对象端点上的 draft 是只读投影，PUT 它返回 200 却不生效（08-06-2026 线上实证）
+    expect(calls.some((c) => c.method === 'PUT' && /\/articles\/54141192272659\.json$/.test(c.url))).toBe(false);
+    for (const locale of ['zh-cn', 'en-us']) {
+      const put = calls.find(
+        (c) => c.method === 'PUT' && c.url.includes(`/articles/54141192272659/translations/${locale}.json`),
+      );
+      expect(put, `缺少 ${locale} 的撤下请求`).toBeDefined();
+      expect((put!.body as { translation: { draft: boolean } }).translation.draft).toBe(true);
+    }
+  });
+
+  it('重新发布必须复位 draft，否则下线过的文章更新后仍对客隐藏', async () => {
+    const calls = stubFetch();
+    const { getZendesk } = await loadZendesk();
+    await getZendesk().upsertArticle({ ...PUSH, articleRef: '54141192272659' });
+    const put = calls.find((c) => c.method === 'PUT' && c.url.includes('/translations/zh-cn.json'))!.body as {
+      translation: { draft: boolean };
+    };
+    expect(put.translation.draft).toBe(false);
   });
 
   it('传了 articleRef 走更新路径：不再新建文章，改打对象与翻译端点', async () => {

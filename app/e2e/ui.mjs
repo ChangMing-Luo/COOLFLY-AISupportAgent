@@ -7,7 +7,19 @@ import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const WEB = process.env.WEB_URL ?? 'http://localhost:5311';
-const PWD = process.env.SEED_PASSWORD ?? 'Coolfly@2026';
+const PWD = process.env.E2E_PASSWORD;
+if (!PWD) {
+  console.error('缺少 E2E_PASSWORD（超级管理员密码）');
+  process.exit(1);
+}
+// 安全闸：本套会触发回滚→重新同步，跑在 live 上会写真实帮助中心
+{
+  const health = await (await fetch((process.env.API_URL ?? 'http://localhost:3311') + '/healthz')).json();
+  if (health.zendesk !== 'sandbox') {
+    console.error(`拒绝执行：服务端 Zendesk 模式为「${health.zendesk}」，请以 ZENDESK_FORCE_SANDBOX=1 重启后再跑。`);
+    process.exit(1);
+  }
+}
 const SHOTS = new URL('./shots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 
@@ -22,11 +34,62 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 }, d
 const page = await ctx.newPage();
 
 await page.goto(WEB, { waitUntil: 'networkidle' });
-await page.fill('#em', 'chenmo@coolfly.com');
+await page.fill('#em', process.env.E2E_SUPER_EMAIL ?? 'admin@coolfly.com');
 await page.fill('#pw', PWD);
 await page.click('button[type=submit]');
 await page.waitForSelector('aside nav button', { timeout: 15000 });
 await page.waitForTimeout(700);
+
+/** 视觉断言前先把六态造齐（沿用真实接口，不写库） */
+async function seedStates() {
+  const call = (m, p, b) =>
+    page.evaluate(
+      ([m2, p2, b2]) =>
+        fetch(p2, {
+          method: m2,
+          credentials: 'include',
+          headers: b2 ? { 'content-type': 'application/json' } : undefined,
+          body: b2 ? JSON.stringify(b2) : undefined,
+        }).then((r) => r.json()),
+      [m, p, b],
+    );
+  const cats = await call('GET', '/api/meta/categories');
+  const scenes = await call('GET', '/api/meta/scenes');
+  const catId = cats.categories[0]?.id;
+  const sceneId = scenes.scenes[0]?.id;
+  const mk = async (title) => (await call('POST', '/api/entries', { titleZh: title, bodyZh: '一、适用范围。视觉验收样例。\n\n二、处理规则。用于覆盖状态标签。', categoryId: catId, sceneId })).entry.code;
+  const publish = async (code) => {
+    await call('POST', `/api/entries/${code}/translate`);
+    await call('POST', `/api/entries/${code}/submit`);
+    await call('POST', `/api/entries/${code}/approve`, { comment: '视觉验收' });
+  };
+  const pend = await mk('视觉验收：待审核样例');
+  await call('POST', `/api/entries/${pend}/translate`);
+  await call('POST', `/api/entries/${pend}/submit`);
+  const off = await mk('视觉验收：已下线样例');
+  await publish(off);
+  await call('POST', `/api/entries/${off}/offline`);
+  const fix = await mk('视觉验收：修复中样例');
+  await publish(fix);
+  const fb = await call('POST', '/api/feedback/pull');
+  const list = await call('GET', '/api/feedback');
+  const open = (list.feedbacks ?? []).find((f) => f.state === 'open');
+  if (open) await call('POST', `/api/feedback/${open.code}/fix`);
+  else await call('POST', `/api/entries/${fix}/revise`);
+  const rej = await mk('视觉验收：已驳回样例');
+  await call('POST', `/api/entries/${rej}/translate`);
+  await call('POST', `/api/entries/${rej}/submit`);
+  await call('POST', `/api/entries/${rej}/reject`, { comment: '视觉验收：驳回样例' });
+  const roll = await mk('视觉验收：版本回滚样例');
+  await publish(roll);
+  await call('POST', `/api/entries/${roll}/revise`);
+  await call('POST', `/api/entries/${roll}/submit`);
+  await call('POST', `/api/entries/${roll}/approve`, { comment: '第二个版本' });
+  return { roll, pend, fb };
+}
+const FIX = await seedStates();
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
 
 async function shot(name) {
   await page.screenshot({ path: `${SHOTS}${name}.png` });
@@ -134,7 +197,7 @@ async function go(label, sub) {
 {
   await go('知识库');
   await page.evaluate(() => {
-    [...document.querySelectorAll('td button')].find((b) => b.textContent.includes('国际机票改签手续费'))?.click();
+    [...document.querySelectorAll('td button')].find((b) => b.textContent.includes('版本回滚样例'))?.click();
   });
   await page.waitForTimeout(800);
   await page.evaluate(() => {
@@ -143,7 +206,9 @@ async function go(label, sub) {
   await page.waitForTimeout(300);
   await shot('05-detail-versions');
   await page.evaluate(() => {
-    [...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('回滚至'))?.click();
+    const btns = [...document.querySelectorAll('button')];
+    // 有质量告警时是「回滚至 vX」，无告警时是版本行右侧的「回滚」
+    (btns.find((b) => b.textContent.trim().startsWith('回滚至')) ?? btns.find((b) => b.textContent.trim() === '回滚'))?.click();
   });
   await page.waitForTimeout(500);
   const dialog = await page.evaluate(() => document.querySelector('.dialog')?.getBoundingClientRect().width);
@@ -174,20 +239,22 @@ for (const [label, sub, name] of [
 
 /* ══════ RULE-01 UI 层 403 ══════ */
 {
-  await page.evaluate(() =>
-    fetch('/api/auth/switch', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email: 'linjing@coolfly.com', password: 'Coolfly@2026' }),
-    }),
+  await page.evaluate(
+    ([email, password]) =>
+      fetch('/api/auth/switch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      }),
+    [process.env.E2E_OPS_EMAIL ?? 'ops@coolfly.com', process.env.E2E_OPS_PASSWORD ?? PWD],
   );
   await page.waitForTimeout(600);
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(700);
   await go('系统管理', '用户与角色');
   const denied = await page.evaluate(() => document.body.innerText.includes('403 · 权限不足'));
-  record('RULE-01-ui', denied, `林静访问系统管理 → 页面显示 403 权限不足=${denied}`);
+  record('RULE-01-ui', denied, `知识运营访问系统管理 → 页面显示 403 权限不足=${denied}`);
   await shot('17-403');
 }
 

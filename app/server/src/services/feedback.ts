@@ -191,8 +191,10 @@ export async function fixFeedback(user: SessionUser, code: string): Promise<Entr
   if (!fb) throw new DomainError('反馈不存在。', 404);
   const entry = await findEntry(fb.entry_code);
   const next = entry.status === 'published' ? bumpVersion(entry.version, false) : entry.version;
+  // 置「修复中」而不是「草稿」——六态里 fixing 的定义就是「正在根据反馈修订」，
+  // 写成 draft 会让这个状态永远不可达，界面上也分不清「自发修订」与「被投诉后修复」。
   await query(
-    `UPDATE entries SET status='draft', version=$2, note=$3, owner_id=$4, owner_name=$5, updated_at=now()
+    `UPDATE entries SET status='fixing', version=$2, note=$3, owner_id=$4, owner_name=$5, updated_at=now()
      WHERE code=$1`,
     [entry.code, next, `修复反馈 ${code}：${fb.text}`, user.id, user.name],
   );

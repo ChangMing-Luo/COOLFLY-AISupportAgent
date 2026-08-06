@@ -2,9 +2,9 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-/** v4 独立库：旧模型的 kb_console 原样保留为回滚点，不做任何破坏性迁移 */
+/** 唯一库：08-06-2026 用户授权清空旧库后重建，结构与 db/schema.sql 完全一致 */
 export const DATABASE_URL =
-  process.env.DATABASE_URL ?? 'postgres://localhost:5432/kb_console_v4';
+  process.env.DATABASE_URL ?? 'postgres://localhost:5432/kb_console';
 
 export const pool = new Pool({ connectionString: DATABASE_URL });
 

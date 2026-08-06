@@ -12,7 +12,7 @@
 |---|---|
 | 系统 | 知识运营中台（知识的生产、审核、发布、同步、反馈闭环） |
 | 运行时 | Zendesk 承载对客问答与工单；本中台**不做**对话运行时 |
-| 写入方向 | 中台 → Zendesk：**英文版本**写入 Help Center（article）；分类/场景写入 Category/Section |
+| 写入方向 | 中台 → Zendesk：**英文版本**写入 Help Center（article，`locale=en-us`，中文正文不外发）；分类/场景写入 Category/Section（用英文名） |
 | 读取方向 | Zendesk → 中台：客诉会话（反馈回流）、未命中提问、文章投票 |
 | 语言模型 | 中文录入 → 大模型翻译英文 → 人工二次编辑 → 同步 |
 | 角色 | 2 个：`super` 超级管理员 / `ops` 知识运营（审核权限单独授予） |
@@ -104,8 +104,11 @@ draft ──提交审核──▶ pending ──通过──▶ published ──
                     rejected ──编辑/提交──┘（rejected 与 draft 同权，均可编辑并再提交）
 
 published ──回滚提交──▶ pending(pending_kind=rollback) ──通过──▶ published(版本=目标版本)
-反馈「去修复」：published/任意 ──▶ draft（小版本 +1，线上仍为上一版本）；反馈置 fixing
+反馈「去修复」：published/任意 ──▶ **fixing**（小版本 +1，线上仍为上一版本）；反馈同时置 fixing
 ```
+
+> `fixing` 与 `draft` 的区别是来源：`fixing` = 被客诉驱动的修订，`draft` = 自发新建或修订。
+> 若「去修复」写成 `draft`，`fixing` 在真实系统里将永远不可达（六态少一态）。
 
 版本号规则（`bump`）：审核通过发布 = **大版本 +1**（`v3.2 → v4.0`）；创建修订 / 反馈转修复 = **小版本 +1**（`v3.2 → v3.3`）。
 
@@ -332,19 +335,42 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | Zendesk 卡 | 4 行（实例 / 上次拉取 / 待同步 / 同步失败） | 保持 4 行；沙箱模式在「实例」值后缀「（沙箱）」并置 accent | 不新增行，同时不掩盖沙箱事实 |
 | 日期 | 硬编码 `08-05` | 真实时间（`DISPLAY_TZ`，默认 Asia/Shanghai），格式保持 `MM-DD HH:mm` | — |
 
-### 7.1 生产写入的两道闸
+### 7.1 运行模式与两道闸
 
-1. `ZENDESK_FORCE_SANDBOX=1`（开发机 `.env` 默认开）→ 全部 Zendesk 调用走落盘沙箱。
-2. 去掉①后仍需 `ALLOW_LIVE_SYNC=1`，否则 `LiveZendesk` 的写方法直接抛错并把失败原因写进同步日志。
+| 模式 | 配置 | 用途 |
+|---|---|---|
+| **生产（当前）** | `.env` 无 `ZENDESK_FORCE_SANDBOX`，且 `ALLOW_LIVE_SYNC=1` | 08-06-2026 用户拍板启用：Zendesk 与千问全部真实调用 |
+| 沙箱 | 启动时加 `ZENDESK_FORCE_SANDBOX=1` | 跑 `e2e/flows.mjs` / `e2e/ui.mjs` 必须用此模式；两套脚本自带闸，检测到 `live` 直接拒绝执行 |
 
-**未取得用户当次授权前，不得放开这两道闸。**
+`ALLOW_LIVE_SYNC` 未置 1 时，`LiveZendesk` 的写方法直接抛错并把失败原因写进同步日志——防止误配置下静默写生产。
+
+### 7.2 Zendesk 侧的两处「返回 200 但不生效」（均已实证并修复）
+
+| 对象 | 错误做法 | 正确做法 |
+|---|---|---|
+| 分类 / 场景改名 | `PUT /help_center/{categories\|sections}/{id}.json {name}` | `PUT .../{id}/translations/{locale}.json {translation:{title}}` |
+| 文章下线 / 上线 | `PUT /help_center/articles/{id}.json {article:{draft}}` | `PUT .../articles/{id}/translations/{locale}.json {translation:{draft}}`，**逐 locale** |
+
+原因相同：这些字段的真身在 translation 上，对象端点上的同名字段只是只读投影。
+另：重新发布必须在 translation 里显式带 `draft:false`，否则被下线过的文章内容更新了却仍对客隐藏。
 
 ---
 
 ## 8. 验收契约与结果
 
-执行：`node app/e2e/flows.mjs`（闭环，15 项）+ `node app/e2e/ui.mjs`（视觉，7 项，产出 `app/e2e/shots/*.png`）。
-下表「结果」为 08-06-2026 的实跑结论，依赖：真实 PostgreSQL `kb_console_v4` + 真实通义千问 + Zendesk 沙箱。
+执行（**必须在沙箱模式的服务上跑**，脚本自带闸）：
+
+```bash
+psql postgres -c 'DROP DATABASE IF EXISTS kb_console_e2e'
+DATABASE_URL=postgres://localhost:5432/kb_console_e2e pnpm -C app --filter @kb/server exec tsx src/db/migrate.ts
+DATABASE_URL=postgres://localhost:5432/kb_console_e2e pnpm -C app --filter @kb/server exec tsx src/db/seed.ts   # 记下打印的密码
+DATABASE_URL=postgres://localhost:5432/kb_console_e2e ZENDESK_FORCE_SANDBOX=1 pnpm -C app --filter @kb/server dev
+E2E_PASSWORD=<超管密码> E2E_OPS_PASSWORD=<运营密码> node app/e2e/flows.mjs   # 闭环 15 项
+E2E_PASSWORD=<超管密码> E2E_OPS_PASSWORD=<运营密码> node app/e2e/ui.mjs      # 视觉 7 项 + 17 张截图
+```
+
+两套脚本**自带 fixture**：分类/场景由接口建，抽取候选、未命中、反馈全部由真实管道从 Zendesk 沙箱语料生成，
+不依赖任何演示种子（`db:seed` 已不含 mock 数据）。下表为 08-06-2026 在空库上的实跑结论。
 
 | 编号 | 类型 | 验收项 | 结果 |
 |---|---|---|---|
@@ -360,17 +386,20 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 | FLOW-04 | 闭环 | 提交进队列 → 通过 → 大版本 +1 且写版本历史 | ✅ v0.1 → v1.0 |
 | FLOW-05 | 闭环 | 发布即同步 + 报文号 + 耗时留痕 | ✅ synced / #88212 / 3ms |
 | FLOW-06 | 闭环 | 驳回空意见被拒；带意见回写条目 | ✅ 400 → 200，意见落库 |
-| FLOW-07 | 闭环 | Zendesk 拉客诉 → 去修复生成小版本草稿 | ✅ v1.0 → v1.1，反馈置修复中 |
+| FLOW-07 | 闭环 | Zendesk 拉客诉（真实投票增量）→ 去修复生成小版本 | ✅ v1.0 → v1.1，条目与反馈均置「修复中」 |
 | FLOW-08 | 闭环 | 未命中新建条目 → 未命中置已排期 | ✅ MS-441 → KB-20546 |
 | FLOW-09 | 闭环 | 回滚必须过审；过审后内容与指标一并回退并重新同步 | ✅ v3.2 → v3.1，正文实测已回退 |
-| FLOW-10 | 闭环 | 下线 → offline + Zendesk 归档；恢复 → draft | ✅ 双向通过 |
+| FLOW-10 | 闭环 | 下线 → offline + Zendesk 归档留痕；恢复 → draft | ✅ 双向通过 |
+| LIVE-01 | 生产 | 真实帮助中心全链路：建目录 → 翻译 → 审核 → 发布 → 回读 | ✅ article 54141192272659 `locale=en-us` `draft=false`，标题/正文为真实千问译文 |
+| LIVE-02 | 生产 | 真实下线 → 文章从对客侧撤下（回读 `draft=true`） | ✅ 修复后实证生效（修复前 PUT 对象端点返 200 但不生效） |
+| LIVE-03 | 生产 | 真实重新发布 → 文章复出（回读 `draft=false`） | ✅ translation 带 `draft:false` 后生效 |
 | RULE-01 | 安全 | ops 访问 admin：API 403 + 页面 403 | ✅ 两层均拦 |
 | RULE-02 | 安全 | 审计 append-only | ✅ 接口无修改路径；psql `UPDATE 0 / DELETE 0` |
 | RULE-03 | 安全 | 未登录访问 `/api` → 401 | ✅ |
 | RULE-04 | 数据 | 新增分类/场景 → 懒创建 Zendesk Category/Section | ✅ 场景挂上 Section id |
 | RULE-05 | 数据 | 标签不翻译、不进 Zendesk | ✅ 无英文字段；翻译端点拒标签 |
 
-单元测试：`vitest run` **35/35**（状态机与版本号、权限单独授予、段落 diff LCS、脱敏、时间格式、Zendesk 契约含更新路径防回归）。
+单元测试：`vitest run` **37/37**（状态机与版本号、权限单独授予、段落 diff LCS、脱敏、时间格式、Zendesk 契约含更新路径 / 下线逐 locale / 重发复位 draft 三条防回归）。
 
 ---
 
@@ -380,16 +409,23 @@ published ──回滚提交──▶ pending(pending_kind=rollback) ──通�
 # 依赖：本机 PostgreSQL（无需 Docker）
 corepack pnpm -C app install
 corepack pnpm -C app --filter @kb/contracts build
-corepack pnpm -C app --filter @kb/server db:migrate   # 自动建 kb_console_v4
-corepack pnpm -C app --filter @kb/server db:seed      # 原型基线数据，初始密码 Coolfly@2026
+corepack pnpm -C app --filter @kb/server db:migrate   # 库不存在时自动建 kb_console
+corepack pnpm -C app --filter @kb/server db:seed      # 引导数据：每角色一个账号 + 权限矩阵
 corepack pnpm -C app --filter @kb/server dev          # 3311
 corepack pnpm -C app --filter @kb/web dev             # 5311（代理 /api → 3311）
 ```
 
+**`db:seed` 不含任何演示数据**，且幂等非破坏：重跑不删业务数据、不重置已有账号密码
+（要重置显式 `SEED_RESET_PASSWORD=1`）。新建账号时生成 16 位随机密码并打印一次，库里只存 argon2 哈希。
+分类 / 场景 / 标签由用户在「元数据中心」自建（保存即同步 Zendesk 目录）；
+知识条目、抽取候选、反馈、未命中一律来自真实业务与 Zendesk 回流。
+
 | 环境变量 | 作用 |
 |---|---|
-| `DATABASE_URL` | 默认 `postgres://localhost:5432/kb_console_v4` |
+| `DATABASE_URL` | 默认 `postgres://localhost:5432/kb_console` |
 | `QWEN_API_KEY` / `QWEN_MODEL` | 翻译与抽取；缺失则降级为本地确定性模式并在界面如实标注 |
-| `ZENDESK_*` | 实例与凭据；见 §7.1 两道写入闸 |
-| `DISABLE_CRON=1` | 关闭抽取与未命中刷新的定时任务 |
+| `ZENDESK_*` | 实例与凭据；`ZENDESK_LOCALE=en-us`（文章写入语言） |
+| `ALLOW_LIVE_SYNC=1` | 允许写真实帮助中心（生产必需） |
+| `ZENDESK_FORCE_SANDBOX=1` | 强制沙箱；跑 E2E 必须加 |
+| `DISABLE_CRON=1` | 关闭抽取（每日 07:00）与未命中刷新（每小时） |
 | `DISPLAY_TZ` | 界面时区，默认 `Asia/Shanghai` |

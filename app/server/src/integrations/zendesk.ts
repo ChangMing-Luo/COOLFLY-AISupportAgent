@@ -528,7 +528,11 @@ class LiveZendesk implements ZendeskClient {
     };
   }
 
-  /** 翻译 upsert：先试 PUT，翻译不存在（404）再 POST 创建 */
+  /**
+   * 翻译 upsert：先试 PUT，翻译不存在（404）再 POST 创建。
+   * 必须显式带 `draft:false`——被下线过的文章重新发布时，若不复位 draft，
+   * 内容会更新但文章仍对客隐藏。
+   */
   private async upsertTranslation(
     articleRef: string,
     locale: string,
@@ -538,13 +542,13 @@ class LiveZendesk implements ZendeskClient {
     try {
       await this.call(`/help_center/articles/${articleRef}/translations/${locale}.json`, {
         method: 'PUT',
-        body: JSON.stringify({ translation: { title, body } }),
+        body: JSON.stringify({ translation: { title, body, draft: false } }),
       });
     } catch (err) {
       if (err instanceof ZendeskApiError && err.status === 404) {
         await this.call(`/help_center/articles/${articleRef}/translations.json`, {
           method: 'POST',
-          body: JSON.stringify({ translation: { locale, title, body } }),
+          body: JSON.stringify({ translation: { locale, title, body, draft: false } }),
         });
         return;
       }
@@ -552,12 +556,25 @@ class LiveZendesk implements ZendeskClient {
     }
   }
 
+  /**
+   * 下线 = 把文章从对客帮助中心撤下（不裸删）。
+   * 文章的 `draft` 是 **translation 上的字段**，对象端点上的 `draft` 只是源翻译的只读投影：
+   * `PUT /help_center/articles/{id}.json {article:{draft:true}}` 返回 200 但不生效（08-06-2026 线上实证）。
+   * 必须逐个 locale 打 translations 端点，否则「已下线」在中台成立、文章却仍对客可见。
+   */
   async archiveArticle(articleRef: string): Promise<void> {
     this.assertWritable('archiveArticle');
-    await this.call(`/help_center/articles/${articleRef}.json`, {
-      method: 'PUT',
-      body: JSON.stringify({ article: { draft: true } }),
-    });
+    const data = await this.call<{ translations: Array<{ locale: string }> }>(
+      `/help_center/articles/${articleRef}/translations.json`,
+    );
+    const locales = (data.translations ?? []).map((t) => t.locale);
+    if (locales.length === 0) locales.push(this.locale);
+    for (const locale of locales) {
+      await this.call(`/help_center/articles/${articleRef}/translations/${locale}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({ translation: { draft: true } }),
+      });
+    }
   }
 
   async getArticle(articleRef: string): Promise<ZendeskArticle | null> {
