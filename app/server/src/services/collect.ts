@@ -37,6 +37,8 @@ export interface CandidateDto {
   sentiment: 'negative' | 'neutral' | 'positive';
   sentimentLabel: string;
   createdAt: string;
+  /** 排序用的毫秒时间戳（createdAt 只有 MM-DD HH:mm，跨年无法比较） */
+  createdAtTs: number;
   dup: boolean;
   dupCode: string | null;
   dupTitle: string | null;
@@ -124,6 +126,9 @@ function toCandDto(c: CandRow): CandidateDto {
     sentiment: (c.sentiment as CandidateDto['sentiment']) ?? 'neutral',
     sentimentLabel: SENTIMENT_LABEL[c.sentiment] ?? '中性',
     createdAt: fmtShort(c.created_at),
+    // 排序用的绝对时间。界面显示的 createdAt 是 `MM-DD HH:mm`，前端要拿它排序
+    // 只能自己拼一个年份，跨年那几天 12-31 会被当成比 01-02 更新。
+    createdAtTs: c.created_at.getTime(),
     dup: Boolean(c.dup_code),
     dupCode: c.dup_code,
     dupTitle: c.dup_code ? `${c.dup_code} ${c.dup_title}` : null,

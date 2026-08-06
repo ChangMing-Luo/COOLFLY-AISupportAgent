@@ -15,7 +15,7 @@ import {
   type TagDto,
 } from '../api.js';
 import { useApp, type Ctx } from '../shell.js';
-import { C, Empty, kickerStyle, tnum } from '../ui.js';
+import { C, Empty, LoadFailed, kickerStyle, tnum } from '../ui.js';
 
 export interface Row {
   id: string;
@@ -74,6 +74,9 @@ export function ListPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [filterIdx, setFilterIdx] = useState(0);
   const [picked, setPicked] = useState<string[]>([]);
+  /** 正在执行的动作 key，非空时所有动作按钮禁用（防双击重复发请求） */
+  const [acting, setActing] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     setFilterIdx(0);
@@ -88,19 +91,42 @@ export function ListPage() {
     const src = SOURCE[app.route];
     if (!src) return;
     let alive = true;
+    setLoadError('');
     api
       .get<Record<string, unknown>>(src)
       .then((d) => {
         if (alive) setData(d);
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => {
+        // 原来失败静默、组件 return null，整个主区一片空白，
+        // 用户分不清是「还在加载」还是「坏了」
+        if (alive) setLoadError(e instanceof Error ? e.message : '加载失败');
+      });
     return () => {
       alive = false;
     };
   }, [app.route, app.rev]);
 
   const cfg = useMemo(() => (data ? buildCfg(app, data) : null), [app, data]);
+  if (loadError) return <LoadFailed message={loadError} onRetry={app.refreshShell} />;
   if (!cfg) return null;
+
+  /**
+   * 行内与页头动作的统一出口：接住失败并上 busy 闸。
+   * 这些动作原来是 `void a.on()` 直接调用——请求失败（网络、权限、409 状态冲突）
+   * 界面毫无反应，用户以为没点上就反复点，而每次点击都真的发了一次请求。
+   */
+  const runAction = async (key: string, fn: () => void | Promise<void>): Promise<void> => {
+    if (acting) return;
+    setActing(key);
+    try {
+      await fn();
+    } catch (e) {
+      app.toast('操作未完成', e instanceof Error ? e.message : '未知错误');
+    } finally {
+      setActing('');
+    }
+  };
 
   const filters = cfg.filters.length ? cfg.filters : [{ l: '全部' }];
   const idx = Math.min(filterIdx, filters.length - 1);
@@ -121,8 +147,13 @@ export function ListPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
           {cfg.actions.map((a) => (
-            <button key={a.l} className={`btn ${a.cls}`} onClick={() => void a.on()}>
-              {a.l}
+            <button
+              key={a.l}
+              className={`btn ${a.cls}`}
+              disabled={Boolean(acting)}
+              onClick={() => void runAction(`head:${a.l}`, a.on)}
+            >
+              {acting === `head:${a.l}` ? '处理中…' : a.l}
             </button>
           ))}
         </div>
@@ -239,10 +270,11 @@ export function ListPage() {
                     <button
                       key={a.l}
                       className="btn btn-ghost"
-                      onClick={() => void a.on()}
+                      disabled={Boolean(acting)}
+                      onClick={() => void runAction(`${r.id}:${a.l}`, a.on)}
                       style={{ fontSize: 12 }}
                     >
-                      {a.l}
+                      {acting === `${r.id}:${a.l}` ? '…' : a.l}
                     </button>
                   ))}
                 </div>

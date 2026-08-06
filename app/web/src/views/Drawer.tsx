@@ -93,8 +93,16 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
       {
         l: '驳回',
         cls: 'btn-secondary',
+        // 与「通过并发布」一致地上 busy 闸并接住失败——原来这一条既能双击也不报错
         on: async () => {
-          if (await doReject(app, review.entry.code, comment)) onClose();
+          setBusy(true);
+          try {
+            if (await doReject(app, review.entry.code, comment)) onClose();
+          } catch (e) {
+            app.toast('驳回失败', e instanceof Error ? e.message : '未知错误');
+          } finally {
+            setBusy(false);
+          }
         },
       },
       {
@@ -105,6 +113,8 @@ export function Drawer({ state, onClose }: { state: DrawerState; onClose: () => 
           try {
             await doApprove(app, review.entry.code, comment);
             onClose();
+          } catch (e) {
+            app.toast('审核失败', e instanceof Error ? e.message : '未知错误');
           } finally {
             setBusy(false);
           }

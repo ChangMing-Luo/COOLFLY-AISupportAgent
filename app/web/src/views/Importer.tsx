@@ -23,44 +23,49 @@ export function Importer() {
   async function pick(file: File) {
     setBusy(true);
     let parsed: ParseResult | null = null;
-    await app.runWithProgress('导入并 AI 整理', [
-      {
-        label: `解析文件《${file.name}》`,
-        run: async ({ setDetail }) => {
-          setDetail(`${(file.size / 1024).toFixed(0)} KB，上传中…`);
-          const fd = new FormData();
-          fd.append('file', file);
-          const ac = new AbortController();
-          abortRef.current = ac;
-          const res = await fetch('/api/import/parse', {
-            method: 'POST',
-            body: fd,
-            credentials: 'include',
-            signal: ac.signal,
-          }).catch((e: Error) => {
-            if (e.name === 'AbortError') throw new Error('已取消上传，文件未入库');
-            throw e;
-          });
-          const text = await res.text();
-          const data = text ? JSON.parse(text) : {};
-          if (!res.ok) throw new Error(String(data.message ?? `解析失败（${res.status}）`));
-          parsed = data as ParseResult;
-          setDetail(`${(parsed as ParseResult).format} · 切出 ${(parsed as ParseResult).rawCount} 段`);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    await app.runWithProgress(
+      '导入并 AI 整理',
+      [
+        {
+          label: `解析文件《${file.name}》`,
+          run: async ({ setDetail }) => {
+            setDetail(`${(file.size / 1024).toFixed(0)} KB，上传中…`);
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/import/parse', {
+              method: 'POST',
+              body: fd,
+              credentials: 'include',
+              signal: ac.signal,
+            }).catch((e: Error) => {
+              if (e.name === 'AbortError') throw new Error('已取消上传，文件未入库');
+              throw e;
+            });
+            const text = await res.text();
+            const data = text ? JSON.parse(text) : {};
+            if (!res.ok) throw new Error(String(data.message ?? `解析失败（${res.status}）`));
+            parsed = data as ParseResult;
+            setDetail(`${(parsed as ParseResult).format} · 切出 ${(parsed as ParseResult).rawCount} 段`);
+          },
         },
-      },
-      {
-        label: '大模型理解与分类匹配',
-        run: async ({ setDetail }) => {
-          const p = parsed as ParseResult | null;
-          if (!p) throw new Error('解析结果为空');
-          setDetail(
-            p.aiMode === 'qwen'
-              ? `已整理 ${p.drafts.length} 条，自动匹配分类与场景`
-              : '当前为本地模式，AI 整理未生效，仅按字面匹配',
-          );
+        {
+          label: '大模型理解与分类匹配',
+          run: async ({ setDetail }) => {
+            const p = parsed as ParseResult | null;
+            if (!p) throw new Error('解析结果为空');
+            setDetail(
+              p.aiMode === 'qwen'
+                ? `已整理 ${p.drafts.length} 条，自动匹配分类与场景`
+                : '当前为本地模式，AI 整理未生效，仅按字面匹配',
+            );
+          },
         },
-      },
-    ]);
+      ],
+      // 取消入口挂在进度模态上：模态遮罩盖住整页，页头那个「取消上传」按钮点不到
+      () => ac.abort(),
+    );
     abortRef.current = null;
     const p = parsed as ParseResult | null;
     if (p) {
@@ -188,7 +193,7 @@ export function Importer() {
             <p style={{ fontSize: 13, color: C.muted, margin: '8px auto 16px', maxWidth: 460, textWrap: 'pretty' }}>
               支持 .md / .txt（按 # 标题切条）、.csv / .tsv / .xlsx（按行切条，自动识别「标题·正文」或「问题·答案」列）、.docx（按标题层级切条）。单文件上限 20 MB。
               <br />
-              文件只在服务端内存里解析，<b>不落盘、不入库</b>；入库的只有你确认后的知识条目。上传过程中可随时点「取消上传」。
+              文件只在服务端内存里解析，<b>不落盘、不入库</b>；入库的只有你确认后的知识条目。上传过程中可在进度框里点「取消」。
             </p>
             <button className="btn btn-primary" onClick={() => fileRef.current?.click()} disabled={busy}>
               选择文件

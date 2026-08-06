@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type ReviewDto } from '../api.js';
 import { useApp, type Ctx } from '../shell.js';
-import { C, Card, Crumb, KvRow, kickerStyle, tnum, twoCol } from '../ui.js';
+import { C, Card, Crumb, KvRow, LoadFailed, kickerStyle, tnum, twoCol } from '../ui.js';
 
 export const REJECT_QUICK = ['费率与新政策不符', '缺少生效日期', '英文翻译有误', '话术过长需精简'];
 
@@ -9,18 +9,25 @@ const DIFF_BG = { same: 'transparent', del: 'var(--color-neutral-100)', add: 'va
 const DIFF_COL = { same: 'var(--color-text)', del: 'var(--color-neutral-500)', add: 'var(--color-accent-800)' };
 const DIFF_GUT = { same: 'transparent', del: 'var(--color-neutral-200)', add: 'var(--color-accent-200)' };
 
-export function useReview(code: string | null): [ReviewDto | null, () => void] {
+export function useReview(code: string | null): [ReviewDto | null, () => void, string] {
   const app = useApp();
   const [d, setD] = useState<ReviewDto | null>(null);
+  const [err, setErr] = useState('');
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!code) return;
+    setErr('');
     api
       .get<ReviewDto>(`/entries/${code}/review`)
       .then(setD)
-      .catch(() => setD(null));
+      .catch((e: unknown) => {
+        // 真实业务路径：这条待审刚被另一位审核人处理掉，接口会 409。
+        // 原来吞掉后整页空白，从工作台待办点进来就是一片白，没人知道发生了什么。
+        setD(null);
+        setErr(e instanceof Error ? e.message : '审核内容加载失败');
+      });
   }, [code, tick, app.rev]);
-  return [d, () => setTick((n) => n + 1)];
+  return [d, () => setTick((n) => n + 1), err];
 }
 
 export function DiffBlock({
@@ -178,11 +185,37 @@ export async function doReject(app: Ctx, code: string, comment: string): Promise
 
 export function ReviewPage() {
   const app = useApp();
-  const [d] = useReview(app.sel);
+  const [d, , loadError] = useReview(app.sel);
   const [comment, setComment] = useState('');
+  // 审核是最不该重复触发的动作：双击「通过并发布」会并发两次 approve（重复发布与同步），
+  // 而失败（对象已被他人处理、门禁 409）原来完全没有反馈，按钮还能继续点
+  const [busy, setBusy] = useState(false);
 
+  if (loadError) {
+    return (
+      <>
+        <Crumb onBack={() => app.go('review.queue')} backText="← 返回待审队列" label="审核" />
+        <LoadFailed
+          message={`${loadError}（这条可能已被其他审核人处理，返回队列刷新即可看到最新状态）`}
+          onRetry={app.refreshShell}
+        />
+      </>
+    );
+  }
   if (!d) return null;
   const code = d.entry.code;
+
+  const run = async (fn: () => Promise<boolean>): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (await fn()) app.go('review.queue');
+    } catch (e) {
+      app.toast('操作未完成', e instanceof Error ? e.message : '未知错误');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <>
@@ -202,20 +235,22 @@ export function ReviewPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             className="btn btn-secondary"
-            onClick={async () => {
-              if (await doReject(app, code, comment)) app.go('review.queue');
-            }}
+            disabled={busy}
+            onClick={() => void run(() => doReject(app, code, comment))}
           >
-            驳回
+            {busy ? '处理中…' : '驳回'}
           </button>
           <button
             className="btn btn-primary"
-            onClick={async () => {
-              await doApprove(app, code, comment);
-              app.go('review.queue');
-            }}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                await doApprove(app, code, comment);
+                return true;
+              })
+            }
           >
-            通过并发布
+            {busy ? '处理中…' : '通过并发布'}
           </button>
         </div>
       </div>

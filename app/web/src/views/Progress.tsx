@@ -90,6 +90,11 @@ export function Progress({ state, onClose }: { state: ProgressState; onClose: ()
         ) : null}
 
         <div className="dialog-actions">
+          {!state.done && state.onCancel ? (
+            <button className="btn btn-secondary" onClick={state.onCancel}>
+              取消
+            </button>
+          ) : null}
           <button className="btn btn-primary" disabled={!state.done} onClick={onClose}>
             {state.done ? '完成' : '处理中…'}
           </button>

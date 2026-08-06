@@ -367,11 +367,13 @@ export function Adopt({ code, onClose }: { code: string; onClose: () => void }) 
             ) : null}
 
             <div className="dialog-actions">
-              <button className="btn btn-secondary" onClick={onClose}>
+              {/* 提交中一并禁用：关掉弹窗并不会中止请求，候选照样被采纳、审核单照样生成，
+                  但用户看不到结果页，只会以为什么都没发生 */}
+              <button className="btn btn-secondary" disabled={busy} onClick={onClose}>
                 取消
               </button>
               {step > 0 ? (
-                <button className="btn btn-secondary" onClick={() => setStep(step - 1)}>
+                <button className="btn btn-secondary" disabled={busy} onClick={() => setStep(step - 1)}>
                   上一步
                 </button>
               ) : null}

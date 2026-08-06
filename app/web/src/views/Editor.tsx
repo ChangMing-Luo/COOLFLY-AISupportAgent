@@ -53,6 +53,8 @@ export function Editor() {
   const [backup, setBackup] = useState<LocalBackup | null>(null);
   const [savedAt, setSavedAt] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
   const loadedKey = useRef('');
 
   /* ── 装载 ── */
@@ -73,6 +75,7 @@ export function Editor() {
     loadedKey.current = key;
     setShowErr(false);
     setDirty(false);
+    setLoadError('');
 
     const readBackup = (): LocalBackup | null => {
       try {
@@ -118,15 +121,30 @@ export function Editor() {
         setCatalog(p.catalog);
         setSavedAt(p.entry.updatedAt);
         const b = readBackup();
-        // 本地备份比服务端新，且内容确实不同，才提示恢复
-        if (b && (b.titleZh !== p.entry.titleZh || b.bodyZh !== p.bodyZh)) setBackup(b);
+        // 本地备份与服务端任一字段不同就提示恢复。原来只比中文标题与中文正文，
+        // 于是「翻译完只润色了英文」「只改了标签或场景」的备份会被当成无差异直接删掉
+        const differs =
+          b &&
+          (b.titleZh !== p.entry.titleZh ||
+            b.bodyZh !== p.bodyZh ||
+            b.titleEn !== p.entry.titleEn ||
+            b.bodyEn !== p.bodyEn ||
+            b.note !== p.entry.note ||
+            b.categoryId !== (p.categoryId ?? '') ||
+            b.sceneId !== (p.sceneId ?? '') ||
+            b.tags.join('') !== p.entry.tags.join(''));
+        if (differs) setBackup(b);
         else {
           setBackup(null);
           localStorage.removeItem(backupKey(code));
         }
       })
-      .catch(() => undefined);
-  }, [code]);
+      .catch((e: unknown) => {
+        // 装载失败必须让用户知道。原来静默吞掉，表单保持全空但 code 仍指向该条目，
+        // 用户没察觉就点「保存草稿」，会用空内容覆盖掉正文与已翻译的英文版本
+        setLoadError(e instanceof Error ? e.message : '装载失败');
+      });
+  }, [code, reloadTick]);
 
   /* ── 本地备份：改动后 800ms 落 localStorage，防刷新/误退丢内容 ── */
   useEffect(() => {
@@ -252,13 +270,21 @@ export function Editor() {
     setBusy(true);
     type TransOut = { entry: EntryDto; bodyEn: string; degraded: boolean; mode: string };
     let out: TransOut | null = null;
+    // 用 persist() 的返回值而不是闭包里的 code：新建态进来时 code 还是 null，
+    // 第一步刚建的条目号要到下次渲染才写回，直接读 code 会打到 /entries//translate（404）
+    let target = code;
     await app.runWithProgress('翻译为英文', [
-      { label: '保存当前内容', run: async () => void (await persist()) },
+      {
+        label: '保存当前内容',
+        run: async () => {
+          target = await persist();
+        },
+      },
       {
         label: '调用大模型翻译标题与正文',
         run: async ({ setDetail }) => {
           setDetail(`引擎：${d?.llmLabel ?? '大模型'}`);
-          out = await api.post(`/entries/${code ?? ''}/translate`);
+          out = await api.post(`/entries/${target}/translate`);
         },
       },
     ]);
@@ -281,6 +307,47 @@ export function Editor() {
   ) : (
     <span className="tag tag-neutral">新建</span>
   );
+
+  // 装载失败时不能进编辑态：表单是空的，一保存就会把正文和英文版本清掉
+  if (loadError) {
+    return (
+      <>
+        <Crumb onBack={() => app.go('author.drafts')} label="知识编辑" />
+        <div
+          style={{
+            marginTop: 24,
+            border: `1px solid ${C.divider}`,
+            borderLeft: '2px solid var(--color-accent-600)',
+            borderRadius: 'var(--radius-md)',
+            padding: '18px 20px',
+            background: C.surface,
+          }}
+        >
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 17 }}>无法打开这条知识</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8, lineHeight: 1.8 }}>
+            {loadError}
+            <br />
+            为避免用空白内容覆盖已有正文，编辑器暂不打开。请重试，或返回草稿列表。
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                loadedKey.current = '';
+                setLoadError('');
+                setReloadTick((n) => n + 1);
+              }}
+            >
+              重试
+            </button>
+            <button className="btn btn-secondary" onClick={() => app.go('author.drafts')}>
+              返回草稿列表
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

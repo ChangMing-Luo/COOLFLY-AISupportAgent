@@ -57,14 +57,24 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
     body = `将发起把 ${state.code} 的线上内容回滚至 ${state.version} 的版本（历史采纳率 ${state.adopt}%）。回滚需经过审核工作流，审核通过后才生效并重新同步 Zendesk。`;
     warn = '提交后该知识状态变为「待审核」，在审核中心通过后回滚才会写入 Zendesk。';
     confirmLabel = '提交回滚审核';
+    // 与本文件其它确认动作一致地上 busy 闸并接住失败：原来双击会提交两条回滚审核单，
+    // 失败则弹窗原地不动且没有任何提示（未捕获的 rejection）
     onConfirm = async () => {
-      await api.post(`/entries/${state.code}/rollback`, { version: state.version });
-      app.refreshShell();
-      app.toast('回滚已提交审核', `${state.code} 回滚至 ${state.version} 已进入待审队列，审核通过后才生效。`, {
-        label: '前往审核中心',
-        route: 'review.queue',
-      });
-      onClose();
+      setBusy(true);
+      setErr('');
+      try {
+        await api.post(`/entries/${state.code}/rollback`, { version: state.version });
+        app.refreshShell();
+        app.toast('回滚已提交审核', `${state.code} 回滚至 ${state.version} 已进入待审队列，审核通过后才生效。`, {
+          label: '前往审核中心',
+          route: 'review.queue',
+        });
+        onClose();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '提交失败');
+      } finally {
+        setBusy(false);
+      }
     };
   } else if (state.type === 'offline') {
     title = '下线知识';
@@ -72,10 +82,19 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
     warn = '近 7 日该知识仍被召回，下线可能导致相关提问无召回。';
     confirmLabel = '确认下线';
     onConfirm = async () => {
-      await api.post(`/entries/${state.code}/offline`);
-      app.refreshShell();
-      app.toast('已下线', `${state.code} 已从 Zendesk 撤回。`, { label: '查看已下线', route: 'kb.offline' });
-      onClose();
+      setBusy(true);
+      setErr('');
+      try {
+        await api.post(`/entries/${state.code}/offline`);
+        app.refreshShell();
+        app.toast('已下线', `${state.code} 已从 Zendesk 撤回。`, { label: '查看已下线', route: 'kb.offline' });
+        onClose();
+      } catch (e) {
+        // 归档失败时服务端会拒绝下线（避免中台已下线、线上仍可见），这里必须让用户看到原因
+        setErr(e instanceof Error ? e.message : '下线失败');
+      } finally {
+        setBusy(false);
+      }
     };
   } else if (state.type === 'switch') {
     title = '切换账号';
@@ -178,11 +197,19 @@ export function Modal({ state, onClose }: { state: ModalState; onClose: () => vo
     warn = '该操作会改写已有知识的标签引用，且不会自动还原。';
     confirmLabel = '确认合并';
     onConfirm = async () => {
-      await api.post(`/meta/tags/${state.id}/merge`, { targetId });
-      app.refreshShell();
-      const target = tags.find((t) => t.id === targetId);
-      app.toast('标签已合并', `「${state.name}」的引用已改写到「${target?.name ?? ''}」。`);
-      onClose();
+      setBusy(true);
+      setErr('');
+      try {
+        await api.post(`/meta/tags/${state.id}/merge`, { targetId });
+        app.refreshShell();
+        const target = tags.find((t) => t.id === targetId);
+        app.toast('标签已合并', `「${state.name}」的引用已改写到「${target?.name ?? ''}」。`);
+        onClose();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '合并失败');
+      } finally {
+        setBusy(false);
+      }
     };
   }
 

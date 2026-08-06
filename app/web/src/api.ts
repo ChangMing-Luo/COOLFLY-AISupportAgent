@@ -217,6 +217,8 @@ export interface CandidateDto {
   sentiment: 'negative' | 'neutral' | 'positive';
   sentimentLabel: string;
   createdAt: string;
+  /** 排序用的毫秒时间戳（createdAt 只有 MM-DD HH:mm，跨年无法比较） */
+  createdAtTs: number;
   dup: boolean;
   dupCode: string | null;
   dupTitle: string | null;

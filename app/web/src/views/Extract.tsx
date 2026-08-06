@@ -40,7 +40,7 @@ export function Extract() {
           ? c.confidence
           : sort === 'sentiment'
             ? (SENTIMENT_RANK[c.sentiment] ?? 1)
-            : new Date(`2026-${c.createdAt.replace(' ', 'T')}`).getTime() || 0;
+            : c.createdAtTs;
     list.sort((a, b) => (desc ? val(b) - val(a) : val(a) - val(b)));
     return list;
   }, [d, sort, desc]);
@@ -49,11 +49,15 @@ export function Extract() {
   const t = d.task;
 
   async function drop(c: CandidateDto) {
-    setD(await api.post<Payload>(`/collect/candidates/${c.code}/drop`, { reason: '人工丢弃' }));
-    app.toast('已移入垃圾箱', `${c.code} 的摘要会成为自动丢弃指纹，下次抽到同类问题将直接进垃圾箱。`, {
-      label: '查看垃圾箱',
-      route: 'collect.trash',
-    });
+    try {
+      setD(await api.post<Payload>(`/collect/candidates/${c.code}/drop`, { reason: '人工丢弃' }));
+      app.toast('已移入垃圾箱', `${c.code} 的摘要会成为自动丢弃指纹，下次抽到同类问题将直接进垃圾箱。`, {
+        label: '查看垃圾箱',
+        route: 'collect.trash',
+      });
+    } catch (e) {
+      app.toast('丢弃失败', e instanceof Error ? e.message : '未知错误');
+    }
   }
 
   /** 主动拉取：不等每日 07:00 的定时任务，立刻从 Zendesk 拉会话跑一遍抽取 */
@@ -87,17 +91,29 @@ export function Extract() {
   }
 
   async function clearAll(mode: 'discard' | 'purge') {
+    // 「彻底清空」是物理删除（连垃圾箱与去重指纹一起没），必须二次确认——
+    // 批量删除、批量下架都有确认弹窗，只有这里点一下就执行
+    if (mode === 'purge' && !window.confirm('彻底清空会物理删除全部候选（含垃圾箱），去重指纹一并失效，不可恢复。确认继续？')) {
+      return;
+    }
     setBusy(true);
-    const r = await api.post<Payload & { moved: number; purged: number }>('/collect/clear', { mode });
-    setD({ task: r.task, candidates: r.candidates, config: d!.config });
-    app.refreshShell();
-    app.toast(
-      '工作台已清空',
-      mode === 'purge'
-        ? `已物理删除 ${r.purged} 条候选（含垃圾箱），不再作为去重指纹。`
-        : `已把 ${r.moved} 条候选移入垃圾箱；它们的摘要会作为自动丢弃指纹，同类问题不会再冒出来。`,
-    );
-    setBusy(false);
+    // 失败必须放开 busy：原来抛错就再也走不到 setBusy(false)，
+    // 「彻底清空 / 清空工作台 / 立即拉取」三个按钮一起灰死，只能切走路由再回来
+    try {
+      const r = await api.post<Payload & { moved: number; purged: number }>('/collect/clear', { mode });
+      setD({ task: r.task, candidates: r.candidates, config: d!.config });
+      app.refreshShell();
+      app.toast(
+        '工作台已清空',
+        mode === 'purge'
+          ? `已物理删除 ${r.purged} 条候选（含垃圾箱），不再作为去重指纹。`
+          : `已把 ${r.moved} 条候选移入垃圾箱；它们的摘要会作为自动丢弃指纹，同类问题不会再冒出来。`,
+      );
+    } catch (e) {
+      app.toast('清空失败', e instanceof Error ? e.message : '未知错误');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

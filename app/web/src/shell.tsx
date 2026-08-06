@@ -142,6 +142,12 @@ export interface ProgressState {
   title: string;
   steps: ProgressStep[];
   done: boolean;
+  /**
+   * 可中止的长操作（如一键导入）在此挂取消回调。
+   * 模态的遮罩盖住整页，页面上的「取消上传」按钮根本点不到——
+   * 取消入口必须在模态自己身上。
+   */
+  onCancel?: () => void;
 }
 
 export interface Ctx {
@@ -160,6 +166,8 @@ export interface Ctx {
   runWithProgress: <T>(
     title: string,
     steps: Array<{ label: string; run: (ctx: { setDetail: (d: string) => void }) => Promise<T | void> }>,
+    /** 可中止的操作传它，模态里才会出现「取消」按钮 */
+    onCancel?: () => void,
   ) => Promise<void>;
   refreshShell: () => void;
   /** 全局刷新计数：视图以它作为 useEffect 依赖来重新拉数据 */

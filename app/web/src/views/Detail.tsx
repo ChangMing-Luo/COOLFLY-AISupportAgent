@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type EntryDetail } from '../api.js';
 import { useApp } from '../shell.js';
-import { C, Card, Crumb, KvRow, Tabs, tnum, twoCol } from '../ui.js';
+import { C, Card, Crumb, KvRow, LoadFailed, Tabs, tnum, twoCol } from '../ui.js';
 import { fixFeedback, submitEntry, syncEntry } from './ListPage.js';
 
 export function Detail() {
@@ -10,6 +10,8 @@ export function Detail() {
   const [d, setD] = useState<EntryDetail | null>(null);
   const [tab, setTab] = useState('content');
   const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const [loadError, setLoadError] = useState('');
+  const [acting, setActing] = useState('');
 
   useEffect(() => {
     setTab('content');
@@ -18,9 +20,21 @@ export function Detail() {
 
   useEffect(() => {
     if (!code) return;
-    api.get<EntryDetail>(`/entries/${code}`).then(setD).catch(() => undefined);
+    setLoadError('');
+    api
+      .get<EntryDetail>(`/entries/${code}`)
+      .then(setD)
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : '加载失败'));
   }, [code, app.rev]);
 
+  if (loadError) {
+    return (
+      <>
+        <Crumb onBack={() => app.go('kb.list')} label="知识库" />
+        <LoadFailed message={loadError} onRetry={app.refreshShell} />
+      </>
+    );
+  }
   if (!d || !code) return null;
   const e = d.entry;
 
@@ -61,6 +75,18 @@ export function Detail() {
   const html = lang === 'en' ? d.bodyEn : d.bodyZh;
   const adoptCol = (a: number) => (a >= 60 ? 'var(--color-accent-700)' : a >= 40 ? C.accent : C.muted500);
 
+  const runAction = async (key: string, fn: () => void | Promise<void>): Promise<void> => {
+    if (acting) return;
+    setActing(key);
+    try {
+      await fn();
+    } catch (err) {
+      app.toast('操作未完成', err instanceof Error ? err.message : '未知错误');
+    } finally {
+      setActing('');
+    }
+  };
+
   return (
     <>
       <Crumb onBack={() => app.go('kb.list')} label={`知识库 / ${e.categoryZh || '未分类'} / ${e.sceneZh || '未设置'}`} />
@@ -81,8 +107,14 @@ export function Detail() {
         </div>
         <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
           {actions.map((a) => (
-            <button key={a.l} className={`btn ${a.cls}`} onClick={() => void a.on()}>
-              {a.l}
+            <button
+              key={a.l}
+              className={`btn ${a.cls}`}
+              disabled={Boolean(acting)}
+              // 「创建修订」「恢复为草稿」原来双击会发两次请求（版本号连跳两级），失败也无提示
+              onClick={() => void runAction(a.l, a.on)}
+            >
+              {acting === a.l ? '处理中…' : a.l}
             </button>
           ))}
         </div>

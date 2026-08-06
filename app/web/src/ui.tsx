@@ -233,6 +233,34 @@ export function Empty({
   );
 }
 
+/**
+ * 数据加载失败态。
+ * 各视图原本一律 `.catch(() => undefined)` 后 `return null`——主区一片空白，
+ * 用户既看不出是坏了还是在加载，也没有重试的入口。
+ */
+export function LoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div
+      style={{
+        marginTop: 24,
+        border: `1px solid ${C.divider}`,
+        borderLeft: '2px solid var(--color-accent-600)',
+        borderRadius: 'var(--radius-md)',
+        padding: '18px 20px',
+        background: C.surface,
+      }}
+    >
+      <div style={{ fontFamily: 'var(--font-heading)', fontSize: 17 }}>数据没能加载出来</div>
+      <p style={{ fontSize: 12.5, color: C.muted, margin: '8px 0 0', lineHeight: 1.8, textWrap: 'pretty' }}>
+        {message}
+      </p>
+      <button className="btn btn-primary" onClick={onRetry} style={{ marginTop: 16 }}>
+        重试
+      </button>
+    </div>
+  );
+}
+
 export function Skeleton() {
   return (
     <div style={{ animation: 'shimmer 1.4s ease-in-out infinite' }}>

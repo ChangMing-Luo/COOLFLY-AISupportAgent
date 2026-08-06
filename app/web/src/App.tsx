@@ -97,6 +97,10 @@ export function App() {
     if (nextSel !== undefined) setSel(nextSel);
     setQuery('');
     setHits([]);
+    // 抽屉与弹窗必须随路由关掉：它们浮在新页面上、里面的动作却还指向上一页的对象
+    // （toast 的「前往 →」按钮 zIndex 高于抽屉，开着抽屉也能点到）
+    setDrawer(null);
+    setModal(null);
     setLoading(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setLoading(false), 380);
@@ -106,8 +110,14 @@ export function App() {
     async (
       title: string,
       steps: Array<{ label: string; run: (c: { setDetail: (d: string) => void }) => Promise<unknown> }>,
+      onCancel?: () => void,
     ) => {
-      setProgress({ title, steps: steps.map((s) => ({ label: s.label, state: 'pending' })), done: false });
+      setProgress({
+        title,
+        steps: steps.map((s) => ({ label: s.label, state: 'pending' })),
+        done: false,
+        onCancel,
+      });
       for (let i = 0; i < steps.length; i += 1) {
         setProgress((p) =>
           p ? { ...p, steps: p.steps.map((s, j) => (j === i ? { ...s, state: 'running' } : s)) } : p,
