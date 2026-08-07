@@ -243,6 +243,15 @@ export function App() {
     setModal({ type: 'switch' });
   }
 
+  async function logout() {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // 会话过期/网络异常时服务端已无有效会话，效果等同已退出，照常回登录页
+    }
+    window.location.reload();
+  }
+
   return (
     <AppCtx.Provider value={ctx}>
       <div
@@ -504,6 +513,9 @@ export function App() {
               </div>
               <button className="btn btn-ghost" onClick={switchLogout} style={{ fontSize: 12 }}>
                 切换
+              </button>
+              <button className="btn btn-ghost" onClick={logout} style={{ fontSize: 12 }}>
+                退出
               </button>
             </div>
           </header>

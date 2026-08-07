@@ -114,6 +114,23 @@ export function ChangePassword({ user, onDone }: { user: SessionUser; onDone: (u
         <button className="btn btn-primary btn-block" type="submit" disabled={busy} style={{ marginTop: 18 }}>
           {busy ? '提交中…' : '设置并进入系统'}
         </button>
+        <button
+          className="btn btn-ghost btn-block"
+          type="button"
+          disabled={busy}
+          style={{ marginTop: 8, fontSize: 12.5 }}
+          onClick={async () => {
+            // 拿到初始密码的人不一定想现在改（比如登错了账号），必须能退出去
+            try {
+              await api.post('/auth/logout');
+            } catch {
+              // 会话已失效等同已退出
+            }
+            window.location.reload();
+          }}
+        >
+          退出登录
+        </button>
         <div style={{ fontSize: 11.5, color: C.muted, marginTop: 14, ...tnum }}>
           改密后本账号在其它设备上的登录态会一并失效。
         </div>
