@@ -62,7 +62,7 @@ export async function registerOpsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/collect/candidates/:code/adopt', async (req) => {
     const { code } = req.params as { code: string };
     const { catalogTree } = await import('../services/meta.js');
-    return { plan: await adoptPlan(code), catalog: await catalogTree() };
+    return { plan: await adoptPlan(code), catalog: (await catalogTree()).list };
   });
 
   app.post('/api/collect/candidates/:code/adopt', { preHandler: requirePermission('collect.manage') }, async (req) => {

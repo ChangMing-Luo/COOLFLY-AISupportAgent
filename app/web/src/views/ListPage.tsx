@@ -801,7 +801,8 @@ function buildCfg(app: Ctx, data: Record<string, unknown>): Cfg | null {
         c2: s.nameEn || '未翻译',
         c3: s.pendingReview ? '审核中' : s.statusLabel,
         tagCls: s.pendingReview ? 'tag-outline' : s.status === 'published' ? 'tag-accent' : 'tag-neutral',
-        c4: s.categoryZh,
+        // 父分类已下架时场景即使「已上架」也不会出现在编辑器下拉，必须在此把原因亮出来
+        c4: s.parentPublished ? s.categoryZh : `${s.categoryZh}（已下架）`,
         c5: s.entryCount,
         open: () =>
           app.openDrawer({

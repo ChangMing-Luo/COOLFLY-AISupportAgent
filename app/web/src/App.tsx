@@ -42,6 +42,7 @@ export function App() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [booted, setBooted] = useState(false);
   const [catalog, setCatalog] = useState<CatalogCategory[]>([]);
+  const [offlineCategories, setOfflineCategories] = useState(0);
   const [route, setRoute] = useState('dash');
   const [openGroup, setOpenGroup] = useState('dash');
   const [sel, setSel] = useState<string | null>(null);
@@ -72,10 +73,11 @@ export function App() {
 
   useEffect(() => {
     api
-      .get<{ user: SessionUser; catalog: CatalogCategory[] }>('/bootstrap')
+      .get<{ user: SessionUser; catalog: CatalogCategory[]; offlineCategories: number }>('/bootstrap')
       .then((d) => {
         setUser(d.user);
         setCatalog(d.catalog);
+        setOfflineCategories(d.offlineCategories);
         return loadShell();
       })
       .catch(() => undefined)
@@ -86,8 +88,11 @@ export function App() {
     setRev((n) => n + 1);
     void loadShell();
     api
-      .get<{ catalog: CatalogCategory[] }>('/bootstrap')
-      .then((d) => setCatalog(d.catalog))
+      .get<{ catalog: CatalogCategory[]; offlineCategories: number }>('/bootstrap')
+      .then((d) => {
+        setCatalog(d.catalog);
+        setOfflineCategories(d.offlineCategories);
+      })
       .catch(() => undefined);
   }, [loadShell]);
 
@@ -186,7 +191,10 @@ export function App() {
         onLogin={(u) => {
           setUser(u);
           if (u.mustChangePassword) return;
-          void api.get<{ catalog: CatalogCategory[] }>('/bootstrap').then((d) => setCatalog(d.catalog));
+          void api.get<{ catalog: CatalogCategory[]; offlineCategories: number }>('/bootstrap').then((d) => {
+            setCatalog(d.catalog);
+            setOfflineCategories(d.offlineCategories);
+          });
           void loadShell();
         }}
       />
@@ -199,7 +207,10 @@ export function App() {
         user={user}
         onDone={(u) => {
           setUser(u);
-          void api.get<{ catalog: CatalogCategory[] }>('/bootstrap').then((d) => setCatalog(d.catalog));
+          void api.get<{ catalog: CatalogCategory[]; offlineCategories: number }>('/bootstrap').then((d) => {
+            setCatalog(d.catalog);
+            setOfflineCategories(d.offlineCategories);
+          });
           void loadShell();
         }}
       />
@@ -211,6 +222,7 @@ export function App() {
   const ctx: Ctx = {
     user,
     catalog,
+    offlineCategories,
     route,
     sel,
     go,

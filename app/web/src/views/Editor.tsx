@@ -12,6 +12,7 @@ interface EditorPayload {
   sceneId: string | null;
   suggestions: Array<{ id: string; text: string; insert: string }>;
   catalog: CatalogCategory[];
+  offlineCategories: number;
   llmLabel: string;
 }
 
@@ -45,6 +46,7 @@ export function Editor() {
   const [tagInput, setTagInput] = useState('');
   const [allTags, setAllTags] = useState<TagDto[]>([]);
   const [catalog, setCatalog] = useState<CatalogCategory[]>(app.catalog);
+  const [offlineCats, setOfflineCats] = useState(app.offlineCategories);
   const [translated, setTranslated] = useState(false);
   const [enEdited, setEnEdited] = useState(false);
   const [showErr, setShowErr] = useState(false);
@@ -119,6 +121,7 @@ export function Editor() {
         setEnEdited(p.entry.enEdited);
         setSuggestions(p.suggestions);
         setCatalog(p.catalog);
+        setOfflineCats(p.offlineCategories);
         setSavedAt(p.entry.updatedAt);
         const b = readBackup();
         // 本地备份与服务端任一字段不同就提示恢复。原来只比中文标题与中文正文，
@@ -596,6 +599,11 @@ export function Editor() {
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
                 EN · {cat ? cat.en : '选择分类后显示'}
               </div>
+              {offlineCats > 0 ? (
+                <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
+                  另有 {offlineCats} 个分类已下架未列出，可在元数据中心上架后选用
+                </div>
+              ) : null}
             </div>
             <div className="field" style={{ marginTop: 12 }}>
               <label>
@@ -619,6 +627,11 @@ export function Editor() {
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
                 EN · {scene ? scene.en : '选择场景后显示'}
               </div>
+              {cat && cat.offlineScenes > 0 ? (
+                <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
+                  该分类下另有 {cat.offlineScenes} 个场景已下架未列出
+                </div>
+              ) : null}
               {showErr && !sceneId ? (
                 <div style={{ fontSize: 11.5, color: C.accent700, marginTop: 4 }}>
                   未选择问题场景，无法进入审核队列

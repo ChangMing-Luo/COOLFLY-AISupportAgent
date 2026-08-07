@@ -53,11 +53,15 @@ const VIEW_SQL: Record<string, string> = {
 };
 
 export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/bootstrap', async (req) => ({
-    user: req.currentUser,
-    catalog: await catalogTree(),
-    tunables: TUNABLES,
-  }));
+  app.get('/api/bootstrap', async (req) => {
+    const tree = await catalogTree();
+    return {
+      user: req.currentUser,
+      catalog: tree.list,
+      offlineCategories: tree.offlineCategories,
+      tunables: TUNABLES,
+    };
+  });
 
   app.get('/api/dashboard', async (req) => dashboard(req.currentUser!));
 
@@ -130,6 +134,7 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/entries/:code/editor', async (req) => {
     const { code } = req.params as { code: string };
     const entry = await findEntry(code);
+    const tree = await catalogTree();
     return {
       entry: toDto(entry),
       bodyZh: sanitizeRichHtml(entry.body_zh),
@@ -137,7 +142,8 @@ export async function registerEntryRoutes(app: FastifyInstance): Promise<void> {
       categoryId: entry.category_id,
       sceneId: entry.scene_id,
       suggestions: await editorSuggestions(entry),
-      catalog: await catalogTree(),
+      catalog: tree.list,
+      offlineCategories: tree.offlineCategories,
       llmLabel: llmLabel(),
     };
   });

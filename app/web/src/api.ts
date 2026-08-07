@@ -111,6 +111,8 @@ export interface CatalogCategory {
   id: string;
   zh: string;
   en: string;
+  /** 该分类下因已下架而未列出的场景数，编辑器下拉据此提示 */
+  offlineScenes: number;
   scenes: Array<{ id: string; zh: string; en: string }>;
 }
 
@@ -305,6 +307,8 @@ export interface SceneMetaDto {
   pendingReview: string | null;
   categoryId: string;
   categoryZh: string;
+  /** 父分类未发布时场景不会出现在编辑器下拉，列表据此标注原因 */
+  parentPublished: boolean;
   entryCount: number;
   zendeskRef: string | null;
 }

@@ -84,6 +84,8 @@ export interface SceneDto {
   pendingReview: string | null;
   categoryId: string;
   categoryZh: string;
+  /** 父分类未发布时场景在编辑器不可选（catalogTree 按父级过滤），列表须把这层原因亮出来 */
+  parentPublished: boolean;
   entryCount: number;
   zendeskRef: string | null;
 }
@@ -98,10 +100,12 @@ export async function listScenes(): Promise<SceneDto[]> {
     status: string;
     category_id: string;
     category_zh: string;
+    parent_published: boolean;
     zendesk_section_ref: string | null;
     entry_count: string;
   }>(
     `SELECT s.*, c.name_zh AS category_zh,
+            (c.active AND c.status='published') AS parent_published,
             (SELECT COUNT(*) FROM entries e WHERE e.scene_id=s.id)::text AS entry_count
      FROM scenes s JOIN categories c ON c.id=s.category_id
      ORDER BY c.sort_order, s.sort_order, s.created_at`,
@@ -118,6 +122,7 @@ export async function listScenes(): Promise<SceneDto[]> {
     pendingReview: pending.get(r.id) ?? null,
     categoryId: r.category_id,
     categoryZh: r.category_zh,
+    parentPublished: r.parent_published,
     entryCount: Number(r.entry_count),
     zendeskRef: r.zendesk_section_ref,
   }));
@@ -157,21 +162,32 @@ export async function listTags(): Promise<TagDto[]> {
   }));
 }
 
+export interface CatalogTree {
+  list: Array<{ id: string; zh: string; en: string; offlineScenes: number; scenes: Array<{ id: string; zh: string; en: string }> }>;
+  /** 因未发布而被树排除的分类数：编辑器据此提示「另有 N 个已下架」，否则下拉与元数据列表对不上 */
+  offlineCategories: number;
+}
+
 /** 编辑器的分类 → 场景联动树 */
-export async function catalogTree(): Promise<Array<{ id: string; zh: string; en: string; scenes: Array<{ id: string; zh: string; en: string }> }>> {
+export async function catalogTree(): Promise<CatalogTree> {
   const cats = await listCategories();
   const scenes = await listScenes();
   // 只暴露已发布的分类/场景：草稿或审核中的一旦被选，提交知识时会被门禁挡住
-  return cats
-    .filter((c) => c.active && c.status === 'published')
-    .map((c) => ({
-      id: c.id,
-      zh: c.nameZh,
-      en: c.nameEn,
-      scenes: scenes
-        .filter((s) => s.categoryId === c.id && s.active && s.status === 'published')
-        .map((s) => ({ id: s.id, zh: s.nameZh, en: s.nameEn })),
-    }));
+  const published = cats.filter((c) => c.active && c.status === 'published');
+  return {
+    list: published.map((c) => {
+      const mine = scenes.filter((s) => s.categoryId === c.id);
+      const usable = mine.filter((s) => s.active && s.status === 'published');
+      return {
+        id: c.id,
+        zh: c.nameZh,
+        en: c.nameEn,
+        offlineScenes: mine.length - usable.length,
+        scenes: usable.map((s) => ({ id: s.id, zh: s.nameZh, en: s.nameEn })),
+      };
+    }),
+    offlineCategories: cats.length - published.length,
+  };
 }
 
 /* ══════════ 写：分类 ══════════ */

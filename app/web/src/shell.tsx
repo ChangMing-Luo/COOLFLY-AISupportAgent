@@ -153,6 +153,8 @@ export interface ProgressState {
 export interface Ctx {
   user: SessionUser;
   catalog: CatalogCategory[];
+  /** 因已下架而未进入 catalog 的分类数：编辑器下拉用它解释「为什么比元数据列表少」 */
+  offlineCategories: number;
   route: string;
   sel: string | null;
   go: (route: string, sel?: string | null) => void;
